@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AAC 4x4 Board</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --needs: #e0f2fe; --needs-b: #0ea5e9;
+            --feel: #fef3c7; --feel-b: #d97706;
+            --social: #fce7f3; --social-b: #db2777;
+            --food: #dcfce7; --food-b: #16a34a;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sentence Bar */
+        header {
+            background: white;
+            padding: 10px 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            height: 100px;
+        }
+
+        #sentence-display {
+            flex-grow: 1;
+            height: 70px;
+            background: #f1f5f9;
+            border-radius: 16px;
+            border: 2px dashed #cbd5e1;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 10px;
+            overflow-x: auto;
+        }
+
+        .sentence-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 800;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            animation: pop 0.2s ease-out;
+            flex-shrink: 0;
+        }
+
+        @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .btn-group { display: flex; flex-direction: column; gap: 6px; }
+
+        .btn {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 16px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.1s;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        .btn-clear { background: #fee2e2; color: #b91c1c; }
+        .btn-speak { background: #22c55e; color: white; }
+        .btn:active { transform: scale(0.95); }
+
+        /* 4x4 Grid */
+        main {
+            flex-grow: 1;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 12px;
+            width: 100%;
+            height: 100%;
+            max-width: 600px;
+            max-height: 600px;
+            aspect-ratio: 1 / 1;
+        }
+
+        .cell {
+            background: white;
+            border: 3px solid #e2e8f0;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell:active { transform: scale(0.92); filter: brightness(0.95); }
+
+        .emoji { font-size: clamp(2rem, 8vh, 3.5rem); }
+        .label {
+            font-size: clamp(0.7rem, 2vh, 1rem);
+            font-weight: 900;
+            margin-top: 4px;
+            color: #1e293b;
+            text-transform: uppercase;
+        }
+
+        /* Category Colors */
+        .needs { background: var(--needs); border-color: var(--needs-b); }
+        .feel { background: var(--feel); border-color: var(--feel-b); }
+        .social { background: var(--social); border-color: var(--social-b); }
+        .food { background: var(--food); border-color: var(--food-b); }
+
+        @media (max-width: 400px) {
+            .grid { gap: 8px; }
+            .cell { border-radius: 12px; }
+            header { height: 80px; padding: 8px; }
+            #sentence-display { height: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div id="sentence-display"></div>
+        <div class="btn-group">
+            <button class="btn btn-speak" onclick="playSentence()">Speak</button>
+            <button class="btn btn-clear" onclick="clearSentence()">Clear</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="grid" id="board"></div>
+    </main>
+
+    <script>
+        const items = [
+            // Row 1: Basics
+            {e:"✅", n:"Yes", c:"needs"}, 
+            {e:"❌", n:"No", c:"needs"}, 
+            {e:"🆘", n:"Help", c:"needs"}, 
+            {e:"🚽", n:"Toilet", c:"needs"},
+            // Row 2: Feelings
+            {e:"😊", n:"Happy", c:"feel"}, 
+            {e:"😢", n:"Sad", c:"feel"}, 
+            {e:"😴", n:"Sleep", c:"feel"}, 
+            {e:"🤒", n:"Sick", c:"feel"},
+            // Row 3: People/Pets
+            {e:"👩", n:"Mom", c:"social"}, 
+            {e:"👨", n:"Dad", c:"social"}, 
+            {e:"🐱", n:"Cat", c:"social"}, 
+            {e:"🏠", n:"Home", c:"social"},
+            // Row 4: Food/Action
+            {e:"😋", n:"Eat", c:"food"}, 
+            {e:"🥤", n:"Drink", c:"food"}, 
+            {e:"➕", n:"More", c:"food"}, 
+            {e:"🔚", n:"Done", c:"food"}
+        ];
+
+        let sentence = [];
+        const board = document.getElementById('board');
+        const display = document.getElementById('sentence-display');
+
+        function createBoard() {
+            items.forEach((item) => {
+                const cell = document.createElement('div');
+                cell.className = `cell ${item.c}`;
+                cell.innerHTML = `<span class="emoji">${item.e}</span><span class="label">${item.n}</span>`;
+                cell.onclick = () => addToSentence(item);
+                board.appendChild(cell);
+            });
+        }
+
+        function addToSentence(item) {
+            speak(item.n);
+            sentence.push(item);
+            renderSentence();
+        }
+
+        function renderSentence() {
+            display.innerHTML = '';
+            sentence.forEach((item, index) => {
+                const word = document.createElement('div');
+                word.className = 'sentence-item';
+                word.innerHTML = `<span>${item.e}</span><span>${item.n}</span>`;
+                word.onclick = (e) => {
+                    e.stopPropagation();
+                    sentence.splice(index, 1);
+                    renderSentence();
+                };
+                display.appendChild(word);
+            });
+            display.scrollLeft = display.scrollWidth;
+        }
+
+        function clearSentence() {
+            sentence = [];
+            renderSentence();
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const msg = new SpeechSynthesisUtterance(text);
+                msg.rate = 0.9; // Slightly slower for clarity
+                window.speechSynthesis.speak(msg);
+            }
+        }
+
+        function playSentence() {
+            if (sentence.length === 0) return;
+            const fullText = sentence.map(i => i.n).join(' ');
+            speak(fullText);
+        }
+
+        window.onload = createBoard;
+    </script>
+</body>
+</html>

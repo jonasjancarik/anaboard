@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "anaboard-expo-QHM55O",
-    "slug": "anaboard-expo-QHM55O",
+    "name": "AnaBoard",
+    "slug": "anaboard",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
