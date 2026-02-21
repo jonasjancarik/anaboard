@@ -99,6 +99,7 @@ type AppStore = {
     ttsPitch?: number;
     preferredVoice?: string | null;
     highContrast?: boolean;
+    showLabels?: boolean;
     pinHash?: string;
   }) => Promise<void>;
 

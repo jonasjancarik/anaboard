@@ -57,6 +57,7 @@ export const DEFAULT_PROFILE_SETTINGS = (
   ttsPitch: 1,
   preferredVoice: undefined,
   highContrast: false,
+  showLabels: false,
   updatedAt,
   revision: 1,
 });

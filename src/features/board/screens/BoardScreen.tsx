@@ -38,6 +38,7 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   const removeSentenceToken = useAppStore((state) => state.removeSentenceToken);
   const clearSentence = useAppStore((state) => state.clearSentence);
   const setSpeaking = useAppStore((state) => state.setSpeaking);
+  const showLabels = settings?.showLabels ?? false;
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
 
@@ -129,10 +130,14 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
                   onPress={() => removeSentenceToken(token.tokenId)}
                   accessibilityRole="button"
                   accessibilityLabel={`Odebrat ${token.label}`}
-                  style={({ pressed }) => [styles.token, pressed && styles.tokenPressed]}
+                  style={({ pressed }) => [
+                    styles.token,
+                    !showLabels && styles.tokenEmojiOnly,
+                    pressed && styles.tokenPressed,
+                  ]}
                 >
                   <Text style={styles.tokenEmoji}>{token.emoji}</Text>
-                  <Text style={styles.tokenText}>{token.label}</Text>
+                  {showLabels ? <Text style={styles.tokenText}>{token.label}</Text> : null}
                 </Pressable>
               ))
             )}
@@ -203,7 +208,7 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
                 ]}
               >
                 <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                <Text style={styles.tileLabel}>{tile.labelCs}</Text>
+                {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
               </Pressable>
             );
           })}
@@ -257,6 +262,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  tokenEmojiOnly: {
+    width: 46,
+    paddingHorizontal: 0,
+    justifyContent: 'center',
   },
   tokenPressed: {
     transform: [{ scale: 0.97 }],

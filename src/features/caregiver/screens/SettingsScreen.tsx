@@ -18,6 +18,7 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
   const [ttsRateText, setTtsRateText] = useState('0.86');
   const [ttsPitchText, setTtsPitchText] = useState('1');
   const [highContrast, setHighContrast] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(true);
 
   const [currentPin, setCurrentPin] = useState('');
@@ -33,6 +34,7 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
     setTtsRateText(String(settings.ttsRate));
     setTtsPitchText(String(settings.ttsPitch));
     setHighContrast(settings.highContrast);
+    setShowLabels(settings.showLabels);
     setLockEnabled(settings.lockEnabled);
   }, [settings]);
 
@@ -49,6 +51,7 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
       ttsRate: Math.min(1.2, Math.max(0.5, nextRate)),
       ttsPitch: Math.min(2, Math.max(0.5, nextPitch)),
       highContrast,
+      showLabels,
       lockEnabled,
     });
 
@@ -130,6 +133,11 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
           <View style={styles.switchRow}>
             <Text style={styles.label}>Vysoký kontrast</Text>
             <Switch value={highContrast} onValueChange={setHighContrast} />
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>Zobrazit texty na dlaždicích</Text>
+            <Switch value={showLabels} onValueChange={setShowLabels} />
           </View>
 
           <View style={styles.switchRow}>

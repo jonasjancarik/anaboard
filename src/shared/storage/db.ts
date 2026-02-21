@@ -70,6 +70,7 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       tts_pitch REAL NOT NULL DEFAULT 1,
       preferred_voice TEXT,
       high_contrast INTEGER NOT NULL DEFAULT 0,
+      show_labels INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 1,
       dirty INTEGER NOT NULL DEFAULT 0
@@ -101,6 +102,13 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_audio_clips_dirty ON audio_clips(dirty);
     CREATE INDEX IF NOT EXISTS idx_sync_events_status_created ON sync_events(status, created_at);
   `);
+
+  // Forward-compatible migration for existing installs.
+  await db.execAsync(`
+    ALTER TABLE profile_settings ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0;
+  `).catch(() => {
+    // Ignore if column already exists.
+  });
 };
 
 export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {

@@ -103,7 +103,19 @@ class SyncService {
             throw error;
           }
         } else {
-          const { error } = await supabaseClient.from(event.entityType).upsert(enrichedPayload);
+          let { error } = await supabaseClient.from(event.entityType).upsert(enrichedPayload);
+          if (
+            error &&
+            event.entityType === 'profile_settings' &&
+            Object.prototype.hasOwnProperty.call(enrichedPayload, 'show_labels')
+          ) {
+            const fallbackPayload = { ...enrichedPayload };
+            delete fallbackPayload.show_labels;
+            const fallbackResult = await supabaseClient
+              .from(event.entityType)
+              .upsert(fallbackPayload);
+            error = fallbackResult.error ?? null;
+          }
 
           if (error) {
             throw error;

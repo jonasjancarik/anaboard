@@ -62,6 +62,7 @@ export interface ProfileSettings {
   ttsPitch: number;
   preferredVoice?: string;
   highContrast: boolean;
+  showLabels: boolean;
   updatedAt: string;
   revision: number;
 }

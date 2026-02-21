@@ -66,10 +66,14 @@ create table if not exists profile_settings (
   tts_pitch real not null default 1,
   preferred_voice text,
   high_contrast boolean not null default false,
+  show_labels boolean not null default false,
   updated_at timestamptz not null,
   revision int not null default 1,
   created_at timestamptz not null default now()
 );
+
+alter table profile_settings
+add column if not exists show_labels boolean not null default false;
 
 create table if not exists phrase_events (
   id uuid primary key default gen_random_uuid(),
