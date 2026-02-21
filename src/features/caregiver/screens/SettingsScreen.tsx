@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
 import { hashPin, isValidPin } from '../../../shared/utils/security';
@@ -97,98 +98,100 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>Zpět</Text>
-        </Pressable>
-        <Text style={styles.title}>Nastavení</Text>
-        <View style={styles.backButtonPlaceholder} />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Řeč a vzhled</Text>
-
-        <Text style={styles.label}>TTS rate (0.5 - 1.2)</Text>
-        <TextInput
-          value={ttsRateText}
-          onChangeText={setTtsRateText}
-          keyboardType="decimal-pad"
-          style={styles.input}
-        />
-
-        <Text style={styles.label}>TTS pitch (0.5 - 2)</Text>
-        <TextInput
-          value={ttsPitchText}
-          onChangeText={setTtsPitchText}
-          keyboardType="decimal-pad"
-          style={styles.input}
-        />
-
-        <View style={styles.switchRow}>
-          <Text style={styles.label}>Vysoký kontrast</Text>
-          <Switch value={highContrast} onValueChange={setHighContrast} />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.headerRow}>
+          <Pressable style={styles.backButton} onPress={onBack}>
+            <Text style={styles.backButtonText}>Zpět</Text>
+          </Pressable>
+          <Text style={styles.title}>Nastavení</Text>
+          <View style={styles.backButtonPlaceholder} />
         </View>
 
-        <View style={styles.switchRow}>
-          <Text style={styles.label}>Zámek PIN</Text>
-          <Switch value={lockEnabled} onValueChange={setLockEnabled} />
-        </View>
-
-        <Pressable style={[styles.primaryButton, styles.saveButton]} onPress={saveAudioSettings}>
-          <Text style={styles.primaryButtonText}>Uložit nastavení</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Změna PIN</Text>
-
-        <Text style={styles.label}>Aktuální PIN</Text>
-        <TextInput
-          value={currentPin}
-          onChangeText={(value) => setCurrentPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
-          keyboardType="number-pad"
-          secureTextEntry
-          style={styles.input}
-          maxLength={4}
-        />
-
-        <Text style={styles.label}>Nový PIN</Text>
-        <TextInput
-          value={newPin}
-          onChangeText={(value) => setNewPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
-          keyboardType="number-pad"
-          secureTextEntry
-          style={styles.input}
-          maxLength={4}
-        />
-
-        <Text style={styles.label}>Potvrď nový PIN</Text>
-        <TextInput
-          value={confirmPin}
-          onChangeText={(value) => setConfirmPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
-          keyboardType="number-pad"
-          secureTextEntry
-          style={styles.input}
-          maxLength={4}
-        />
-
-        <Pressable style={[styles.primaryButton, styles.pinButton]} onPress={savePin}>
-          <Text style={styles.primaryButtonText}>Uložit PIN</Text>
-        </Pressable>
-      </View>
-
-      {authStatus === 'signed_in' ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Účet</Text>
-          <Pressable style={[styles.primaryButton, styles.signOutButton]} onPress={signOut}>
-            <Text style={styles.primaryButtonText}>Odhlásit</Text>
+          <Text style={styles.sectionTitle}>Řeč a vzhled</Text>
+
+          <Text style={styles.label}>TTS rate (0.5 - 1.2)</Text>
+          <TextInput
+            value={ttsRateText}
+            onChangeText={setTtsRateText}
+            keyboardType="decimal-pad"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>TTS pitch (0.5 - 2)</Text>
+          <TextInput
+            value={ttsPitchText}
+            onChangeText={setTtsPitchText}
+            keyboardType="decimal-pad"
+            style={styles.input}
+          />
+
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>Vysoký kontrast</Text>
+            <Switch value={highContrast} onValueChange={setHighContrast} />
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>Zámek PIN</Text>
+            <Switch value={lockEnabled} onValueChange={setLockEnabled} />
+          </View>
+
+          <Pressable style={[styles.primaryButton, styles.saveButton]} onPress={saveAudioSettings}>
+            <Text style={styles.primaryButtonText}>Uložit nastavení</Text>
           </Pressable>
         </View>
-      ) : null}
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-    </View>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Změna PIN</Text>
+
+          <Text style={styles.label}>Aktuální PIN</Text>
+          <TextInput
+            value={currentPin}
+            onChangeText={(value) => setCurrentPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+            keyboardType="number-pad"
+            secureTextEntry
+            style={styles.input}
+            maxLength={4}
+          />
+
+          <Text style={styles.label}>Nový PIN</Text>
+          <TextInput
+            value={newPin}
+            onChangeText={(value) => setNewPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+            keyboardType="number-pad"
+            secureTextEntry
+            style={styles.input}
+            maxLength={4}
+          />
+
+          <Text style={styles.label}>Potvrď nový PIN</Text>
+          <TextInput
+            value={confirmPin}
+            onChangeText={(value) => setConfirmPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+            keyboardType="number-pad"
+            secureTextEntry
+            style={styles.input}
+            maxLength={4}
+          />
+
+          <Pressable style={[styles.primaryButton, styles.pinButton]} onPress={savePin}>
+            <Text style={styles.primaryButtonText}>Uložit PIN</Text>
+          </Pressable>
+        </View>
+
+        {authStatus === 'signed_in' ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Účet</Text>
+            <Pressable style={[styles.primaryButton, styles.signOutButton]} onPress={signOut}>
+              <Text style={styles.primaryButtonText}>Odhlásit</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {message ? <Text style={styles.message}>{message}</Text> : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -196,8 +199,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F7FC',
+  },
+  content: {
     padding: 12,
     gap: 10,
+    paddingBottom: 24,
   },
   headerRow: {
     flexDirection: 'row',

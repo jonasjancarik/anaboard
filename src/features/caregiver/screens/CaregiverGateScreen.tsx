@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { hashPin, isValidPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
@@ -59,7 +60,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Text style={styles.title}>Režim pečovatele</Text>
       <Text style={styles.subtitle}>Zadej PIN pro úpravy tabule</Text>
 
@@ -93,7 +94,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
       </View>
 
       <Text style={styles.note}>Výchozí PIN: 1234 (změň v nastavení)</Text>
-    </View>
+    </SafeAreaView>
   );
 };
 

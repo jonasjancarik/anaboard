@@ -5,8 +5,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CATEGORY_COLORS, SPEECH_MODE_LABELS } from '../../../shared/constants/defaults';
 import type { Category, SpeechMode } from '../../../shared/types/domain';
@@ -22,6 +24,9 @@ const categories: Category[] = ['needs', 'feelings', 'social', 'food'];
 const speechModes: SpeechMode[] = ['tts', 'recording_with_tts_fallback', 'recording_only'];
 
 export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 900;
+
   const tiles = useAppStore((state) => state.tiles);
   const clipsById = useAppStore((state) => state.clipsById);
   const updateTileDraft = useAppStore((state) => state.updateTileDraft);
@@ -141,19 +146,23 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.topBar}>
         <Pressable style={[styles.topButton, styles.neutralButton]} onPress={onBack}>
           <Text style={[styles.topButtonText, styles.neutralButtonText]}>Zpět</Text>
         </Pressable>
-        <Text style={styles.title}>Editor tabule</Text>
+        <Text style={[styles.title, isCompact && styles.titleCompact]}>Editor tabule</Text>
         <Pressable style={[styles.topButton, styles.settingsButton]} onPress={onOpenSettings}>
-          <Text style={styles.topButtonText}>Nastavení</Text>
+          <Text style={styles.topButtonText}>{isCompact ? 'Nast.' : 'Nastavení'}</Text>
         </Pressable>
       </View>
 
-      <View style={styles.content}>
-        <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
+      <View style={[styles.content, isCompact && styles.contentCompact]}>
+        <ScrollView
+          style={[styles.leftPanel, isCompact && styles.leftPanelCompact]}
+          contentContainerStyle={styles.leftPanelContent}
+          showsVerticalScrollIndicator={false}
+        >
           {tiles.map((tile) => {
             const colors = CATEGORY_COLORS[tile.category];
             const isSelected = tile.id === selectedTileId;
@@ -179,7 +188,12 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
           })}
         </ScrollView>
 
-        <View style={styles.editorPanel}>
+        <ScrollView
+          style={[styles.editorPanel, isCompact && styles.editorPanelCompact]}
+          contentContainerStyle={styles.editorPanelContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {selectedTile ? (
             <>
               <Text style={styles.sectionTitle}>Vybraný tile</Text>
@@ -278,9 +292,9 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
           ) : (
             <Text style={styles.emptyText}>Není vybraný tile</Text>
           )}
-        </View>
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -288,26 +302,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F7FC',
-    paddingTop: 12,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
+    paddingVertical: 8,
     gap: 8,
   },
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '900',
     color: '#1F2E48',
+  },
+  titleCompact: {
+    fontSize: 20,
   },
   topButton: {
     borderRadius: 10,
     borderWidth: 2,
+    minWidth: 86,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    alignItems: 'center',
   },
   topButtonText: {
     color: '#FFFFFF',
@@ -330,12 +349,19 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
   },
+  contentCompact: {
+    flexDirection: 'column',
+  },
   leftPanel: {
-    width: 210,
+    width: 260,
     borderRadius: 14,
     borderWidth: 2,
     borderColor: '#D2DAEA',
     backgroundColor: '#FFFFFF',
+  },
+  leftPanelCompact: {
+    width: '100%',
+    maxHeight: 360,
   },
   leftPanelContent: {
     padding: 8,
@@ -370,7 +396,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#D2DAEA',
     backgroundColor: '#FFFFFF',
+  },
+  editorPanelCompact: {
+    width: '100%',
+  },
+  editorPanelContent: {
     padding: 12,
+    paddingBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
