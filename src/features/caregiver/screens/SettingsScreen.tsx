@@ -1,0 +1,289 @@
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+
+import { authService } from '../../auth/authService';
+import { hashPin, isValidPin } from '../../../shared/utils/security';
+import { useAppStore } from '../../../store/useAppStore';
+
+type SettingsScreenProps = {
+  onBack: () => void;
+};
+
+export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
+  const settings = useAppStore((state) => state.settings);
+  const authStatus = useAppStore((state) => state.authStatus);
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  const [ttsRateText, setTtsRateText] = useState('0.86');
+  const [ttsPitchText, setTtsPitchText] = useState('1');
+  const [highContrast, setHighContrast] = useState(false);
+  const [lockEnabled, setLockEnabled] = useState(true);
+
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings) {
+      return;
+    }
+
+    setTtsRateText(String(settings.ttsRate));
+    setTtsPitchText(String(settings.ttsPitch));
+    setHighContrast(settings.highContrast);
+    setLockEnabled(settings.lockEnabled);
+  }, [settings]);
+
+  const saveAudioSettings = async () => {
+    const nextRate = Number(ttsRateText);
+    const nextPitch = Number(ttsPitchText);
+
+    if (!Number.isFinite(nextRate) || !Number.isFinite(nextPitch)) {
+      setMessage('Rate/Pitch musí být číslo');
+      return;
+    }
+
+    await updateSettings({
+      ttsRate: Math.min(1.2, Math.max(0.5, nextRate)),
+      ttsPitch: Math.min(2, Math.max(0.5, nextPitch)),
+      highContrast,
+      lockEnabled,
+    });
+
+    setMessage('Nastavení uloženo');
+  };
+
+  const savePin = async () => {
+    if (!settings) {
+      setMessage('Nastavení není načtené');
+      return;
+    }
+
+    if (!isValidPin(newPin) || !isValidPin(confirmPin)) {
+      setMessage('Nový PIN musí mít 4 číslice');
+      return;
+    }
+
+    if (newPin !== confirmPin) {
+      setMessage('PINy se neshodují');
+      return;
+    }
+
+    const currentHash = await hashPin(currentPin);
+    if (currentHash !== settings.pinHash) {
+      setMessage('Aktuální PIN je špatně');
+      return;
+    }
+
+    const newPinHash = await hashPin(newPin);
+    await updateSettings({ pinHash: newPinHash });
+
+    setCurrentPin('');
+    setNewPin('');
+    setConfirmPin('');
+    setMessage('PIN změněn');
+  };
+
+  const signOut = async () => {
+    try {
+      await authService.signOut();
+      setMessage('Odhlášeno');
+    } catch (signOutError) {
+      const nextMessage =
+        signOutError instanceof Error ? signOutError.message : 'Odhlášení selhalo';
+      setMessage(nextMessage);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Pressable style={styles.backButton} onPress={onBack}>
+          <Text style={styles.backButtonText}>Zpět</Text>
+        </Pressable>
+        <Text style={styles.title}>Nastavení</Text>
+        <View style={styles.backButtonPlaceholder} />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Řeč a vzhled</Text>
+
+        <Text style={styles.label}>TTS rate (0.5 - 1.2)</Text>
+        <TextInput
+          value={ttsRateText}
+          onChangeText={setTtsRateText}
+          keyboardType="decimal-pad"
+          style={styles.input}
+        />
+
+        <Text style={styles.label}>TTS pitch (0.5 - 2)</Text>
+        <TextInput
+          value={ttsPitchText}
+          onChangeText={setTtsPitchText}
+          keyboardType="decimal-pad"
+          style={styles.input}
+        />
+
+        <View style={styles.switchRow}>
+          <Text style={styles.label}>Vysoký kontrast</Text>
+          <Switch value={highContrast} onValueChange={setHighContrast} />
+        </View>
+
+        <View style={styles.switchRow}>
+          <Text style={styles.label}>Zámek PIN</Text>
+          <Switch value={lockEnabled} onValueChange={setLockEnabled} />
+        </View>
+
+        <Pressable style={[styles.primaryButton, styles.saveButton]} onPress={saveAudioSettings}>
+          <Text style={styles.primaryButtonText}>Uložit nastavení</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Změna PIN</Text>
+
+        <Text style={styles.label}>Aktuální PIN</Text>
+        <TextInput
+          value={currentPin}
+          onChangeText={(value) => setCurrentPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+          keyboardType="number-pad"
+          secureTextEntry
+          style={styles.input}
+          maxLength={4}
+        />
+
+        <Text style={styles.label}>Nový PIN</Text>
+        <TextInput
+          value={newPin}
+          onChangeText={(value) => setNewPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+          keyboardType="number-pad"
+          secureTextEntry
+          style={styles.input}
+          maxLength={4}
+        />
+
+        <Text style={styles.label}>Potvrď nový PIN</Text>
+        <TextInput
+          value={confirmPin}
+          onChangeText={(value) => setConfirmPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+          keyboardType="number-pad"
+          secureTextEntry
+          style={styles.input}
+          maxLength={4}
+        />
+
+        <Pressable style={[styles.primaryButton, styles.pinButton]} onPress={savePin}>
+          <Text style={styles.primaryButtonText}>Uložit PIN</Text>
+        </Pressable>
+      </View>
+
+      {authStatus === 'signed_in' ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Účet</Text>
+          <Pressable style={[styles.primaryButton, styles.signOutButton]} onPress={signOut}>
+            <Text style={styles.primaryButtonText}>Odhlásit</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {message ? <Text style={styles.message}>{message}</Text> : null}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F7FC',
+    padding: 12,
+    gap: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1D2E4A',
+  },
+  backButton: {
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#CFD8EA',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    color: '#2D3F5E',
+    fontWeight: '800',
+  },
+  backButtonPlaceholder: {
+    width: 58,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#D0DAED',
+    padding: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#223450',
+    marginBottom: 8,
+  },
+  label: {
+    color: '#364A67',
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  input: {
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#CDD7EA',
+    paddingHorizontal: 10,
+    fontSize: 16,
+  },
+  switchRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  primaryButton: {
+    marginTop: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  saveButton: {
+    backgroundColor: '#2E73CD',
+    borderColor: '#1F5BA8',
+  },
+  pinButton: {
+    backgroundColor: '#24A44A',
+    borderColor: '#1B7C38',
+  },
+  signOutButton: {
+    backgroundColor: '#C6394F',
+    borderColor: '#9E2B3E',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  message: {
+    textAlign: 'center',
+    color: '#2E4768',
+    fontWeight: '700',
+  },
+});

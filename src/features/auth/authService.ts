@@ -1,0 +1,254 @@
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+
+import { logError } from '../../shared/telemetry/logger';
+import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
+import type { RemoteContext } from './types';
+import { clearRemoteContext, loadRemoteContext, saveRemoteContext } from '../sync/remoteContextStorage';
+
+export type BootstrapInput = {
+  familyName: string;
+  childName: string;
+};
+
+type CaregiverRow = {
+  id: string;
+  family_id: string;
+  email: string;
+};
+
+type ProfileRow = {
+  id: string;
+  family_id: string;
+  name: string;
+};
+
+const getClient = () => {
+  if (!hasSupabaseConfig || !supabaseClient) {
+    throw new Error('Supabase config missing');
+  }
+
+  return supabaseClient;
+};
+
+const ensureProfileForFamily = async (
+  familyId: string,
+  fallbackName: string
+): Promise<ProfileRow> => {
+  const client = getClient();
+
+  const { data: existingProfile, error: fetchError } = await client
+    .from('profiles')
+    .select('id, family_id, name')
+    .eq('family_id', familyId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle<ProfileRow>();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  const { data: newProfile, error: insertError } = await client
+    .from('profiles')
+    .insert({
+      family_id: familyId,
+      name: fallbackName,
+    })
+    .select('id, family_id, name')
+    .single<ProfileRow>();
+
+  if (insertError || !newProfile) {
+    throw insertError ?? new Error('Failed to create profile');
+  }
+
+  return newProfile;
+};
+
+const buildRemoteContext = async (user: User): Promise<RemoteContext | null> => {
+  const client = getClient();
+
+  const { data: caregiver, error: caregiverError } = await client
+    .from('caregivers')
+    .select('id, family_id, email')
+    .eq('id', user.id)
+    .maybeSingle<CaregiverRow>();
+
+  if (caregiverError) {
+    throw caregiverError;
+  }
+
+  if (!caregiver) {
+    return null;
+  }
+
+  const profile = await ensureProfileForFamily(
+    caregiver.family_id,
+    user.email ? `${user.email.split('@')[0]} profil` : 'Dítě'
+  );
+
+  const context: RemoteContext = {
+    familyId: caregiver.family_id,
+    profileId: profile.id,
+    caregiverId: caregiver.id,
+    caregiverEmail: caregiver.email,
+  };
+
+  await saveRemoteContext(context);
+
+  return context;
+};
+
+export const authService = {
+  isEnabled(): boolean {
+    return hasSupabaseConfig;
+  },
+
+  async getSession(): Promise<Session | null> {
+    if (!hasSupabaseConfig || !supabaseClient) {
+      return null;
+    }
+
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) {
+      throw error;
+    }
+
+    return data.session;
+  },
+
+  onAuthStateChange(
+    callback: (event: AuthChangeEvent, session: Session | null) => void
+  ): { unsubscribe: () => void } {
+    if (!hasSupabaseConfig || !supabaseClient) {
+      return { unsubscribe: () => {} };
+    }
+
+    const { data } = supabaseClient.auth.onAuthStateChange(callback);
+
+    return {
+      unsubscribe: () => {
+        data.subscription.unsubscribe();
+      },
+    };
+  },
+
+  async signIn(email: string, password: string): Promise<void> {
+    const client = getClient();
+    const { error } = await client.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      throw error;
+    }
+  },
+
+  async signUp(email: string, password: string): Promise<void> {
+    const client = getClient();
+    const { error } = await client.auth.signUp({ email, password });
+
+    if (error) {
+      throw error;
+    }
+  },
+
+  async signOut(): Promise<void> {
+    const client = getClient();
+    const { error } = await client.auth.signOut();
+
+    await clearRemoteContext();
+
+    if (error) {
+      throw error;
+    }
+  },
+
+  async resolveBootstrapState(user: User): Promise<{ requiresBootstrap: boolean; context: RemoteContext | null }> {
+    try {
+      const remoteContext = await buildRemoteContext(user);
+      return {
+        requiresBootstrap: !remoteContext,
+        context: remoteContext,
+      };
+    } catch (error) {
+      logError('resolve_bootstrap_state_failed', error, {
+        user_id: user.id,
+      });
+      throw error;
+    }
+  },
+
+  async bootstrapCurrentUser(input: BootstrapInput): Promise<RemoteContext> {
+    const client = getClient();
+    const { data: authState, error: authError } = await client.auth.getUser();
+
+    if (authError || !authState.user) {
+      throw authError ?? new Error('User not authenticated');
+    }
+
+    const user = authState.user;
+
+    const { data: existingCaregiver, error: caregiverFetchError } = await client
+      .from('caregivers')
+      .select('id, family_id, email')
+      .eq('id', user.id)
+      .maybeSingle<CaregiverRow>();
+
+    if (caregiverFetchError) {
+      throw caregiverFetchError;
+    }
+
+    let caregiver = existingCaregiver;
+
+    if (!caregiver) {
+      const { data: family, error: familyError } = await client
+        .from('families')
+        .insert({ name: input.familyName.trim() || 'Moje rodina' })
+        .select('id')
+        .single<{ id: string }>();
+
+      if (familyError || !family) {
+        throw familyError ?? new Error('Failed to create family');
+      }
+
+      const { data: caregiverInsert, error: caregiverInsertError } = await client
+        .from('caregivers')
+        .insert({
+          id: user.id,
+          family_id: family.id,
+          email: user.email ?? `${user.id}@anaboard.local`,
+        })
+        .select('id, family_id, email')
+        .single<CaregiverRow>();
+
+      if (caregiverInsertError || !caregiverInsert) {
+        throw caregiverInsertError ?? new Error('Failed to create caregiver');
+      }
+
+      caregiver = caregiverInsert;
+    }
+
+    const profile = await ensureProfileForFamily(caregiver.family_id, input.childName || 'Dítě');
+
+    const context: RemoteContext = {
+      familyId: caregiver.family_id,
+      profileId: profile.id,
+      caregiverId: caregiver.id,
+      caregiverEmail: caregiver.email,
+    };
+
+    await saveRemoteContext(context);
+
+    return context;
+  },
+
+  async loadCachedRemoteContext(): Promise<RemoteContext | null> {
+    return loadRemoteContext();
+  },
+
+  async clearCachedRemoteContext(): Promise<void> {
+    await clearRemoteContext();
+  },
+};
