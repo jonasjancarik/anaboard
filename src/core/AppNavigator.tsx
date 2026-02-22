@@ -34,7 +34,7 @@ export const AppNavigator = () => {
   if (currentScreen === 'caregiverGate') {
     return (
       <CaregiverGateScreen
-        onPassed={() => navigate('editor')}
+        onPassed={() => navigate('board')}
         onCancel={() => {
           setEditorTargetTileId(null);
           navigate('board');

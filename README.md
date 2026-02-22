@@ -22,9 +22,10 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - reset to defaults
   - create board copy and switch to it
 - Board shortcuts:
-  - caregiver unlocked: long-press + drag reorders tiles
-  - caregiver unlocked: long-press + release opens editor on that tile
-  - caregiver locked: long-press opens PIN and then editor for that tile
+  - PIN only unlocks caregiver mode; stays on board
+  - caregiver unlocked: long-press tile opens editor for that tile
+  - caregiver unlocked + `PŘESUN`: long-press + drag reorders tiles
+  - caregiver locked: long-press does not trigger editor
   - caregiver mode can be locked/unlocked from board action button
 - Settings screen:
   - TTS rate/pitch

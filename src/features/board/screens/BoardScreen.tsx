@@ -51,6 +51,7 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const [dragOffsetY, setDragOffsetY] = useState(0);
   const [tileDragError, setTileDragError] = useState<string | null>(null);
+  const [isReorderMode, setIsReorderMode] = useState(false);
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
 
@@ -94,6 +95,10 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   const onTilePress = (tileId: string) => {
     if (suppressTapAfterLongPressRef.current) {
       suppressTapAfterLongPressRef.current = false;
+      return;
+    }
+
+    if (caregiverUnlocked && isReorderMode) {
       return;
     }
 
@@ -147,8 +152,6 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
 
       const dragDistance = Math.hypot(dx, dy);
       if (dragDistance < 12) {
-        setEditorTargetTileId(tileId);
-        navigate('editor');
         return;
       }
 
@@ -168,7 +171,7 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
         setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
       }
     },
-    [draggingStartIndex, draggingTileId, moveTile, navigate, setEditorTargetTileId, tileSize, tiles.length]
+    [draggingStartIndex, draggingTileId, moveTile, tileSize, tiles.length]
   );
 
   const boardTileDragResponder = useMemo(
@@ -197,11 +200,15 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   );
 
   const onTileLongPress = (tileId: string) => {
+    if (!caregiverUnlocked) {
+      return;
+    }
+
     suppressTapAfterLongPressRef.current = true;
 
-    if (!caregiverUnlocked) {
+    if (!isReorderMode) {
       setEditorTargetTileId(tileId);
-      onOpenCaregiver();
+      navigate('editor');
       return;
     }
 
@@ -217,8 +224,21 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
     setDragOffsetY(0);
   };
 
+  const onToggleReorderMode = () => {
+    if (!caregiverUnlocked) {
+      return;
+    }
+
+    clearBoardDragState();
+    setTileDragError(null);
+    setIsReorderMode((current) => !current);
+  };
+
   const onCaregiverButtonPress = () => {
     if (caregiverUnlocked) {
+      clearBoardDragState();
+      setTileDragError(null);
+      setIsReorderMode(false);
       lockCaregiver();
       return;
     }
@@ -308,14 +328,34 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
               {caregiverUnlocked ? 'ZAMK.' : 'PIN'}
             </Text>
           </Pressable>
+
+          {caregiverUnlocked ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isReorderMode ? 'Ukončit přesun dlaždic' : 'Zapnout přesun dlaždic'}
+              onPress={onToggleReorderMode}
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.reorderModeButton,
+                isReorderMode && styles.reorderModeButtonActive,
+                pressed && styles.actionButtonPressed,
+              ]}
+            >
+              <Text style={[styles.actionText, styles.reorderModeText, isReorderMode && styles.reorderModeTextActive]}>
+                {isReorderMode ? 'HOTOVO' : 'PŘESUN'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.editorHintWrap}>
         <Text style={styles.editorHint}>
-          {caregiverUnlocked
-            ? 'Režim pečovatele aktivní. Podrž a táhni pro přesun, podrž a pusť pro úpravu.'
-            : 'Podrž dlaždici pro úpravu (po zadání PIN).'}
+          {!caregiverUnlocked
+            ? 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
+            : isReorderMode
+              ? 'Režim přesunu: podrž a táhni dlaždici na nové místo.'
+              : 'Režim pečovatele aktivní: podrž dlaždici pro její úpravu.'}
         </Text>
         {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
@@ -467,6 +507,20 @@ const styles = StyleSheet.create({
   },
   caregiverTextUnlocked: {
     color: '#1F6E39',
+  },
+  reorderModeButton: {
+    backgroundColor: '#FFF3E5',
+    borderColor: '#E8B37A',
+  },
+  reorderModeButtonActive: {
+    backgroundColor: '#FFD6A6',
+    borderColor: '#D6882B',
+  },
+  reorderModeText: {
+    color: '#8A541D',
+  },
+  reorderModeTextActive: {
+    color: '#6C3D11',
   },
   editorHintWrap: {
     paddingHorizontal: LAYOUT_PADDING,
