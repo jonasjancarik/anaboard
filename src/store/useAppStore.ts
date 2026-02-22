@@ -11,6 +11,8 @@ import {
   saveAudioClipForTile,
 } from '../shared/storage/repositories/audioClipRepository';
 import {
+  createTileAfter as createTileAfterInRepository,
+  deleteTileById,
   updateTile,
   updateTilePosition,
   type TileUpdateInput,
@@ -26,8 +28,10 @@ import type { AuthStatus, RemoteContext } from '../features/auth/types';
 import type {
   AudioClip,
   Board,
+  Category,
   ProfileSettings,
   SentenceToken,
+  SpeechMode,
   SyncStatus,
   Tile,
 } from '../shared/types/domain';
@@ -65,6 +69,7 @@ type AppStore = {
   syncStatus: SyncStatus;
   pendingSyncEvents: number;
   isSpeaking: boolean;
+  editorTargetTileId: string | null;
 
   navigate: (screen: ScreenName) => void;
   setAuthState: (params: {
@@ -85,6 +90,16 @@ type AppStore = {
 
   updateTileDraft: (tileId: string, update: TileUpdateInput) => Promise<void>;
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
+  createTileAfter: (
+    tileId: string,
+    input?: {
+      labelCs?: string;
+      emoji?: string;
+      category?: Category;
+      speechMode?: SpeechMode;
+    }
+  ) => Promise<string>;
+  deleteTile: (tileId: string) => Promise<void>;
   saveClip: (
     tileId: string,
     clipData: { localUri: string; durationMs: number; checksum?: string; format: string }
@@ -107,6 +122,7 @@ type AppStore = {
   lockCaregiver: () => void;
   registerPinFailure: () => void;
   clearPinFailures: () => void;
+  setEditorTargetTileId: (tileId: string | null) => void;
 
   setSyncStatus: (status: SyncStatus) => void;
   refreshPendingSyncEvents: () => Promise<void>;
@@ -133,6 +149,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   syncStatus: 'idle',
   pendingSyncEvents: 0,
   isSpeaking: false,
+  editorTargetTileId: null,
 
   navigate: (screen) => {
     set({ currentScreen: screen });
@@ -251,6 +268,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await get().refreshPendingSyncEvents();
   },
 
+  createTileAfter: async (tileId, input) => {
+    const newTileId = await createTileAfterInRepository(tileId, input);
+    await get().refreshBoard();
+    await get().refreshPendingSyncEvents();
+    return newTileId;
+  },
+
+  deleteTile: async (tileId) => {
+    await deleteTileById(tileId);
+    await get().refreshBoard();
+    set((state) => ({
+      sentence: state.sentence.filter((token) => token.tileId !== tileId),
+    }));
+    await get().refreshPendingSyncEvents();
+  },
+
   saveClip: async (tileId, clipData) => {
     await saveAudioClipForTile(tileId, clipData);
     await get().refreshBoard();
@@ -288,7 +321,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   lockCaregiver: () => {
-    set({ caregiverUnlocked: false });
+    set({ caregiverUnlocked: false, editorTargetTileId: null });
   },
 
   registerPinFailure: () => {
@@ -306,6 +339,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   clearPinFailures: () => {
     set({ failedPinAttempts: 0, lockoutUntil: null });
+  },
+
+  setEditorTargetTileId: (tileId) => {
+    set({ editorTargetTileId: tileId });
   },
 
   setSyncStatus: (status) => {

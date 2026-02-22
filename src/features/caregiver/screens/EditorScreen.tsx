@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +24,8 @@ type EditorScreenProps = {
 
 const categories: Category[] = ['needs', 'feelings', 'social', 'food'];
 const speechModes: SpeechMode[] = ['tts', 'recording_with_tts_fallback', 'recording_only'];
+const TILE_ROW_GAP = 8;
+const TILE_DRAG_THRESHOLD_PX = 10;
 
 export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
   const { width } = useWindowDimensions();
@@ -31,10 +35,15 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
   const clipsById = useAppStore((state) => state.clipsById);
   const updateTileDraft = useAppStore((state) => state.updateTileDraft);
   const moveTile = useAppStore((state) => state.moveTile);
+  const createTileAfter = useAppStore((state) => state.createTileAfter);
+  const deleteTile = useAppStore((state) => state.deleteTile);
   const saveClip = useAppStore((state) => state.saveClip);
   const deleteClip = useAppStore((state) => state.deleteClip);
   const resetBoard = useAppStore((state) => state.resetBoard);
   const duplicateBoard = useAppStore((state) => state.duplicateBoard);
+  const editorTargetTileId = useAppStore((state) => state.editorTargetTileId);
+  const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const boardName = useAppStore((state) => state.board?.name ?? 'Tabule');
 
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [labelCs, setLabelCs] = useState('');
@@ -44,6 +53,11 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [tileActionError, setTileActionError] = useState<string | null>(null);
+  const [draggingTileId, setDraggingTileId] = useState<string | null>(null);
+  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const [tileRowHeight, setTileRowHeight] = useState(56);
 
   useEffect(() => {
     if (tiles.length === 0) {
@@ -72,7 +86,48 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
     setSpeechMode(selectedTile.speechMode);
   }, [selectedTile]);
 
+  useEffect(() => {
+    if (!editorTargetTileId) {
+      return;
+    }
+
+    const hasTarget = tiles.some((tile) => tile.id === editorTargetTileId);
+    if (!hasTarget) {
+      setEditorTargetTileId(null);
+      return;
+    }
+
+    setSelectedTileId(editorTargetTileId);
+    setEditorTargetTileId(null);
+  }, [editorTargetTileId, setEditorTargetTileId, tiles]);
+
   const selectedClip = selectedTile?.audioClipId ? clipsById[selectedTile.audioClipId] : undefined;
+
+  const buildTileUpdatePayload = () => {
+    if (!selectedTile) {
+      return null;
+    }
+
+    return {
+      labelCs: labelCs.trim() || selectedTile.labelCs,
+      emoji: emoji.trim() || selectedTile.emoji,
+      category,
+      speechMode,
+    };
+  };
+
+  const persistSelectedTileDraft = async () => {
+    if (!selectedTile) {
+      return;
+    }
+
+    const payload = buildTileUpdatePayload();
+    if (!payload) {
+      return;
+    }
+
+    await updateTileDraft(selectedTile.id, payload);
+  };
 
   const saveTile = async () => {
     if (!selectedTile) {
@@ -81,12 +136,7 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
 
     setIsSaving(true);
     try {
-      await updateTileDraft(selectedTile.id, {
-        labelCs: labelCs.trim() || selectedTile.labelCs,
-        emoji: emoji.trim() || selectedTile.emoji,
-        category,
-        speechMode,
-      });
+      await persistSelectedTileDraft();
     } finally {
       setIsSaving(false);
     }
@@ -145,6 +195,212 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
     await deleteClip(selectedTile.id);
   };
 
+  const handleCreateTile = async () => {
+    if (!selectedTile) {
+      return;
+    }
+
+    setTileActionError(null);
+
+    try {
+      const anchorTileId = selectedTile.id;
+      await persistSelectedTileDraft();
+      const newTileId = await createTileAfter(anchorTileId, {
+        labelCs: 'Nová dlaždice',
+        emoji: '⭐',
+        category,
+        speechMode,
+      });
+      setSelectedTileId(newTileId);
+    } catch (error) {
+      setTileActionError(error instanceof Error ? error.message : 'Dlaždici nešlo vytvořit');
+    }
+  };
+
+  const handleDuplicateTile = async () => {
+    if (!selectedTile) {
+      return;
+    }
+
+    setTileActionError(null);
+
+    try {
+      const anchorTileId = selectedTile.id;
+      const payload = buildTileUpdatePayload();
+      if (!payload) {
+        return;
+      }
+
+      await updateTileDraft(anchorTileId, payload);
+      const newTileId = await createTileAfter(anchorTileId, payload);
+      setSelectedTileId(newTileId);
+    } catch (error) {
+      setTileActionError(error instanceof Error ? error.message : 'Dlaždici nešlo duplikovat');
+    }
+  };
+
+  const deleteSelectedTile = async () => {
+    if (!selectedTile) {
+      return;
+    }
+
+    setTileActionError(null);
+
+    try {
+      await deleteTile(selectedTile.id);
+      setSelectedTileId(null);
+    } catch (error) {
+      setTileActionError(error instanceof Error ? error.message : 'Dlaždici nešlo smazat');
+    }
+  };
+
+  const handleDeleteTile = () => {
+    if (!selectedTile) {
+      return;
+    }
+
+    Alert.alert('Smazat vybranou dlaždici?', 'Dlaždice bude odstraněna z tabule.', [
+      {
+        text: 'Zrušit',
+        style: 'cancel',
+      },
+      {
+        text: 'Smazat',
+        style: 'destructive',
+        onPress: () => {
+          void deleteSelectedTile();
+        },
+      },
+    ]);
+  };
+
+  const confirmResetBoard = () => {
+    Alert.alert(
+      'Obnovit výchozí tabuli?',
+      'Aktuální dlaždice se přepíšou výchozí sadou. Tuto akci nelze vrátit.',
+      [
+        {
+          text: 'Zrušit',
+          style: 'cancel',
+        },
+        {
+          text: 'Obnovit',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await resetBoard();
+              } catch (error) {
+                Alert.alert(
+                  'Obnovení se nepovedlo',
+                  error instanceof Error ? error.message : 'Nepovedlo se obnovit tabuli'
+                );
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmDuplicateBoard = () => {
+    Alert.alert(
+      'Vytvořit kopii tabule?',
+      `Aktuální tabule "${boardName}" se zkopíruje a přepne se na novou kopii.`,
+      [
+        {
+          text: 'Zrušit',
+          style: 'cancel',
+        },
+        {
+          text: 'Vytvořit kopii',
+          onPress: () => {
+            void (async () => {
+              try {
+                await duplicateBoard();
+                Alert.alert('Kopie tabule vytvořena', `Aktivní je nová tabule "${boardName} (kopie)".`);
+              } catch (error) {
+                Alert.alert(
+                  'Kopírování se nepovedlo',
+                  error instanceof Error ? error.message : 'Nepovedlo se vytvořit kopii tabule'
+                );
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
+
+  const finishTileDrag = useCallback(
+    async (dy: number) => {
+      if (!draggingTileId || dragStartIndex === null) {
+        setDraggingTileId(null);
+        setDragStartIndex(null);
+        setDragOffsetY(0);
+        return;
+      }
+
+      const hasMeaningfulMove = Math.abs(dy) >= TILE_DRAG_THRESHOLD_PX;
+      const positionStep = Math.max(1, tileRowHeight + TILE_ROW_GAP);
+      const slotDelta = hasMeaningfulMove ? Math.round(dy / positionStep) : 0;
+      const targetIndex = Math.max(0, Math.min(tiles.length - 1, dragStartIndex + slotDelta));
+
+      setDraggingTileId(null);
+      setDragStartIndex(null);
+      setDragOffsetY(0);
+
+      if (targetIndex === dragStartIndex) {
+        return;
+      }
+
+      try {
+        await moveTile(draggingTileId, targetIndex);
+        setSelectedTileId(draggingTileId);
+      } catch (error) {
+        setTileActionError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
+      }
+    },
+    [dragStartIndex, draggingTileId, moveTile, tileRowHeight, tiles.length]
+  );
+
+  const tileListDragResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => draggingTileId !== null,
+        onStartShouldSetPanResponderCapture: () => draggingTileId !== null,
+        onMoveShouldSetPanResponder: () => draggingTileId !== null,
+        onMoveShouldSetPanResponderCapture: () => draggingTileId !== null,
+        onPanResponderMove: (_event, gestureState) => {
+          if (!draggingTileId) {
+            return;
+          }
+
+          setDragOffsetY(gestureState.dy);
+        },
+        onPanResponderRelease: (_event, gestureState) => {
+          void finishTileDrag(gestureState.dy);
+        },
+        onPanResponderTerminate: (_event, gestureState) => {
+          void finishTileDrag(gestureState.dy);
+        },
+      }),
+    [draggingTileId, finishTileDrag]
+  );
+
+  const handleTileRowLongPress = (tileId: string) => {
+    const startIndex = tiles.findIndex((tile) => tile.id === tileId);
+    if (startIndex < 0) {
+      return;
+    }
+
+    setTileActionError(null);
+    setSelectedTileId(tileId);
+    setDraggingTileId(tileId);
+    setDragStartIndex(startIndex);
+    setDragOffsetY(0);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.topBar}>
@@ -162,21 +418,35 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
           style={[styles.leftPanel, isCompact && styles.leftPanelCompact]}
           contentContainerStyle={styles.leftPanelContent}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={draggingTileId === null}
         >
+          <Text style={styles.leftPanelHint}>Podrž a táhni dlaždici pro změnu pořadí.</Text>
           {tiles.map((tile) => {
             const colors = CATEGORY_COLORS[tile.category];
             const isSelected = tile.id === selectedTileId;
+            const isDraggingRow = tile.id === draggingTileId;
+
             return (
               <Pressable
                 key={tile.id}
                 onPress={() => setSelectedTileId(tile.id)}
+                onLongPress={() => handleTileRowLongPress(tile.id)}
+                delayLongPress={250}
+                onLayout={(event) => {
+                  const nextHeight = event.nativeEvent.layout.height;
+                  if (nextHeight > 0 && Math.abs(nextHeight - tileRowHeight) > 2) {
+                    setTileRowHeight(nextHeight);
+                  }
+                }}
                 style={[
                   styles.tileRow,
                   {
                     backgroundColor: colors.background,
                     borderColor: isSelected ? '#1E293B' : colors.border,
                   },
+                  isDraggingRow && [styles.tileRowDragging, { transform: [{ translateY: dragOffsetY }] }],
                 ]}
+                {...(isDraggingRow ? tileListDragResponder.panHandlers : {})}
               >
                 <Text style={styles.tileRowEmoji}>{tile.emoji}</Text>
                 <View style={styles.tileRowTextWrap}>
@@ -196,7 +466,7 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
         >
           {selectedTile ? (
             <>
-              <Text style={styles.sectionTitle}>Vybraný tile</Text>
+              <Text style={styles.sectionTitle}>Vybraná dlaždice</Text>
 
               <Text style={styles.inputLabel}>Text</Text>
               <TextInput value={labelCs} onChangeText={setLabelCs} style={styles.input} />
@@ -273,24 +543,51 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
                 </Pressable>
               </View>
 
+              <Text style={styles.inputLabel}>Dlaždice</Text>
               <View style={styles.bottomActions}>
                 <Pressable
                   style={[styles.actionButton, styles.saveButton]}
                   onPress={saveTile}
                   disabled={isSaving}
                 >
-                  <Text style={styles.actionButtonText}>{isSaving ? 'Ukládám...' : 'Uložit tile'}</Text>
+                  <Text style={styles.actionButtonText}>
+                    {isSaving ? 'Ukládám...' : 'Uložit změny dlaždice'}
+                  </Text>
                 </Pressable>
-                <Pressable style={[styles.actionButton, styles.warningButton]} onPress={resetBoard}>
-                  <Text style={styles.actionButtonText}>Reset tabule</Text>
+                <Pressable style={[styles.actionButton, styles.saveButton]} onPress={handleCreateTile}>
+                  <Text style={styles.actionButtonText}>Vložit novou dlaždici za vybranou</Text>
                 </Pressable>
-                <Pressable style={[styles.actionButton, styles.copyButton]} onPress={duplicateBoard}>
-                  <Text style={styles.actionButtonText}>Duplikovat tabuli</Text>
+                <Pressable style={[styles.actionButton, styles.copyButton]} onPress={handleDuplicateTile}>
+                  <Text style={styles.actionButtonText}>Duplikovat vybranou dlaždici</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.actionButton, styles.deleteTileButton]}
+                  onPress={handleDeleteTile}
+                  disabled={tiles.length <= 1}
+                >
+                  <Text style={styles.actionButtonText}>Smazat vybranou dlaždici</Text>
                 </Pressable>
               </View>
+              <Text style={styles.helperText}>
+                Nová dlaždice se vloží za vybranou a hned se otevře k úpravě.
+              </Text>
+              {tileActionError ? <Text style={styles.error}>{tileActionError}</Text> : null}
+
+              <Text style={styles.inputLabel}>Tabule</Text>
+              <View style={styles.bottomActions}>
+                <Pressable style={[styles.actionButton, styles.warningButton]} onPress={confirmResetBoard}>
+                  <Text style={styles.actionButtonText}>Obnovit výchozí tabuli</Text>
+                </Pressable>
+                <Pressable style={[styles.actionButton, styles.copyButton]} onPress={confirmDuplicateBoard}>
+                  <Text style={styles.actionButtonText}>Vytvořit kopii tabule</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.helperText}>
+                Kopie vytvoří novou tabuli a automaticky na ni přepne.
+              </Text>
             </>
           ) : (
-            <Text style={styles.emptyText}>Není vybraný tile</Text>
+            <Text style={styles.emptyText}>Není vybraná dlaždice</Text>
           )}
         </ScrollView>
       </View>
@@ -367,6 +664,13 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 8,
   },
+  leftPanelHint: {
+    color: '#4D6180',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 4,
+    paddingTop: 2,
+  },
   tileRow: {
     borderWidth: 2,
     borderRadius: 12,
@@ -374,6 +678,15 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'center',
     padding: 8,
+  },
+  tileRowDragging: {
+    zIndex: 15,
+    elevation: 8,
+    borderColor: '#1E293B',
+    shadowColor: '#18253A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
   },
   tileRowEmoji: {
     fontSize: 24,
@@ -491,6 +804,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#FFFFFF',
     fontWeight: '800',
+    textAlign: 'center',
   },
   recordButton: {
     borderColor: '#1E7C34',
@@ -512,8 +826,18 @@ const styles = StyleSheet.create({
     borderColor: '#6E42C6',
     backgroundColor: '#8658E1',
   },
+  deleteTileButton: {
+    borderColor: '#A61D32',
+    backgroundColor: '#CA2943',
+  },
   emptyText: {
     color: '#5E7390',
     fontWeight: '700',
+  },
+  helperText: {
+    marginTop: 6,
+    color: '#4F6481',
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

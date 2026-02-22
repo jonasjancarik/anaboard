@@ -17,8 +17,15 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
 - Caregiver editor:
   - tile text/emoji/category/speech mode
   - tile reorder
+  - insert new tile after selected tile
+  - duplicate selected tile
   - reset to defaults
-  - duplicate board
+  - create board copy and switch to it
+- Board shortcuts:
+  - caregiver unlocked: long-press + drag reorders tiles
+  - caregiver unlocked: long-press + release opens editor on that tile
+  - caregiver locked: long-press opens PIN and then editor for that tile
+  - caregiver mode can be locked/unlocked from board action button
 - Settings screen:
   - TTS rate/pitch
   - high contrast

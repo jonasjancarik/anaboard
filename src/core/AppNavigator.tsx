@@ -15,7 +15,7 @@ export const AppNavigator = () => {
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
 
   const navigate = useAppStore((state) => state.navigate);
-  const lockCaregiver = useAppStore((state) => state.lockCaregiver);
+  const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
 
   useEffect(() => {
     if (!caregiverUnlocked && (currentScreen === 'editor' || currentScreen === 'settings')) {
@@ -35,7 +35,10 @@ export const AppNavigator = () => {
     return (
       <CaregiverGateScreen
         onPassed={() => navigate('editor')}
-        onCancel={() => navigate('board')}
+        onCancel={() => {
+          setEditorTargetTileId(null);
+          navigate('board');
+        }}
       />
     );
   }
@@ -43,10 +46,7 @@ export const AppNavigator = () => {
   if (currentScreen === 'editor') {
     return (
       <EditorScreen
-        onBack={() => {
-          lockCaregiver();
-          navigate('board');
-        }}
+        onBack={() => navigate('board')}
         onOpenSettings={() => navigate('settings')}
       />
     );

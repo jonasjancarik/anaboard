@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,17 +29,28 @@ const MIN_TILE_SIZE = 58;
 
 export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   const sentenceScrollRef = useRef<ScrollView>(null);
+  const suppressTapAfterLongPressRef = useRef(false);
   const { width } = useWindowDimensions();
 
   const tiles = useAppStore((state) => state.tiles);
   const sentence = useAppStore((state) => state.sentence);
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
+  const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const addTileToSentence = useAppStore((state) => state.addTileToSentence);
   const removeSentenceToken = useAppStore((state) => state.removeSentenceToken);
   const clearSentence = useAppStore((state) => state.clearSentence);
   const setSpeaking = useAppStore((state) => state.setSpeaking);
+  const moveTile = useAppStore((state) => state.moveTile);
+  const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const lockCaregiver = useAppStore((state) => state.lockCaregiver);
+  const navigate = useAppStore((state) => state.navigate);
   const showLabels = settings?.showLabels ?? false;
+  const [draggingTileId, setDraggingTileId] = useState<string | null>(null);
+  const [draggingStartIndex, setDraggingStartIndex] = useState<number | null>(null);
+  const [dragOffsetX, setDragOffsetX] = useState(0);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const [tileDragError, setTileDragError] = useState<string | null>(null);
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
 
@@ -80,6 +92,11 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   };
 
   const onTilePress = (tileId: string) => {
+    if (suppressTapAfterLongPressRef.current) {
+      suppressTapAfterLongPressRef.current = false;
+      return;
+    }
+
     const tile = tilesById[tileId];
     if (!tile) {
       return;
@@ -104,6 +121,109 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   const onClearSentence = () => {
     void speechEngine.cancel();
     clearSentence();
+  };
+
+  const clearBoardDragState = () => {
+    setDraggingTileId(null);
+    setDraggingStartIndex(null);
+    setDragOffsetX(0);
+    setDragOffsetY(0);
+  };
+
+  const finishBoardDrag = useCallback(
+    async (dx: number, dy: number) => {
+      const tileId = draggingTileId;
+      const startIndex = draggingStartIndex;
+
+      clearBoardDragState();
+
+      setTimeout(() => {
+        suppressTapAfterLongPressRef.current = false;
+      }, 0);
+
+      if (!tileId || startIndex === null) {
+        return;
+      }
+
+      const dragDistance = Math.hypot(dx, dy);
+      if (dragDistance < 12) {
+        setEditorTargetTileId(tileId);
+        navigate('editor');
+        return;
+      }
+
+      const positionStep = tileSize + GRID_GAP;
+      const columnDelta = Math.round(dx / positionStep);
+      const rowDelta = Math.round(dy / positionStep);
+      const slotDelta = rowDelta * GRID_COLUMNS + columnDelta;
+      const targetIndex = Math.max(0, Math.min(tiles.length - 1, startIndex + slotDelta));
+
+      if (targetIndex === startIndex) {
+        return;
+      }
+
+      try {
+        await moveTile(tileId, targetIndex);
+      } catch (error) {
+        setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
+      }
+    },
+    [draggingStartIndex, draggingTileId, moveTile, navigate, setEditorTargetTileId, tileSize, tiles.length]
+  );
+
+  const boardTileDragResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => draggingTileId !== null,
+        onStartShouldSetPanResponderCapture: () => draggingTileId !== null,
+        onMoveShouldSetPanResponder: () => draggingTileId !== null,
+        onMoveShouldSetPanResponderCapture: () => draggingTileId !== null,
+        onPanResponderMove: (_event, gestureState) => {
+          if (!draggingTileId) {
+            return;
+          }
+
+          setDragOffsetX(gestureState.dx);
+          setDragOffsetY(gestureState.dy);
+        },
+        onPanResponderRelease: (_event, gestureState) => {
+          void finishBoardDrag(gestureState.dx, gestureState.dy);
+        },
+        onPanResponderTerminate: (_event, gestureState) => {
+          void finishBoardDrag(gestureState.dx, gestureState.dy);
+        },
+      }),
+    [draggingTileId, finishBoardDrag]
+  );
+
+  const onTileLongPress = (tileId: string) => {
+    suppressTapAfterLongPressRef.current = true;
+
+    if (!caregiverUnlocked) {
+      setEditorTargetTileId(tileId);
+      onOpenCaregiver();
+      return;
+    }
+
+    const startIndex = tiles.findIndex((tile) => tile.id === tileId);
+    if (startIndex < 0) {
+      return;
+    }
+
+    setTileDragError(null);
+    setDraggingTileId(tileId);
+    setDraggingStartIndex(startIndex);
+    setDragOffsetX(0);
+    setDragOffsetY(0);
+  };
+
+  const onCaregiverButtonPress = () => {
+    if (caregiverUnlocked) {
+      lockCaregiver();
+      return;
+    }
+
+    onOpenCaregiver();
   };
 
   return (
@@ -175,13 +295,29 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Režim pečovatele"
-            onPress={onOpenCaregiver}
-            style={({ pressed }) => [styles.actionButton, styles.caregiverButton, pressed && styles.actionButtonPressed]}
+            accessibilityLabel={caregiverUnlocked ? 'Zamknout režim pečovatele' : 'Odemknout režim pečovatele'}
+            onPress={onCaregiverButtonPress}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.caregiverButton,
+              caregiverUnlocked && styles.caregiverButtonUnlocked,
+              pressed && styles.actionButtonPressed,
+            ]}
           >
-            <Text style={[styles.actionText, styles.caregiverText]}>PIN</Text>
+            <Text style={[styles.actionText, styles.caregiverText, caregiverUnlocked && styles.caregiverTextUnlocked]}>
+              {caregiverUnlocked ? 'ZAMK.' : 'PIN'}
+            </Text>
           </Pressable>
         </View>
+      </View>
+
+      <View style={styles.editorHintWrap}>
+        <Text style={styles.editorHint}>
+          {caregiverUnlocked
+            ? 'Režim pečovatele aktivní. Podrž a táhni pro přesun, podrž a pusť pro úpravu.'
+            : 'Podrž dlaždici pro úpravu (po zadání PIN).'}
+        </Text>
+        {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
 
       <View style={styles.boardArea}>
@@ -189,6 +325,7 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
           {tiles.map((tile) => {
             const colors = CATEGORY_COLORS[tile.category];
             const highContrast = settings?.highContrast ?? false;
+            const isDraggingTile = tile.id === draggingTileId;
 
             return (
               <Pressable
@@ -196,6 +333,8 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
                 accessibilityRole="button"
                 accessibilityLabel={`Řekni ${tile.labelCs}`}
                 onPress={() => onTilePress(tile.id)}
+                onLongPress={() => onTileLongPress(tile.id)}
+                delayLongPress={350}
                 style={({ pressed }) => [
                   styles.tile,
                   {
@@ -204,8 +343,10 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
                     backgroundColor: highContrast ? '#FFFFFF' : colors.background,
                     borderColor: highContrast ? '#111827' : colors.border,
                   },
-                  pressed && styles.tilePressed,
+                  isDraggingTile && [styles.tileDragging, { transform: [{ translateX: dragOffsetX }, { translateY: dragOffsetY }] }],
+                  pressed && !isDraggingTile && styles.tilePressed,
                 ]}
+                {...(isDraggingTile ? boardTileDragResponder.panHandlers : {})}
               >
                 <Text style={styles.tileEmoji}>{tile.emoji}</Text>
                 {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
@@ -308,6 +449,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#EAE7FF',
     borderColor: '#9E93FF',
   },
+  caregiverButtonUnlocked: {
+    backgroundColor: '#E8F8EC',
+    borderColor: '#8CD1A0',
+  },
   actionText: {
     fontSize: 14,
     fontWeight: '900',
@@ -319,6 +464,26 @@ const styles = StyleSheet.create({
   },
   caregiverText: {
     color: '#3D338A',
+  },
+  caregiverTextUnlocked: {
+    color: '#1F6E39',
+  },
+  editorHintWrap: {
+    paddingHorizontal: LAYOUT_PADDING,
+    paddingBottom: 2,
+  },
+  editorHint: {
+    textAlign: 'center',
+    color: '#4B607E',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  editorHintError: {
+    marginTop: 4,
+    textAlign: 'center',
+    color: '#A62839',
+    fontSize: 12,
+    fontWeight: '700',
   },
   boardArea: {
     flex: 1,
@@ -349,6 +514,13 @@ const styles = StyleSheet.create({
   tilePressed: {
     transform: [{ scale: 0.93 }],
     opacity: 0.9,
+  },
+  tileDragging: {
+    zIndex: 20,
+    elevation: 10,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
   },
   tileEmoji: {
     fontSize: 34,
