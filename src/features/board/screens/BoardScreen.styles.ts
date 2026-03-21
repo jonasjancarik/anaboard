@@ -70,7 +70,7 @@ export const styles = StyleSheet.create({
     color: '#10213A',
   },
   actions: {
-    width: 100,
+    width: 92,
     gap: 8,
   },
   actionButton: {
@@ -94,28 +94,16 @@ export const styles = StyleSheet.create({
     backgroundColor: '#FFF0F0',
     borderColor: '#EEB0B2',
   },
-  caregiverButton: {
-    backgroundColor: '#EAE7FF',
-    borderColor: '#9E93FF',
-  },
-  caregiverButtonUnlocked: {
-    backgroundColor: '#E8F8EC',
-    borderColor: '#8CD1A0',
-  },
   actionText: {
-    fontSize: 14,
+    paddingHorizontal: 4,
+    fontSize: 12,
     fontWeight: '900',
     color: '#FFFFFF',
+    textAlign: 'center',
     textTransform: 'uppercase',
   },
   clearText: {
     color: '#B23845',
-  },
-  caregiverText: {
-    color: '#3D338A',
-  },
-  caregiverTextUnlocked: {
-    color: '#1F6E39',
   },
   reorderModeButton: {
     backgroundColor: '#FFF3E5',
@@ -177,11 +165,74 @@ export const styles = StyleSheet.create({
     position: 'relative',
   },
   pageControls: {
-    marginTop: 8,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
+  },
+  bottomBar: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 52,
+    gap: 10,
+  },
+  bottomBarSide: {
+    minWidth: 72,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  bottomBarSideRight: {
+    minWidth: 72,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  utilityButton: {
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    backgroundColor: '#FFF3E5',
+    borderColor: '#E8B37A',
+  },
+  utilityButtonActive: {
+    backgroundColor: '#FFD6A6',
+    borderColor: '#D6882B',
+  },
+  utilityButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    color: '#8A541D',
+    textAlign: 'center',
+  },
+  utilityButtonTextActive: {
+    color: '#6C3D11',
+  },
+  settingsCogButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CCD8ED',
+  },
+  settingsCogButtonUnlocked: {
+    backgroundColor: '#E8F8EC',
+    borderColor: '#8CD1A0',
+  },
+  settingsCogText: {
+    fontSize: 22,
+    lineHeight: 24,
+    color: '#334764',
+  },
+  settingsCogTextUnlocked: {
+    color: '#1F6E39',
   },
   pageControlButton: {
     minWidth: 46,
@@ -227,6 +278,8 @@ export const styles = StyleSheet.create({
   tile: {
     borderRadius: 20,
     borderWidth: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#192233',
@@ -257,12 +310,15 @@ export const styles = StyleSheet.create({
     transform: [{ scale: 1.06 }],
   },
   tileEmoji: {
-    fontSize: 34,
+    fontSize: 32,
   },
   tileLabel: {
-    marginTop: 6,
-    fontSize: 16,
+    width: '88%',
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 16,
     fontWeight: '900',
+    textAlign: 'center',
     textTransform: 'uppercase',
     color: '#0E203A',
   },

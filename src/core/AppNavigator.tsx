@@ -16,6 +16,7 @@ export const AppNavigator = () => {
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
 
   const navigate = useAppStore((state) => state.navigate);
+  const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
 
   useEffect(() => {
@@ -45,21 +46,25 @@ export const AppNavigator = () => {
   }
 
   if (currentScreen === 'editor') {
+    return <EditorScreen onBack={() => navigate('board')} />;
+  }
+
+  if (currentScreen === 'settings') {
     return (
-      <EditorScreen
+      <SettingsScreen
         onBack={() => navigate('board')}
-        onOpenSettings={() => navigate('settings')}
+        onOpenArchive={() => navigate('tileArchive')}
+        onLock={() => {
+          lockCaregiver();
+          navigate('board');
+        }}
       />
     );
   }
 
-  if (currentScreen === 'settings') {
-    return <SettingsScreen onBack={() => navigate('editor')} />;
-  }
-
   if (currentScreen === 'tileArchive') {
-    return <TileArchiveScreen onBack={() => navigate('board')} />;
+    return <TileArchiveScreen onBack={() => navigate('settings')} />;
   }
 
-  return <BoardScreen onOpenCaregiver={() => navigate('caregiverGate')} onOpenArchive={() => navigate('tileArchive')} />;
+  return <BoardScreen onOpenCaregiver={() => navigate('caregiverGate')} onOpenSettings={() => navigate('settings')} />;
 };

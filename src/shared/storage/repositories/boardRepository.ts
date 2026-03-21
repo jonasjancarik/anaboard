@@ -301,9 +301,19 @@ export const resetActiveBoardToDefaults = async (): Promise<void> => {
 
   const db = await getDatabase();
   const timestamp = nowIso();
-  const defaults = DEFAULT_TILES(timestamp);
-  const existingTiles = [...snapshot.tiles].sort((a, b) => a.position - b.position);
-  const queuedTileEvents: Array<{ tileId: string; payload: Record<string, unknown> }> = [];
+  const nextTiles =
+    snapshot.board.id === DEFAULT_BOARD_ID
+      ? DEFAULT_TILES(timestamp)
+      : DEFAULT_TILES(timestamp).map((tile) => ({
+          ...tile,
+          id: createId('tile'),
+          boardId: snapshot.board.id,
+          updatedAt: timestamp,
+        }));
+  const existingTileIds = new Set(snapshot.tiles.map((tile) => tile.id));
+  const nextTileIds = new Set(nextTiles.map((tile) => tile.id));
+  const deletedTileIds = [...existingTileIds].filter((tileId) => !nextTileIds.has(tileId));
+  const deletedClipIds = snapshot.audioClips.map((clip) => clip.id);
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
@@ -311,50 +321,24 @@ export const resetActiveBoardToDefaults = async (): Promise<void> => {
       snapshot.board.id
     );
 
-    for (let index = 0; index < existingTiles.length; index += 1) {
-      const currentTile = existingTiles[index];
-      const template = defaults[index];
-      if (!template) {
-        continue;
-      }
+    await db.runAsync('DELETE FROM tiles WHERE board_id = ?', snapshot.board.id);
 
+    for (const tile of nextTiles) {
       await db.runAsync(
         `
-          UPDATE tiles
-          SET
-            position = ?,
-            label_cs = ?,
-            emoji = ?,
-            category = ?,
-            speech_mode = ?,
-            audio_clip_id = NULL,
-            updated_at = ?,
-            revision = revision + 1,
-            dirty = 1
-          WHERE id = ?
+          INSERT INTO tiles (
+            id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
         `,
-        template.position,
-        template.labelCs,
-        template.emoji,
-        template.category,
-        template.speechMode,
-        timestamp,
-        currentTile.id
+        tile.id,
+        snapshot.board.id,
+        tile.position,
+        tile.labelCs,
+        tile.emoji,
+        tile.category,
+        tile.speechMode,
+        timestamp
       );
-
-      queuedTileEvents.push({
-        tileId: currentTile.id,
-        payload: {
-          id: currentTile.id,
-          position: template.position,
-          label_cs: template.labelCs,
-          emoji: template.emoji,
-          category: template.category,
-          speech_mode: template.speechMode,
-          audio_clip_id: null,
-          updated_at: timestamp,
-        },
-      });
     }
 
     await db.runAsync(
@@ -364,8 +348,31 @@ export const resetActiveBoardToDefaults = async (): Promise<void> => {
     );
   });
 
-  for (const event of queuedTileEvents) {
-    await enqueueSyncEvent('tiles', event.tileId, 'upsert', event.payload);
+  for (const clipId of deletedClipIds) {
+    await enqueueSyncEvent('audio_clips', clipId, 'delete', {
+      id: clipId,
+    });
+  }
+
+  for (const tileId of deletedTileIds) {
+    await enqueueSyncEvent('tiles', tileId, 'delete', {
+      id: tileId,
+    });
+  }
+
+  for (const tile of nextTiles) {
+    await enqueueSyncEvent('tiles', tile.id, 'upsert', {
+      id: tile.id,
+      board_id: snapshot.board.id,
+      position: tile.position,
+      label_cs: tile.labelCs,
+      emoji: tile.emoji,
+      category: tile.category,
+      speech_mode: tile.speechMode,
+      audio_clip_id: null,
+      updated_at: timestamp,
+      revision: 1,
+    });
   }
 
   await enqueueSyncEvent('boards', snapshot.board.id, 'upsert', {

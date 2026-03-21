@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
@@ -8,12 +8,15 @@ import { useAppStore } from '../../../store/useAppStore';
 
 type SettingsScreenProps = {
   onBack: () => void;
+  onOpenArchive: () => void;
+  onLock: () => void;
 };
 
-export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
+export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
   const authStatus = useAppStore((state) => state.authStatus);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
 
   const [ttsRateText, setTtsRateText] = useState('0.86');
   const [ttsPitchText, setTtsPitchText] = useState('1');
@@ -25,6 +28,7 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [isResettingBoard, setIsResettingBoard] = useState(false);
 
   useEffect(() => {
     if (!settings) {
@@ -100,6 +104,42 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
     }
   };
 
+  const performBoardReset = async () => {
+    setIsResettingBoard(true);
+    setMessage(null);
+
+    try {
+      await resetBoardToDefaults();
+      setMessage('Tabule vrácena na výchozí stav');
+    } catch (resetError) {
+      const nextMessage =
+        resetError instanceof Error ? resetError.message : 'Reset tabule selhal';
+      setMessage(nextMessage);
+    } finally {
+      setIsResettingBoard(false);
+    }
+  };
+
+  const confirmBoardReset = () => {
+    Alert.alert(
+      'Resetovat tabuli?',
+      'Vrátí výchozí dlaždice a pořadí. Vlastní nahrávky na tabuli se smažou.',
+      [
+        {
+          text: 'Zrušit',
+          style: 'cancel',
+        },
+        {
+          text: 'Resetovat',
+          style: 'destructive',
+          onPress: () => {
+            void performBoardReset();
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -109,6 +149,28 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
           </Pressable>
           <Text style={styles.title}>Nastavení</Text>
           <View style={styles.backButtonPlaceholder} />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Správa tabule</Text>
+
+          <Pressable style={[styles.primaryButton, styles.archiveButton]} onPress={onOpenArchive}>
+            <Text style={styles.primaryButtonText}>Archiv smazaných dlaždic</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.primaryButton, styles.resetButton, isResettingBoard && styles.buttonDisabled]}
+            onPress={confirmBoardReset}
+            disabled={isResettingBoard}
+          >
+            <Text style={styles.primaryButtonText}>
+              {isResettingBoard ? 'Resetuji tabuli…' : 'Resetovat na výchozí set'}
+            </Text>
+          </Pressable>
+
+          <Pressable style={[styles.primaryButton, styles.lockButton]} onPress={onLock}>
+            <Text style={styles.primaryButtonText}>Zamknout režim pečovatele</Text>
+          </Pressable>
         </View>
 
         <View style={styles.card}>
@@ -290,6 +352,21 @@ const styles = StyleSheet.create({
   signOutButton: {
     backgroundColor: '#C6394F',
     borderColor: '#9E2B3E',
+  },
+  archiveButton: {
+    backgroundColor: '#596BDF',
+    borderColor: '#4053CB',
+  },
+  resetButton: {
+    backgroundColor: '#D35C3A',
+    borderColor: '#AE4425',
+  },
+  lockButton: {
+    backgroundColor: '#7A879A',
+    borderColor: '#5B6676',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   primaryButtonText: {
     color: '#FFFFFF',

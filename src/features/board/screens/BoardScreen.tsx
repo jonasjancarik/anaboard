@@ -30,7 +30,7 @@ import { useAppStore, selectTilesById } from '../../../store/useAppStore';
 
 type BoardScreenProps = {
   onOpenCaregiver: () => void;
-  onOpenArchive: () => void;
+  onOpenSettings: () => void;
 };
 
 type BoardDragState = {
@@ -53,6 +53,16 @@ type PendingReorderTouch = {
 
 const REORDER_LONG_PRESS_MS = 180;
 const REORDER_LONG_PRESS_SLOP = 8;
+const ACTION_TEXT_PROPS = {
+  allowFontScaling: false,
+  numberOfLines: 1 as const,
+};
+const FITTED_TILE_LABEL_PROPS = {
+  adjustsFontSizeToFit: true,
+  maxFontSizeMultiplier: 1,
+  minimumFontScale: 0.55,
+  numberOfLines: 2 as const,
+};
 
 const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): string[] => {
   if (fromIndex === toIndex) {
@@ -69,7 +79,7 @@ const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): strin
   return next;
 };
 
-export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps) => {
+export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProps) => {
   const boardPagerRef = useRef<ScrollView>(null);
   const sentenceScrollRef = useRef<ScrollView>(null);
   const suppressTapAfterLongPressRef = useRef(false);
@@ -91,7 +101,6 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
   const setSpeaking = useAppStore((state) => state.setSpeaking);
   const moveTile = useAppStore((state) => state.moveTile);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
-  const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const navigate = useAppStore((state) => state.navigate);
 
   const showLabels = settings?.showLabels ?? false;
@@ -573,27 +582,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
 
   const onCaregiverButtonPress = () => {
     if (caregiverUnlocked) {
-      clearBoardDragState();
-      clearPendingReorderTouch();
-      setTileDragError(null);
-      setIsReorderMode(false);
-      lockCaregiver();
+      onOpenSettings();
       return;
     }
 
     onOpenCaregiver();
-  };
-
-  const onArchiveButtonPress = () => {
-    if (!caregiverUnlocked) {
-      return;
-    }
-
-    clearBoardDragState();
-    clearPendingReorderTouch();
-    setTileDragError(null);
-    setIsReorderMode(false);
-    onOpenArchive();
   };
 
   const onBoardViewportLayout = (event: LayoutChangeEvent) => {
@@ -670,7 +663,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
               pressed && styles.actionButtonPressed,
             ]}
           >
-            <Text style={styles.actionText}>Řekni</Text>
+            <Text style={styles.actionText} {...ACTION_TEXT_PROPS}>
+              Řekni
+            </Text>
           </Pressable>
 
           <Pressable
@@ -683,57 +678,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
               pressed && styles.actionButtonPressed,
             ]}
           >
-            <Text style={[styles.actionText, styles.clearText]}>Smazat</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={caregiverUnlocked ? 'Zamknout režim pečovatele' : 'Odemknout režim pečovatele'}
-            onPress={onCaregiverButtonPress}
-            style={({ pressed }) => [
-              styles.actionButton,
-              styles.caregiverButton,
-              caregiverUnlocked && styles.caregiverButtonUnlocked,
-              pressed && styles.actionButtonPressed,
-            ]}
-          >
-            <Text style={[styles.actionText, styles.caregiverText, caregiverUnlocked && styles.caregiverTextUnlocked]}>
-              {caregiverUnlocked ? 'ZAMK.' : 'PIN'}
+            <Text style={[styles.actionText, styles.clearText]} {...ACTION_TEXT_PROPS}>
+              Smazat
             </Text>
           </Pressable>
-
-          {caregiverUnlocked ? (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isReorderMode ? 'Ukončit přesun dlaždic' : 'Zapnout přesun dlaždic'}
-                onPress={onToggleReorderMode}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  styles.reorderModeButton,
-                  isReorderMode && styles.reorderModeButtonActive,
-                  pressed && styles.actionButtonPressed,
-                ]}
-              >
-                <Text style={[styles.actionText, styles.reorderModeText, isReorderMode && styles.reorderModeTextActive]}>
-                  {isReorderMode ? 'HOTOVO' : 'PŘESUN'}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Otevřít archiv smazaných dlaždic"
-                onPress={onArchiveButtonPress}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  styles.clearButton,
-                  pressed && styles.actionButtonPressed,
-                ]}
-              >
-                <Text style={[styles.actionText, styles.clearText]}>ARCH.</Text>
-              </Pressable>
-            </>
-          ) : null}
         </View>
       </View>
 
@@ -741,13 +689,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
         <Text style={styles.editorHint}>
           {!caregiverUnlocked
             ? pageCount > 1
-              ? 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení, mezi stránkami přejeď do stran.'
-              : 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
+              ? 'Kolečko dole vpravo odemyká režim pečovatele. Dlaždice dál fungují na mluvení, mezi stránkami přejeď do stran.'
+              : 'Kolečko dole vpravo odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
             : isReorderMode
               ? 'Režim přesunu: podrž dlaždici a táhni. Ostatní se přeskládají živě.'
               : pageCount > 1
-                ? 'Režim pečovatele aktivní: podrž dlaždici pro úpravu, archiv vrací smazané položky, stránky měň tahem do stran.'
-                : 'Režim pečovatele aktivní: podrž dlaždici pro úpravu, archiv vrací smazané položky.'}
+                ? 'Režim pečovatele aktivní: kolečko dole vpravo otevírá správu tabule, podrž dlaždici pro úpravu, stránky měň tahem do stran.'
+                : 'Režim pečovatele aktivní: kolečko dole vpravo otevírá správu tabule, podrž dlaždici pro úpravu.'}
         </Text>
         {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
@@ -828,7 +776,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
                             ]}
                           >
                             <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                            {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
+                            {showLabels ? (
+                              <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                                {tile.labelCs}
+                              </Text>
+                            ) : null}
                           </View>
                         );
                       }
@@ -853,7 +805,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
                           ]}
                         >
                           <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                          {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
+                          {showLabels ? (
+                            <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                              {tile.labelCs}
+                            </Text>
+                          ) : null}
                         </Pressable>
                       );
                     })}
@@ -883,61 +839,111 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
                   ]}
                 >
                   <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
-                  {showLabels ? <Text style={styles.tileLabel}>{draggedTile.labelCs}</Text> : null}
+                  {showLabels ? (
+                    <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                      {draggedTile.labelCs}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
             </View>
           </ScrollView>
         </View>
 
-        {pageCount > 1 ? (
-          <View style={styles.pageControls}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Předchozí stránka"
-              onPress={() => scrollToPage(currentPage - 1, true)}
-              disabled={currentPage === 0}
-              style={[
-                styles.pageControlButton,
-                currentPage === 0 && styles.pageControlButtonDisabled,
-              ]}
-            >
-              <Text style={styles.pageControlText}>{'<'}</Text>
-            </Pressable>
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomBarSide}>
+            {caregiverUnlocked ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isReorderMode ? 'Ukončit přesun dlaždic' : 'Zapnout přesun dlaždic'}
+                onPress={onToggleReorderMode}
+                style={({ pressed }) => [
+                  styles.utilityButton,
+                  isReorderMode && styles.utilityButtonActive,
+                  pressed && styles.actionButtonPressed,
+                ]}
+              >
+                <Text
+                  style={[styles.utilityButtonText, isReorderMode && styles.utilityButtonTextActive]}
+                  {...ACTION_TEXT_PROPS}
+                >
+                  {isReorderMode ? 'Hotovo' : 'Přesun'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
 
-            <View style={styles.pageIndicatorWrap}>
-              {Array.from({ length: pageCount }, (_, pageIndex) => (
-                <Pressable
-                  key={`page-dot-${pageIndex}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Otevřít stránku ${pageIndex + 1}`}
-                  onPress={() => scrollToPage(pageIndex, true)}
-                  style={[
-                    styles.pageDot,
-                    currentPage === pageIndex && styles.pageDotActive,
-                  ]}
-                />
-              ))}
+          {pageCount > 1 ? (
+            <View style={styles.pageControls}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Předchozí stránka"
+                onPress={() => scrollToPage(currentPage - 1, true)}
+                disabled={currentPage === 0}
+                style={[
+                  styles.pageControlButton,
+                  currentPage === 0 && styles.pageControlButtonDisabled,
+                ]}
+              >
+                <Text style={styles.pageControlText}>{'<'}</Text>
+              </Pressable>
+
+              <View style={styles.pageIndicatorWrap}>
+                {Array.from({ length: pageCount }, (_, pageIndex) => (
+                  <Pressable
+                    key={`page-dot-${pageIndex}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Otevřít stránku ${pageIndex + 1}`}
+                    onPress={() => scrollToPage(pageIndex, true)}
+                    style={[
+                      styles.pageDot,
+                      currentPage === pageIndex && styles.pageDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <Text style={styles.pageCounter}>
+                {currentPage + 1}/{pageCount}
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Další stránka"
+                onPress={() => scrollToPage(currentPage + 1, true)}
+                disabled={currentPage >= pageCount - 1}
+                style={[
+                  styles.pageControlButton,
+                  currentPage >= pageCount - 1 && styles.pageControlButtonDisabled,
+                ]}
+              >
+                <Text style={styles.pageControlText}>{'>'}</Text>
+              </Pressable>
             </View>
+          ) : (
+            <View />
+          )}
 
-            <Text style={styles.pageCounter}>
-              {currentPage + 1}/{pageCount}
-            </Text>
-
+          <View style={styles.bottomBarSideRight}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Další stránka"
-              onPress={() => scrollToPage(currentPage + 1, true)}
-              disabled={currentPage >= pageCount - 1}
-              style={[
-                styles.pageControlButton,
-                currentPage >= pageCount - 1 && styles.pageControlButtonDisabled,
+              accessibilityLabel={caregiverUnlocked ? 'Otevřít nastavení pečovatele' : 'Odemknout režim pečovatele'}
+              onPress={onCaregiverButtonPress}
+              style={({ pressed }) => [
+                styles.settingsCogButton,
+                caregiverUnlocked && styles.settingsCogButtonUnlocked,
+                pressed && styles.actionButtonPressed,
               ]}
             >
-              <Text style={styles.pageControlText}>{'>'}</Text>
+              <Text
+                style={[styles.settingsCogText, caregiverUnlocked && styles.settingsCogTextUnlocked]}
+                allowFontScaling={false}
+              >
+                ⚙
+              </Text>
             </Pressable>
           </View>
-        ) : null}
+        </View>
       </View>
     </SafeAreaView>
   );

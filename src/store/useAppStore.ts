@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   ensureDefaultBoard,
   getActiveBoardSnapshot,
+  resetActiveBoardToDefaults,
 } from '../shared/storage/repositories/boardRepository';
 import {
   deleteAudioClipForTile,
@@ -79,6 +80,7 @@ type AppStore = {
   updateTileDraft: (tileId: string, update: TileUpdateInput) => Promise<void>;
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
   deleteTile: (tileId: string) => Promise<void>;
+  resetBoardToDefaults: () => Promise<void>;
   saveClip: (
     tileId: string,
     clipData: { localUri: string; durationMs: number; checksum?: string; format: string }
@@ -251,6 +253,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((state) => ({
       sentence: state.sentence.filter((token) => token.tileId !== tileId),
     }));
+    await get().refreshPendingSyncEvents();
+  },
+
+  resetBoardToDefaults: async () => {
+    await resetActiveBoardToDefaults();
+    await get().refreshBoard();
+    set({ sentence: [], editorTargetTileId: null });
     await get().refreshPendingSyncEvents();
   },
 

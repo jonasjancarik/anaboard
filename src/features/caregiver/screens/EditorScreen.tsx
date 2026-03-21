@@ -9,13 +9,12 @@ import { recordingService } from '../../speech/recordingService';
 
 type EditorScreenProps = {
   onBack: () => void;
-  onOpenSettings: () => void;
 };
 
 const categories: Category[] = ['needs', 'feelings', 'social', 'food'];
 const speechModes: SpeechMode[] = ['tts', 'recording_with_tts_fallback', 'recording_only'];
 
-export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
+export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const tiles = useAppStore((state) => state.tiles);
   const clipsById = useAppStore((state) => state.clipsById);
   const updateTileDraft = useAppStore((state) => state.updateTileDraft);
@@ -196,9 +195,7 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
           <Text style={[styles.topButtonText, styles.neutralButtonText]}>Zpět</Text>
         </Pressable>
         <Text style={styles.title}>Upravit dlaždici</Text>
-        <Pressable style={[styles.topButton, styles.settingsButton]} onPress={onOpenSettings}>
-          <Text style={styles.topButtonText}>Nastavení</Text>
-        </Pressable>
+        <View style={styles.topButtonPlaceholder} />
       </View>
 
       <View style={styles.content}>
@@ -341,9 +338,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
   },
-  settingsButton: {
-    borderColor: '#7F5EFF',
-    backgroundColor: '#7F5EFF',
+  topButtonPlaceholder: {
+    minWidth: 86,
   },
   neutralButton: {
     borderColor: '#D2DAEA',
