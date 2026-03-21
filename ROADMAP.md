@@ -49,11 +49,11 @@ Implemented:
 - Caregiver PIN gate.
 - Lockout rule: 3 failed attempts -> 30s cooldown.
 - Editor: tile text/emoji/category/speech mode, reorder, clip record/delete.
+- Editor: create/delete tile actions with automatic position reindex.
 - Board actions: reset to defaults, duplicate board.
 - Settings: TTS rate/pitch, high contrast, PIN change.
 
 Remaining:
-- Add tile management: create new tile, delete tile, and choose insert position.
 - Add better child-safe runtime lock UX (single switch + confirmations).
 - Add clip replace UX polish (preview/playback in editor).
 - Add editor undo/redo for tile mutations.
@@ -118,7 +118,6 @@ Planned:
    - Clip checksum verification.
    - Interruption handling.
 3. Editor safety polish:
-   - Add/create/delete tile flow with clear position handling.
    - Confirm dialogs on destructive actions.
    - Better clip management UX.
 
