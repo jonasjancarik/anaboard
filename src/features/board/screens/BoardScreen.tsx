@@ -1,6 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   LayoutAnimation,
   PanResponder,
   Pressable,
@@ -38,6 +40,7 @@ type BoardDragState = {
   startIndex: number;
   startLeft: number;
   startTop: number;
+  startViewportLeft: number;
   startPageX: number;
   startPageY: number;
   dx: number;
@@ -87,6 +90,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const reorderTileIdsRef = useRef<string[]>([]);
   const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wiggleValue = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
 
   const board = useAppStore((state) => state.board);
@@ -111,6 +115,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const [tileDragError, setTileDragError] = useState<string | null>(null);
   const [reorderTileIds, setReorderTileIds] = useState<string[]>([]);
   const [activeDrag, setActiveDrag] = useState<BoardDragState | null>(null);
+  const [wiggleActive, setWiggleActive] = useState(false);
   const [boardViewportWidth, setBoardViewportWidth] = useState(0);
   const [boardViewportHeight, setBoardViewportHeight] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
@@ -148,6 +153,48 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   }, [reorderTileIds]);
 
   useEffect(() => {
+    let animation: Animated.CompositeAnimation | null = null;
+
+    if (!caregiverUnlocked || !wiggleActive) {
+      wiggleValue.stopAnimation();
+      wiggleValue.setValue(0);
+      return;
+    }
+
+    animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wiggleValue, {
+          toValue: 1,
+          duration: 120,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(wiggleValue, {
+          toValue: -1,
+          duration: 220,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(wiggleValue, {
+          toValue: 0,
+          duration: 120,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.delay(260),
+      ])
+    );
+
+    animation.start();
+
+    return () => {
+      animation?.stop();
+      wiggleValue.stopAnimation();
+      wiggleValue.setValue(0);
+    };
+  }, [caregiverUnlocked, wiggleActive, wiggleValue]);
+
+  useEffect(() => {
     if (!caregiverUnlocked) {
       if (reorderLongPressTimerRef.current) {
         clearTimeout(reorderLongPressTimerRef.current);
@@ -157,6 +204,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       dragStateRef.current = null;
       setActiveDrag(null);
       setReorderTileIds([]);
+      setWiggleActive(false);
     }
   }, [caregiverUnlocked]);
 
@@ -357,7 +405,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       dragStateRef.current = nextDrag;
       setActiveDrag(nextDrag);
 
-      const dragCenterLeft = drag.startLeft + dx + tileSize / 2;
+      const viewportLeft = drag.startViewportLeft + dx;
+      const dragCenterLeft = currentPageRef.current * pageWidth + viewportLeft + tileSize / 2;
       const targetPage = clampPageIndex(Math.floor(dragCenterLeft / pageWidth));
       if (targetPage !== currentPageRef.current) {
         scrollToPage(targetPage, false);
@@ -369,8 +418,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           return currentIds;
         }
 
+        const contentLeft = currentPageRef.current * pageWidth + viewportLeft;
         const targetIndex = getTargetIndexFromPosition(
-          drag.startLeft + dx,
+          contentLeft,
           drag.startTop + dy,
           currentIds.length
         );
@@ -434,6 +484,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         startIndex: pendingTouch.startIndex,
         startLeft: left,
         startTop: top,
+        startViewportLeft: left - currentPageRef.current * pageWidth,
         startPageX: pendingTouch.startPageX,
         startPageY: pendingTouch.startPageY,
         dx: 0,
@@ -441,11 +492,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       };
 
       setTileDragError(null);
+      setWiggleActive(true);
       suppressTapAfterLongPressRef.current = true;
       dragStateRef.current = nextDrag;
       setActiveDrag(nextDrag);
     },
-    [getSlotPosition]
+    [getSlotPosition, pageWidth]
   );
 
   const beginReorderTouch = useCallback(
@@ -515,6 +567,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   const endReorderTouch = useCallback(() => {
+    setWiggleActive(false);
     clearPendingReorderTouch();
     if (dragStateRef.current) {
       void commitDrag();
@@ -555,6 +608,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setTileDragError(null);
 
     if (caregiverUnlocked) {
+      setWiggleActive(false);
       lockCaregiver();
       return;
     }
@@ -572,6 +626,24 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setTileDragError(null);
     onOpenSettings();
   };
+
+  const getTileWiggleStyle = useCallback(
+    (index: number) => {
+      const direction = index % 2 === 0 ? 1 : -1;
+
+      return {
+        transform: [
+          {
+            rotate: wiggleValue.interpolate({
+              inputRange: [-1, 0, 1],
+              outputRange: [`${1.15 * direction}deg`, '0deg', `${-1.15 * direction}deg`],
+            }),
+          },
+        ],
+      };
+    },
+    [wiggleValue]
+  );
 
   const onBoardViewportLayout = (event: LayoutChangeEvent) => {
     const nextWidth = event.nativeEvent.layout.width;
@@ -676,8 +748,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               ? 'Zámek dole vlevo odemyká režim pečovatele. Dlaždice mluví, mezi stránkami přejeď do stran.'
               : 'Zámek dole vlevo odemyká režim pečovatele. Dlaždice mluví.'
             : pageCount > 1
-              ? 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž a táhni pro přesun, ozubené kolečko otevírá správu tabule.'
-              : 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž a táhni pro přesun, ozubené kolečko otevírá správu tabule.'}
+                ? 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž dlaždici pro zapnutí přesunu a táhni, ozubené kolečko otevírá správu tabule.'
+              : 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž dlaždici pro zapnutí přesunu a táhni, ozubené kolečko otevírá správu tabule.'}
         </Text>
         {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
@@ -734,94 +806,104 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                       const isDraggedTile = activeDrag?.tileId === tile.id;
 
                       return (
-                        <Pressable
+                        <Animated.View
                           key={tile.id}
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`
-                          }
-                          onPress={() => onTilePress(tile.id)}
-                          onTouchStart={
-                            caregiverUnlocked
-                              ? (event) => {
-                                  beginReorderTouch(
-                                    tile.id,
-                                    globalIndex,
-                                    event.nativeEvent.pageX,
-                                    event.nativeEvent.pageY
-                                  );
-                                }
+                          style={
+                            caregiverUnlocked && wiggleActive && !isDraggedTile
+                              ? getTileWiggleStyle(globalIndex)
                               : undefined
                           }
-                          onTouchEnd={
-                            caregiverUnlocked
-                              ? () => {
-                                  endReorderTouch();
-                                }
-                              : undefined
-                          }
-                          onTouchCancel={
-                            caregiverUnlocked
-                              ? () => {
-                                  endReorderTouch();
-                                }
-                              : undefined
-                          }
-                          style={({ pressed }) => [
-                            styles.tile,
-                            {
-                              width: tileSize,
-                              height: tileSize,
-                              backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                              borderColor: highContrast ? '#111827' : colors.border,
-                            },
-                            pressed && styles.tilePressed,
-                          ]}
                         >
-                          <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                          {showLabels ? (
-                            <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
-                              {tile.labelCs}
-                            </Text>
-                          ) : null}
-                        </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`
+                            }
+                            onPress={() => onTilePress(tile.id)}
+                            onTouchStart={
+                              caregiverUnlocked
+                                ? (event) => {
+                                    beginReorderTouch(
+                                      tile.id,
+                                      globalIndex,
+                                      event.nativeEvent.pageX,
+                                      event.nativeEvent.pageY
+                                    );
+                                  }
+                                : undefined
+                            }
+                            onTouchEnd={
+                              caregiverUnlocked
+                                ? () => {
+                                    endReorderTouch();
+                                  }
+                                : undefined
+                            }
+                            onTouchCancel={
+                              caregiverUnlocked
+                                ? () => {
+                                    endReorderTouch();
+                                  }
+                                : undefined
+                            }
+                            style={({ pressed }) => [
+                              styles.tile,
+                              {
+                                width: tileSize,
+                                height: tileSize,
+                                backgroundColor: highContrast ? '#FFFFFF' : colors.background,
+                                borderColor: highContrast ? '#111827' : colors.border,
+                              },
+                              isDraggedTile && styles.tilePlaceholder,
+                              pressed && styles.tilePressed,
+                            ]}
+                          >
+                            <Text style={styles.tileEmoji}>{tile.emoji}</Text>
+                            {showLabels ? (
+                              <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                                {tile.labelCs}
+                              </Text>
+                            ) : null}
+                          </Pressable>
+                        </Animated.View>
                       );
                     })}
                   </View>
                 </View>
               ))}
 
-              {activeDrag && draggedTile ? (
-                <View
-                  pointerEvents="none"
-                  style={[
-                    styles.dragOverlayTile,
-                    {
-                      width: tileSize,
-                      height: tileSize,
-                      left: activeDrag.startLeft + activeDrag.dx,
-                      top: activeDrag.startTop + activeDrag.dy,
-                      backgroundColor:
-                        settings?.highContrast ?? false
-                          ? '#FFFFFF'
-                          : CATEGORY_COLORS[draggedTile.category].background,
-                      borderColor:
-                        settings?.highContrast ?? false
-                          ? '#111827'
-                          : CATEGORY_COLORS[draggedTile.category].border,
-                    },
-                  ]}
-                >
-                  <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
-                  {showLabels ? (
-                    <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
-                      {draggedTile.labelCs}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
             </View>
           </ScrollView>
+
+          {activeDrag && draggedTile ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.dragOverlayTile,
+                {
+                  width: tileSize,
+                  height: tileSize,
+                  left: activeDrag.startViewportLeft + activeDrag.dx,
+                  top: activeDrag.startTop + activeDrag.dy,
+                  backgroundColor:
+                    settings?.highContrast ?? false
+                      ? '#FFFFFF'
+                      : CATEGORY_COLORS[draggedTile.category].background,
+                  borderColor:
+                    settings?.highContrast ?? false
+                      ? '#111827'
+                      : CATEGORY_COLORS[draggedTile.category].border,
+                },
+              ]}
+            >
+              <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
+              {showLabels ? (
+                <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                  {draggedTile.labelCs}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.bottomBar}>
