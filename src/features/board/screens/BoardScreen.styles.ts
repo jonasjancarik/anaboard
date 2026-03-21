@@ -1,10 +1,12 @@
 import { StyleSheet } from 'react-native';
 
 export const GRID_COLUMNS = 4;
+export const GRID_ROWS = 4;
 export const GRID_GAP = 10;
 export const LAYOUT_PADDING = 12;
 export const MAX_TILE_SIZE = 180;
 export const MIN_TILE_SIZE = 58;
+export const MAX_GRID_WIDTH = 760;
 
 export const styles = StyleSheet.create({
   screen: {
@@ -148,19 +150,79 @@ export const styles = StyleSheet.create({
   },
   boardArea: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     paddingHorizontal: LAYOUT_PADDING,
     paddingBottom: LAYOUT_PADDING,
   },
-  grid: {
+  boardPagerViewport: {
+    flex: 1,
     width: '100%',
-    maxWidth: 760,
+  },
+  boardPagerScroll: {
+    flex: 1,
+  },
+  pagesStrip: {
+    flexDirection: 'row',
+    position: 'relative',
+  },
+  page: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    alignContent: 'flex-start',
     gap: GRID_GAP,
     position: 'relative',
+  },
+  pageControls: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pageControlButton: {
+    minWidth: 46,
+    minHeight: 38,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#CCD8ED',
+    backgroundColor: '#F5F8FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  pageControlButtonDisabled: {
+    opacity: 0.35,
+  },
+  pageControlText: {
+    color: '#243755',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  pageIndicatorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#C9D5E8',
+  },
+  pageDotActive: {
+    width: 22,
+    backgroundColor: '#355C9B',
+  },
+  pageCounter: {
+    color: '#415978',
+    fontSize: 13,
+    fontWeight: '700',
+    minWidth: 42,
+    textAlign: 'center',
   },
   tile: {
     borderRadius: 20,

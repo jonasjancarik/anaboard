@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  type LayoutChangeEvent,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -15,7 +16,9 @@ import { speechEngine, buildSpeechSegments } from '../../speech/speechEngine';
 import {
   GRID_COLUMNS,
   GRID_GAP,
+  GRID_ROWS,
   LAYOUT_PADDING,
+  MAX_GRID_WIDTH,
   MAX_TILE_SIZE,
   MIN_TILE_SIZE,
   styles,
@@ -67,6 +70,7 @@ const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): strin
 };
 
 export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps) => {
+  const boardPagerRef = useRef<ScrollView>(null);
   const sentenceScrollRef = useRef<ScrollView>(null);
   const suppressTapAfterLongPressRef = useRef(false);
   const dragStateRef = useRef<BoardDragState | null>(null);
@@ -75,6 +79,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { width } = useWindowDimensions();
 
+  const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
   const sentence = useAppStore((state) => state.sentence);
   const clipsById = useAppStore((state) => state.clipsById);
@@ -90,26 +95,44 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
   const navigate = useAppStore((state) => state.navigate);
 
   const showLabels = settings?.showLabels ?? false;
+  const gridColumns = board?.columns ?? GRID_COLUMNS;
+  const gridRows = board?.rows ?? GRID_ROWS;
+  const pageSize = gridColumns * gridRows;
   const [tileDragError, setTileDragError] = useState<string | null>(null);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [reorderTileIds, setReorderTileIds] = useState<string[]>([]);
   const [activeDrag, setActiveDrag] = useState<BoardDragState | null>(null);
-  const [gridWidth, setGridWidth] = useState(0);
+  const [boardViewportWidth, setBoardViewportWidth] = useState(0);
+  const [boardViewportHeight, setBoardViewportHeight] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const currentPageRef = useRef(0);
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
 
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  const pageWidth = boardViewportWidth > 0 ? boardViewportWidth : width - LAYOUT_PADDING * 2;
+  const availableGridWidth = Math.min(pageWidth, MAX_GRID_WIDTH);
   const tileSize = useMemo(() => {
-    const maxGridWidth = 760;
-    const availableWidth = Math.min(width - LAYOUT_PADDING * 2, maxGridWidth);
-    const rawTileSize = (availableWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+    const widthBound = (availableGridWidth - GRID_GAP * (gridColumns - 1)) / gridColumns;
+    const heightBound =
+      boardViewportHeight > 0
+        ? (boardViewportHeight - GRID_GAP * (gridRows - 1)) / gridRows
+        : widthBound;
+    const rawTileSize = Math.min(widthBound, heightBound);
 
     return Math.max(MIN_TILE_SIZE, Math.min(MAX_TILE_SIZE, Math.floor(rawTileSize)));
-  }, [width]);
+  }, [availableGridWidth, boardViewportHeight, gridColumns, gridRows]);
 
   const tileStep = tileSize + GRID_GAP;
-  const rowWidth = tileSize * GRID_COLUMNS + GRID_GAP * (GRID_COLUMNS - 1);
-  const effectiveGridWidth = gridWidth > 0 ? gridWidth : rowWidth;
-  const horizontalGridOffset = Math.max(0, (effectiveGridWidth - rowWidth) / 2);
+  const pageGridWidth = tileSize * gridColumns + GRID_GAP * (gridColumns - 1);
+  const pageGridHeight = tileSize * gridRows + GRID_GAP * (gridRows - 1);
+  const effectivePageHeight = boardViewportHeight > 0 ? boardViewportHeight : pageGridHeight;
+  const horizontalGridOffset = Math.max(0, (pageWidth - pageGridWidth) / 2);
+  const verticalGridOffset = Math.max(0, (effectivePageHeight - pageGridHeight) / 2);
 
   useEffect(() => {
     reorderTileIdsRef.current = reorderTileIds;
@@ -148,19 +171,67 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
       .filter((tile): tile is Tile => Boolean(tile));
   }, [isReorderMode, reorderTileIds, tiles, tilesById]);
 
+  const pageCount = Math.max(1, Math.ceil(orderedTiles.length / pageSize));
+  const pagedTiles = useMemo(() => {
+    const pages: Tile[][] = [];
+
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const startIndex = pageIndex * pageSize;
+      pages.push(orderedTiles.slice(startIndex, startIndex + pageSize));
+    }
+
+    return pages;
+  }, [orderedTiles, pageCount, pageSize]);
+
   const draggedTile = activeDrag ? tilesById[activeDrag.tileId] : undefined;
+
+  const clampPageIndex = useCallback(
+    (nextPage: number) => Math.max(0, Math.min(pageCount - 1, nextPage)),
+    [pageCount]
+  );
+
+  const scrollToPage = useCallback(
+    (nextPage: number, animated: boolean) => {
+      const clampedPage = clampPageIndex(nextPage);
+      currentPageRef.current = clampedPage;
+      setCurrentPage(clampedPage);
+
+      if (pageWidth <= 0) {
+        return;
+      }
+
+      boardPagerRef.current?.scrollTo({
+        x: clampedPage * pageWidth,
+        animated,
+      });
+    },
+    [clampPageIndex, pageWidth]
+  );
+
+  useEffect(() => {
+    if (currentPage > pageCount - 1) {
+      scrollToPage(pageCount - 1, false);
+      return;
+    }
+
+    if (pageWidth > 0) {
+      scrollToPage(currentPage, false);
+    }
+  }, [currentPage, pageCount, pageWidth, scrollToPage]);
 
   const getSlotPosition = useCallback(
     (index: number) => {
-      const row = Math.floor(index / GRID_COLUMNS);
-      const column = index % GRID_COLUMNS;
+      const pageIndex = Math.floor(index / pageSize);
+      const localIndex = index % pageSize;
+      const row = Math.floor(localIndex / gridColumns);
+      const column = localIndex % gridColumns;
 
       return {
-        left: horizontalGridOffset + column * tileStep,
-        top: row * tileStep,
+        left: pageIndex * pageWidth + horizontalGridOffset + column * tileStep,
+        top: verticalGridOffset + row * tileStep,
       };
     },
-    [horizontalGridOffset, tileStep]
+    [gridColumns, horizontalGridOffset, pageSize, pageWidth, tileStep, verticalGridOffset]
   );
 
   const getTargetIndexFromPosition = useCallback(
@@ -169,14 +240,29 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
         return 0;
       }
 
-      const normalizedLeft = left - horizontalGridOffset;
-      const column = Math.max(0, Math.min(GRID_COLUMNS - 1, Math.round(normalizedLeft / tileStep)));
-      const row = Math.max(0, Math.round(top / tileStep));
-      const rawIndex = row * GRID_COLUMNS + column;
+      const tileCenterLeft = left + tileSize / 2;
+      const pageIndex = clampPageIndex(Math.floor(tileCenterLeft / pageWidth));
+      const normalizedLeft = left - pageIndex * pageWidth - horizontalGridOffset;
+      const normalizedTop = top - verticalGridOffset;
+      const column = Math.max(0, Math.min(gridColumns - 1, Math.round(normalizedLeft / tileStep)));
+      const row = Math.max(0, Math.min(gridRows - 1, Math.round(normalizedTop / tileStep)));
+      const rawLocalIndex = row * gridColumns + column;
+      const maxLocalIndex = Math.min(pageSize - 1, totalTiles - pageIndex * pageSize - 1);
+      const localIndex = Math.max(0, Math.min(maxLocalIndex, rawLocalIndex));
 
-      return Math.max(0, Math.min(totalTiles - 1, rawIndex));
+      return Math.max(0, Math.min(totalTiles - 1, pageIndex * pageSize + localIndex));
     },
-    [horizontalGridOffset, tileStep]
+    [
+      clampPageIndex,
+      gridColumns,
+      gridRows,
+      horizontalGridOffset,
+      pageSize,
+      pageWidth,
+      tileSize,
+      tileStep,
+      verticalGridOffset,
+    ]
   );
 
   const clearBoardDragState = useCallback(() => {
@@ -260,6 +346,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
       dragStateRef.current = nextDrag;
       setActiveDrag(nextDrag);
 
+      const dragCenterLeft = drag.startLeft + dx + tileSize / 2;
+      const targetPage = clampPageIndex(Math.floor(dragCenterLeft / pageWidth));
+      if (targetPage !== currentPageRef.current) {
+        scrollToPage(targetPage, false);
+      }
+
       setReorderTileIds((currentIds) => {
         const currentIndex = currentIds.indexOf(drag.tileId);
         if (currentIndex < 0) {
@@ -281,7 +373,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
         return nextIds;
       });
     },
-    [getTargetIndexFromPosition]
+    [clampPageIndex, getTargetIndexFromPosition, pageWidth, scrollToPage, tileSize]
   );
 
   const commitDrag = useCallback(async () => {
@@ -472,6 +564,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
       const nextIds = tiles.map((tile) => tile.id);
       reorderTileIdsRef.current = nextIds;
       setReorderTileIds(nextIds);
+    } else {
+      scrollToPage(currentPageRef.current, true);
     }
 
     setIsReorderMode((current) => !current);
@@ -500,6 +594,29 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
     setTileDragError(null);
     setIsReorderMode(false);
     onOpenArchive();
+  };
+
+  const onBoardViewportLayout = (event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    const nextHeight = event.nativeEvent.layout.height;
+
+    if (nextWidth > 0 && Math.abs(nextWidth - boardViewportWidth) > 1) {
+      setBoardViewportWidth(nextWidth);
+    }
+
+    if (nextHeight > 0 && Math.abs(nextHeight - boardViewportHeight) > 1) {
+      setBoardViewportHeight(nextHeight);
+    }
+  };
+
+  const onPagerMomentumScrollEnd = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+    if (pageWidth <= 0) {
+      return;
+    }
+
+    const nextPage = clampPageIndex(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
+    currentPageRef.current = nextPage;
+    setCurrentPage(nextPage);
   };
 
   return (
@@ -623,111 +740,204 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps
       <View style={styles.editorHintWrap}>
         <Text style={styles.editorHint}>
           {!caregiverUnlocked
-            ? 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
+            ? pageCount > 1
+              ? 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení, mezi stránkami přejeď do stran.'
+              : 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
             : isReorderMode
               ? 'Režim přesunu: podrž dlaždici a táhni. Ostatní se přeskládají živě.'
-              : 'Režim pečovatele aktivní: podrž dlaždici pro úpravu, archiv vrací smazané položky.'}
+              : pageCount > 1
+                ? 'Režim pečovatele aktivní: podrž dlaždici pro úpravu, archiv vrací smazané položky, stránky měň tahem do stran.'
+                : 'Režim pečovatele aktivní: podrž dlaždici pro úpravu, archiv vrací smazané položky.'}
         </Text>
         {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
 
       <View style={styles.boardArea}>
         <View
-          style={styles.grid}
-          onLayout={(event) => {
-            const nextWidth = event.nativeEvent.layout.width;
-            if (nextWidth > 0 && Math.abs(nextWidth - gridWidth) > 1) {
-              setGridWidth(nextWidth);
-            }
-          }}
+          style={styles.boardPagerViewport}
+          onLayout={onBoardViewportLayout}
           {...(isReorderMode ? reorderGridResponder.panHandlers : {})}
         >
-          {orderedTiles.map((tile, index) => {
-            const colors = CATEGORY_COLORS[tile.category];
-            const highContrast = settings?.highContrast ?? false;
-            const isDraggedTile = activeDrag?.tileId === tile.id;
-
-            if (isReorderMode) {
-              return (
-                <View
-                  key={tile.id}
-                  onTouchStart={(event) => {
-                    beginReorderTouch(tile.id, index, event.nativeEvent.pageX, event.nativeEvent.pageY);
-                  }}
-                  onTouchEnd={() => {
-                    endReorderTouch();
-                  }}
-                  onTouchCancel={() => {
-                    endReorderTouch();
-                  }}
-                  style={[
-                    styles.tile,
-                    {
-                      width: tileSize,
-                      height: tileSize,
-                      backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                      borderColor: highContrast ? '#111827' : colors.border,
-                    },
-                    isDraggedTile && styles.tilePlaceholder,
-                  ]}
-                >
-                  <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                  {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
-                </View>
-              );
-            }
-
-            return (
-              <Pressable
-                key={tile.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Řekni ${tile.labelCs}`}
-                onPress={() => onTilePress(tile.id)}
-                onLongPress={() => onTileLongPress(tile.id)}
-                delayLongPress={250}
-                style={({ pressed }) => [
-                  styles.tile,
-                  {
-                    width: tileSize,
-                    height: tileSize,
-                    backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                    borderColor: highContrast ? '#111827' : colors.border,
-                  },
-                  pressed && styles.tilePressed,
-                ]}
-              >
-                <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
-              </Pressable>
-            );
-          })}
-
-          {isReorderMode && activeDrag && draggedTile ? (
+          <ScrollView
+            ref={boardPagerRef}
+            horizontal
+            pagingEnabled
+            scrollEnabled={!isReorderMode && pageCount > 1}
+            style={styles.boardPagerScroll}
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={onPagerMomentumScrollEnd}
+            decelerationRate="fast"
+          >
             <View
-              pointerEvents="none"
               style={[
-                styles.dragOverlayTile,
+                styles.pagesStrip,
                 {
-                  width: tileSize,
-                  height: tileSize,
-                  left: activeDrag.startLeft + activeDrag.dx,
-                  top: activeDrag.startTop + activeDrag.dy,
-                  backgroundColor:
-                    settings?.highContrast ?? false
-                      ? '#FFFFFF'
-                      : CATEGORY_COLORS[draggedTile.category].background,
-                  borderColor:
-                    settings?.highContrast ?? false
-                      ? '#111827'
-                      : CATEGORY_COLORS[draggedTile.category].border,
+                  width: pageWidth * pageCount,
+                  minHeight: effectivePageHeight,
                 },
               ]}
             >
-              <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
-              {showLabels ? <Text style={styles.tileLabel}>{draggedTile.labelCs}</Text> : null}
+              {pagedTiles.map((pageTiles, pageIndex) => (
+                <View
+                  key={`page-${pageIndex}`}
+                  style={[
+                    styles.page,
+                    {
+                      width: pageWidth,
+                      height: effectivePageHeight,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.pageGrid,
+                      {
+                        width: pageGridWidth,
+                        minHeight: pageGridHeight,
+                      },
+                    ]}
+                  >
+                    {pageTiles.map((tile, localIndex) => {
+                      const colors = CATEGORY_COLORS[tile.category];
+                      const highContrast = settings?.highContrast ?? false;
+                      const globalIndex = pageIndex * pageSize + localIndex;
+                      const isDraggedTile = activeDrag?.tileId === tile.id;
+
+                      if (isReorderMode) {
+                        return (
+                          <View
+                            key={tile.id}
+                            onTouchStart={(event) => {
+                              beginReorderTouch(tile.id, globalIndex, event.nativeEvent.pageX, event.nativeEvent.pageY);
+                            }}
+                            onTouchEnd={() => {
+                              endReorderTouch();
+                            }}
+                            onTouchCancel={() => {
+                              endReorderTouch();
+                            }}
+                            style={[
+                              styles.tile,
+                              {
+                                width: tileSize,
+                                height: tileSize,
+                                backgroundColor: highContrast ? '#FFFFFF' : colors.background,
+                                borderColor: highContrast ? '#111827' : colors.border,
+                              },
+                              isDraggedTile && styles.tilePlaceholder,
+                            ]}
+                          >
+                            <Text style={styles.tileEmoji}>{tile.emoji}</Text>
+                            {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
+                          </View>
+                        );
+                      }
+
+                      return (
+                        <Pressable
+                          key={tile.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Řekni ${tile.labelCs}`}
+                          onPress={() => onTilePress(tile.id)}
+                          onLongPress={() => onTileLongPress(tile.id)}
+                          delayLongPress={250}
+                          style={({ pressed }) => [
+                            styles.tile,
+                            {
+                              width: tileSize,
+                              height: tileSize,
+                              backgroundColor: highContrast ? '#FFFFFF' : colors.background,
+                              borderColor: highContrast ? '#111827' : colors.border,
+                            },
+                            pressed && styles.tilePressed,
+                          ]}
+                        >
+                          <Text style={styles.tileEmoji}>{tile.emoji}</Text>
+                          {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+
+              {isReorderMode && activeDrag && draggedTile ? (
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.dragOverlayTile,
+                    {
+                      width: tileSize,
+                      height: tileSize,
+                      left: activeDrag.startLeft + activeDrag.dx,
+                      top: activeDrag.startTop + activeDrag.dy,
+                      backgroundColor:
+                        settings?.highContrast ?? false
+                          ? '#FFFFFF'
+                          : CATEGORY_COLORS[draggedTile.category].background,
+                      borderColor:
+                        settings?.highContrast ?? false
+                          ? '#111827'
+                          : CATEGORY_COLORS[draggedTile.category].border,
+                    },
+                  ]}
+                >
+                  <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
+                  {showLabels ? <Text style={styles.tileLabel}>{draggedTile.labelCs}</Text> : null}
+                </View>
+              ) : null}
             </View>
-          ) : null}
+          </ScrollView>
         </View>
+
+        {pageCount > 1 ? (
+          <View style={styles.pageControls}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Předchozí stránka"
+              onPress={() => scrollToPage(currentPage - 1, true)}
+              disabled={currentPage === 0}
+              style={[
+                styles.pageControlButton,
+                currentPage === 0 && styles.pageControlButtonDisabled,
+              ]}
+            >
+              <Text style={styles.pageControlText}>{'<'}</Text>
+            </Pressable>
+
+            <View style={styles.pageIndicatorWrap}>
+              {Array.from({ length: pageCount }, (_, pageIndex) => (
+                <Pressable
+                  key={`page-dot-${pageIndex}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Otevřít stránku ${pageIndex + 1}`}
+                  onPress={() => scrollToPage(pageIndex, true)}
+                  style={[
+                    styles.pageDot,
+                    currentPage === pageIndex && styles.pageDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.pageCounter}>
+              {currentPage + 1}/{pageCount}
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Další stránka"
+              onPress={() => scrollToPage(currentPage + 1, true)}
+              disabled={currentPage >= pageCount - 1}
+              style={[
+                styles.pageControlButton,
+                currentPage >= pageCount - 1 && styles.pageControlButtonDisabled,
+              ]}
+            >
+              <Text style={styles.pageControlText}>{'>'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
