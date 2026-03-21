@@ -188,29 +188,27 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  utilityButton: {
-    minHeight: 42,
-    borderRadius: 14,
+  lockButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CCD8ED',
+  },
+  lockButtonUnlocked: {
     backgroundColor: '#FFF3E5',
     borderColor: '#E8B37A',
   },
-  utilityButtonActive: {
-    backgroundColor: '#FFD6A6',
-    borderColor: '#D6882B',
+  lockButtonText: {
+    fontSize: 22,
+    lineHeight: 24,
+    color: '#334764',
   },
-  utilityButtonText: {
-    fontSize: 12,
-    fontWeight: '900',
-    textTransform: 'uppercase',
+  lockButtonTextUnlocked: {
     color: '#8A541D',
-    textAlign: 'center',
-  },
-  utilityButtonTextActive: {
-    color: '#6C3D11',
   },
   settingsCogButton: {
     width: 44,

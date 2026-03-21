@@ -101,6 +101,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const setSpeaking = useAppStore((state) => state.setSpeaking);
   const moveTile = useAppStore((state) => state.moveTile);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const navigate = useAppStore((state) => state.navigate);
 
   const showLabels = settings?.showLabels ?? false;
@@ -108,7 +109,6 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const gridRows = board?.rows ?? GRID_ROWS;
   const pageSize = gridColumns * gridRows;
   const [tileDragError, setTileDragError] = useState<string | null>(null);
-  const [isReorderMode, setIsReorderMode] = useState(false);
   const [reorderTileIds, setReorderTileIds] = useState<string[]>([]);
   const [activeDrag, setActiveDrag] = useState<BoardDragState | null>(null);
   const [boardViewportWidth, setBoardViewportWidth] = useState(0);
@@ -156,29 +156,29 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       pendingReorderTouchRef.current = null;
       dragStateRef.current = null;
       setActiveDrag(null);
-      setIsReorderMode(false);
+      setReorderTileIds([]);
     }
   }, [caregiverUnlocked]);
 
   useEffect(() => {
-    if (!isReorderMode || dragStateRef.current) {
+    if (!caregiverUnlocked || dragStateRef.current) {
       return;
     }
 
     const nextIds = tiles.map((tile) => tile.id);
     reorderTileIdsRef.current = nextIds;
     setReorderTileIds(nextIds);
-  }, [isReorderMode, tiles]);
+  }, [caregiverUnlocked, tiles]);
 
   const orderedTiles = useMemo(() => {
-    if (!isReorderMode) {
+    if (!caregiverUnlocked) {
       return tiles;
     }
 
     return reorderTileIds
       .map((id) => tilesById[id])
       .filter((tile): tile is Tile => Boolean(tile));
-  }, [isReorderMode, reorderTileIds, tiles, tilesById]);
+  }, [caregiverUnlocked, reorderTileIds, tiles, tilesById]);
 
   const pageCount = Math.max(1, Math.ceil(orderedTiles.length / pageSize));
   const pagedTiles = useMemo(() => {
@@ -314,7 +314,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    if (caregiverUnlocked && isReorderMode) {
+    if (caregiverUnlocked) {
+      setEditorTargetTileId(tileId);
+      navigate('editor');
       return;
     }
 
@@ -439,6 +441,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       };
 
       setTileDragError(null);
+      suppressTapAfterLongPressRef.current = true;
       dragStateRef.current = nextDrag;
       setActiveDrag(nextDrag);
     },
@@ -447,7 +450,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   const beginReorderTouch = useCallback(
     (tileId: string, startIndex: number, pageX: number, pageY: number) => {
-      if (!caregiverUnlocked || !isReorderMode || dragStateRef.current) {
+      if (!caregiverUnlocked || dragStateRef.current) {
         return;
       }
 
@@ -482,7 +485,6 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     [
       caregiverUnlocked,
       clearPendingReorderTouch,
-      isReorderMode,
       startReorderDrag,
     ]
   );
@@ -525,9 +527,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         onStartShouldSetPanResponder: () => false,
         onStartShouldSetPanResponderCapture: () => false,
         onMoveShouldSetPanResponder: () =>
-          caregiverUnlocked && isReorderMode && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
+          caregiverUnlocked && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
         onMoveShouldSetPanResponderCapture: () =>
-          caregiverUnlocked && isReorderMode && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
+          caregiverUnlocked && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
         onPanResponderTerminationRequest: () => false,
         onPanResponderMove: (event, gestureState) => {
           handleReorderTouchMove(
@@ -544,23 +546,23 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           endReorderTouch();
         },
       }),
-    [caregiverUnlocked, endReorderTouch, handleReorderTouchMove, isReorderMode]
+    [caregiverUnlocked, endReorderTouch, handleReorderTouchMove]
   );
 
-  const onTileLongPress = (tileId: string) => {
-    if (!caregiverUnlocked || isReorderMode) {
+  const onLockButtonPress = () => {
+    clearBoardDragState();
+    clearPendingReorderTouch();
+    setTileDragError(null);
+
+    if (caregiverUnlocked) {
+      lockCaregiver();
       return;
     }
 
-    suppressTapAfterLongPressRef.current = true;
-    setEditorTargetTileId(tileId);
-    navigate('editor');
-    setTimeout(() => {
-      suppressTapAfterLongPressRef.current = false;
-    }, 0);
+    onOpenCaregiver();
   };
 
-  const onToggleReorderMode = () => {
+  const onSettingsButtonPress = () => {
     if (!caregiverUnlocked) {
       return;
     }
@@ -568,25 +570,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     clearBoardDragState();
     clearPendingReorderTouch();
     setTileDragError(null);
-
-    if (!isReorderMode) {
-      const nextIds = tiles.map((tile) => tile.id);
-      reorderTileIdsRef.current = nextIds;
-      setReorderTileIds(nextIds);
-    } else {
-      scrollToPage(currentPageRef.current, true);
-    }
-
-    setIsReorderMode((current) => !current);
-  };
-
-  const onCaregiverButtonPress = () => {
-    if (caregiverUnlocked) {
-      onOpenSettings();
-      return;
-    }
-
-    onOpenCaregiver();
+    onOpenSettings();
   };
 
   const onBoardViewportLayout = (event: LayoutChangeEvent) => {
@@ -689,13 +673,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         <Text style={styles.editorHint}>
           {!caregiverUnlocked
             ? pageCount > 1
-              ? 'Kolečko dole vpravo odemyká režim pečovatele. Dlaždice dál fungují na mluvení, mezi stránkami přejeď do stran.'
-              : 'Kolečko dole vpravo odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
-            : isReorderMode
-              ? 'Režim přesunu: podrž dlaždici a táhni. Ostatní se přeskládají živě.'
-              : pageCount > 1
-                ? 'Režim pečovatele aktivní: kolečko dole vpravo otevírá správu tabule, podrž dlaždici pro úpravu, stránky měň tahem do stran.'
-                : 'Režim pečovatele aktivní: kolečko dole vpravo otevírá správu tabule, podrž dlaždici pro úpravu.'}
+              ? 'Zámek dole vlevo odemyká režim pečovatele. Dlaždice mluví, mezi stránkami přejeď do stran.'
+              : 'Zámek dole vlevo odemyká režim pečovatele. Dlaždice mluví.'
+            : pageCount > 1
+              ? 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž a táhni pro přesun, ozubené kolečko otevírá správu tabule.'
+              : 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž a táhni pro přesun, ozubené kolečko otevírá správu tabule.'}
         </Text>
         {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
@@ -704,13 +686,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         <View
           style={styles.boardPagerViewport}
           onLayout={onBoardViewportLayout}
-          {...(isReorderMode ? reorderGridResponder.panHandlers : {})}
+          {...(caregiverUnlocked ? reorderGridResponder.panHandlers : {})}
         >
           <ScrollView
             ref={boardPagerRef}
             horizontal
             pagingEnabled
-            scrollEnabled={!isReorderMode && pageCount > 1}
+            scrollEnabled={pageCount > 1}
             style={styles.boardPagerScroll}
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={onPagerMomentumScrollEnd}
@@ -751,48 +733,40 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                       const globalIndex = pageIndex * pageSize + localIndex;
                       const isDraggedTile = activeDrag?.tileId === tile.id;
 
-                      if (isReorderMode) {
-                        return (
-                          <View
-                            key={tile.id}
-                            onTouchStart={(event) => {
-                              beginReorderTouch(tile.id, globalIndex, event.nativeEvent.pageX, event.nativeEvent.pageY);
-                            }}
-                            onTouchEnd={() => {
-                              endReorderTouch();
-                            }}
-                            onTouchCancel={() => {
-                              endReorderTouch();
-                            }}
-                            style={[
-                              styles.tile,
-                              {
-                                width: tileSize,
-                                height: tileSize,
-                                backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                                borderColor: highContrast ? '#111827' : colors.border,
-                              },
-                              isDraggedTile && styles.tilePlaceholder,
-                            ]}
-                          >
-                            <Text style={styles.tileEmoji}>{tile.emoji}</Text>
-                            {showLabels ? (
-                              <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
-                                {tile.labelCs}
-                              </Text>
-                            ) : null}
-                          </View>
-                        );
-                      }
-
                       return (
                         <Pressable
                           key={tile.id}
                           accessibilityRole="button"
-                          accessibilityLabel={`Řekni ${tile.labelCs}`}
+                          accessibilityLabel={
+                            caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`
+                          }
                           onPress={() => onTilePress(tile.id)}
-                          onLongPress={() => onTileLongPress(tile.id)}
-                          delayLongPress={250}
+                          onTouchStart={
+                            caregiverUnlocked
+                              ? (event) => {
+                                  beginReorderTouch(
+                                    tile.id,
+                                    globalIndex,
+                                    event.nativeEvent.pageX,
+                                    event.nativeEvent.pageY
+                                  );
+                                }
+                              : undefined
+                          }
+                          onTouchEnd={
+                            caregiverUnlocked
+                              ? () => {
+                                  endReorderTouch();
+                                }
+                              : undefined
+                          }
+                          onTouchCancel={
+                            caregiverUnlocked
+                              ? () => {
+                                  endReorderTouch();
+                                }
+                              : undefined
+                          }
                           style={({ pressed }) => [
                             styles.tile,
                             {
@@ -817,7 +791,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                 </View>
               ))}
 
-              {isReorderMode && activeDrag && draggedTile ? (
+              {activeDrag && draggedTile ? (
                 <View
                   pointerEvents="none"
                   style={[
@@ -852,25 +826,23 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
         <View style={styles.bottomBar}>
           <View style={styles.bottomBarSide}>
-            {caregiverUnlocked ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isReorderMode ? 'Ukončit přesun dlaždic' : 'Zapnout přesun dlaždic'}
-                onPress={onToggleReorderMode}
-                style={({ pressed }) => [
-                  styles.utilityButton,
-                  isReorderMode && styles.utilityButtonActive,
-                  pressed && styles.actionButtonPressed,
-                ]}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={caregiverUnlocked ? 'Zamknout režim pečovatele' : 'Odemknout režim pečovatele'}
+              onPress={onLockButtonPress}
+              style={({ pressed }) => [
+                styles.lockButton,
+                caregiverUnlocked && styles.lockButtonUnlocked,
+                pressed && styles.actionButtonPressed,
+              ]}
+            >
+              <Text
+                style={[styles.lockButtonText, caregiverUnlocked && styles.lockButtonTextUnlocked]}
+                allowFontScaling={false}
               >
-                <Text
-                  style={[styles.utilityButtonText, isReorderMode && styles.utilityButtonTextActive]}
-                  {...ACTION_TEXT_PROPS}
-                >
-                  {isReorderMode ? 'Hotovo' : 'Přesun'}
-                </Text>
-              </Pressable>
-            ) : null}
+                {caregiverUnlocked ? '🔓' : '🔒'}
+              </Text>
+            </Pressable>
           </View>
 
           {pageCount > 1 ? (
@@ -928,10 +900,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={caregiverUnlocked ? 'Otevřít nastavení pečovatele' : 'Odemknout režim pečovatele'}
-              onPress={onCaregiverButtonPress}
+              onPress={onSettingsButtonPress}
+              disabled={!caregiverUnlocked}
               style={({ pressed }) => [
                 styles.settingsCogButton,
                 caregiverUnlocked && styles.settingsCogButtonUnlocked,
+                !caregiverUnlocked && styles.pageControlButtonDisabled,
                 pressed && styles.actionButtonPressed,
               ]}
             >
