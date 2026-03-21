@@ -25,7 +25,7 @@ import type { AuthStatus, RemoteContext } from '../features/auth/types';
 import type { AudioClip, Board, ProfileSettings, SentenceToken, SyncStatus, Tile } from '../shared/types/domain';
 import { createId } from '../shared/utils/id';
 
-export type ScreenName = 'board' | 'caregiverGate' | 'editor' | 'settings';
+export type ScreenName = 'board' | 'caregiverGate' | 'editor' | 'settings' | 'tileArchive';
 
 type ClipMap = Record<string, AudioClip>;
 

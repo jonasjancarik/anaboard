@@ -1,10 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  LayoutAnimation,
   PanResponder,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   useWindowDimensions,
   View,
@@ -12,24 +12,67 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { speechEngine, buildSpeechSegments } from '../../speech/speechEngine';
+import {
+  GRID_COLUMNS,
+  GRID_GAP,
+  LAYOUT_PADDING,
+  MAX_TILE_SIZE,
+  MIN_TILE_SIZE,
+  styles,
+} from './BoardScreen.styles';
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
-import type { SentenceToken } from '../../../shared/types/domain';
+import type { SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
 
 type BoardScreenProps = {
   onOpenCaregiver: () => void;
+  onOpenArchive: () => void;
 };
 
-const GRID_COLUMNS = 4;
-const GRID_GAP = 10;
-const LAYOUT_PADDING = 12;
-const MAX_TILE_SIZE = 180;
-const MIN_TILE_SIZE = 58;
+type BoardDragState = {
+  tileId: string;
+  startIndex: number;
+  startLeft: number;
+  startTop: number;
+  startPageX: number;
+  startPageY: number;
+  dx: number;
+  dy: number;
+};
 
-export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
+type PendingReorderTouch = {
+  tileId: string;
+  startIndex: number;
+  startPageX: number;
+  startPageY: number;
+};
+
+const REORDER_LONG_PRESS_MS = 180;
+const REORDER_LONG_PRESS_SLOP = 8;
+
+const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): string[] => {
+  if (fromIndex === toIndex) {
+    return ids;
+  }
+
+  const next = [...ids];
+  const [moved] = next.splice(fromIndex, 1);
+  if (!moved) {
+    return ids;
+  }
+
+  next.splice(toIndex, 0, moved);
+  return next;
+};
+
+export const BoardScreen = ({ onOpenCaregiver, onOpenArchive }: BoardScreenProps) => {
   const sentenceScrollRef = useRef<ScrollView>(null);
   const suppressTapAfterLongPressRef = useRef(false);
+  const dragStateRef = useRef<BoardDragState | null>(null);
+  const reorderTileIdsRef = useRef<string[]>([]);
+  const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
+  const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { width } = useWindowDimensions();
 
   const tiles = useAppStore((state) => state.tiles);
@@ -45,13 +88,13 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
   const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const navigate = useAppStore((state) => state.navigate);
+
   const showLabels = settings?.showLabels ?? false;
-  const [draggingTileId, setDraggingTileId] = useState<string | null>(null);
-  const [draggingStartIndex, setDraggingStartIndex] = useState<number | null>(null);
-  const [dragOffsetX, setDragOffsetX] = useState(0);
-  const [dragOffsetY, setDragOffsetY] = useState(0);
   const [tileDragError, setTileDragError] = useState<string | null>(null);
   const [isReorderMode, setIsReorderMode] = useState(false);
+  const [reorderTileIds, setReorderTileIds] = useState<string[]>([]);
+  const [activeDrag, setActiveDrag] = useState<BoardDragState | null>(null);
+  const [gridWidth, setGridWidth] = useState(0);
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
 
@@ -62,6 +105,84 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
 
     return Math.max(MIN_TILE_SIZE, Math.min(MAX_TILE_SIZE, Math.floor(rawTileSize)));
   }, [width]);
+
+  const tileStep = tileSize + GRID_GAP;
+  const rowWidth = tileSize * GRID_COLUMNS + GRID_GAP * (GRID_COLUMNS - 1);
+  const effectiveGridWidth = gridWidth > 0 ? gridWidth : rowWidth;
+  const horizontalGridOffset = Math.max(0, (effectiveGridWidth - rowWidth) / 2);
+
+  useEffect(() => {
+    reorderTileIdsRef.current = reorderTileIds;
+  }, [reorderTileIds]);
+
+  useEffect(() => {
+    if (!caregiverUnlocked) {
+      if (reorderLongPressTimerRef.current) {
+        clearTimeout(reorderLongPressTimerRef.current);
+        reorderLongPressTimerRef.current = null;
+      }
+      pendingReorderTouchRef.current = null;
+      dragStateRef.current = null;
+      setActiveDrag(null);
+      setIsReorderMode(false);
+    }
+  }, [caregiverUnlocked]);
+
+  useEffect(() => {
+    if (!isReorderMode || dragStateRef.current) {
+      return;
+    }
+
+    const nextIds = tiles.map((tile) => tile.id);
+    reorderTileIdsRef.current = nextIds;
+    setReorderTileIds(nextIds);
+  }, [isReorderMode, tiles]);
+
+  const orderedTiles = useMemo(() => {
+    if (!isReorderMode) {
+      return tiles;
+    }
+
+    return reorderTileIds
+      .map((id) => tilesById[id])
+      .filter((tile): tile is Tile => Boolean(tile));
+  }, [isReorderMode, reorderTileIds, tiles, tilesById]);
+
+  const draggedTile = activeDrag ? tilesById[activeDrag.tileId] : undefined;
+
+  const getSlotPosition = useCallback(
+    (index: number) => {
+      const row = Math.floor(index / GRID_COLUMNS);
+      const column = index % GRID_COLUMNS;
+
+      return {
+        left: horizontalGridOffset + column * tileStep,
+        top: row * tileStep,
+      };
+    },
+    [horizontalGridOffset, tileStep]
+  );
+
+  const getTargetIndexFromPosition = useCallback(
+    (left: number, top: number, totalTiles: number) => {
+      if (totalTiles <= 1) {
+        return 0;
+      }
+
+      const normalizedLeft = left - horizontalGridOffset;
+      const column = Math.max(0, Math.min(GRID_COLUMNS - 1, Math.round(normalizedLeft / tileStep)));
+      const row = Math.max(0, Math.round(top / tileStep));
+      const rawIndex = row * GRID_COLUMNS + column;
+
+      return Math.max(0, Math.min(totalTiles - 1, rawIndex));
+    },
+    [horizontalGridOffset, tileStep]
+  );
+
+  const clearBoardDragState = useCallback(() => {
+    dragStateRef.current = null;
+    setActiveDrag(null);
+  }, []);
 
   const playTokens = async (tokens: SentenceToken[]) => {
     if (tokens.length === 0 || !settings) {
@@ -128,100 +249,214 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
     clearSentence();
   };
 
-  const clearBoardDragState = () => {
-    setDraggingTileId(null);
-    setDraggingStartIndex(null);
-    setDragOffsetX(0);
-    setDragOffsetY(0);
-  };
-
-  const finishBoardDrag = useCallback(
-    async (dx: number, dy: number) => {
-      const tileId = draggingTileId;
-      const startIndex = draggingStartIndex;
-
-      clearBoardDragState();
-
-      setTimeout(() => {
-        suppressTapAfterLongPressRef.current = false;
-      }, 0);
-
-      if (!tileId || startIndex === null) {
+  const moveDrag = useCallback(
+    (dx: number, dy: number) => {
+      const drag = dragStateRef.current;
+      if (!drag) {
         return;
       }
 
-      const dragDistance = Math.hypot(dx, dy);
-      if (dragDistance < 12) {
-        return;
-      }
+      const nextDrag = { ...drag, dx, dy };
+      dragStateRef.current = nextDrag;
+      setActiveDrag(nextDrag);
 
-      const positionStep = tileSize + GRID_GAP;
-      const columnDelta = Math.round(dx / positionStep);
-      const rowDelta = Math.round(dy / positionStep);
-      const slotDelta = rowDelta * GRID_COLUMNS + columnDelta;
-      const targetIndex = Math.max(0, Math.min(tiles.length - 1, startIndex + slotDelta));
+      setReorderTileIds((currentIds) => {
+        const currentIndex = currentIds.indexOf(drag.tileId);
+        if (currentIndex < 0) {
+          return currentIds;
+        }
 
-      if (targetIndex === startIndex) {
-        return;
-      }
+        const targetIndex = getTargetIndexFromPosition(
+          drag.startLeft + dx,
+          drag.startTop + dy,
+          currentIds.length
+        );
+        if (targetIndex === currentIndex) {
+          return currentIds;
+        }
 
-      try {
-        await moveTile(tileId, targetIndex);
-      } catch (error) {
-        setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
-      }
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        const nextIds = moveIdInArray(currentIds, currentIndex, targetIndex);
+        reorderTileIdsRef.current = nextIds;
+        return nextIds;
+      });
     },
-    [draggingStartIndex, draggingTileId, moveTile, tileSize, tiles.length]
+    [getTargetIndexFromPosition]
   );
 
-  const boardTileDragResponder = useMemo(
+  const commitDrag = useCallback(async () => {
+    const drag = dragStateRef.current;
+    clearBoardDragState();
+
+    setTimeout(() => {
+      suppressTapAfterLongPressRef.current = false;
+    }, 0);
+
+    if (!drag) {
+      return;
+    }
+
+    const finalIndex = reorderTileIdsRef.current.indexOf(drag.tileId);
+    if (finalIndex < 0 || finalIndex === drag.startIndex) {
+      return;
+    }
+
+    try {
+      await moveTile(drag.tileId, finalIndex);
+    } catch (error) {
+      setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
+    }
+  }, [clearBoardDragState, moveTile]);
+
+  const clearPendingReorderTouch = useCallback(() => {
+    if (reorderLongPressTimerRef.current) {
+      clearTimeout(reorderLongPressTimerRef.current);
+      reorderLongPressTimerRef.current = null;
+    }
+
+    pendingReorderTouchRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearPendingReorderTouch();
+    };
+  }, [clearPendingReorderTouch]);
+
+  const startReorderDrag = useCallback(
+    (pendingTouch: PendingReorderTouch) => {
+      const { left, top } = getSlotPosition(pendingTouch.startIndex);
+      const nextDrag: BoardDragState = {
+        tileId: pendingTouch.tileId,
+        startIndex: pendingTouch.startIndex,
+        startLeft: left,
+        startTop: top,
+        startPageX: pendingTouch.startPageX,
+        startPageY: pendingTouch.startPageY,
+        dx: 0,
+        dy: 0,
+      };
+
+      setTileDragError(null);
+      dragStateRef.current = nextDrag;
+      setActiveDrag(nextDrag);
+    },
+    [getSlotPosition]
+  );
+
+  const beginReorderTouch = useCallback(
+    (tileId: string, startIndex: number, pageX: number, pageY: number) => {
+      if (!caregiverUnlocked || !isReorderMode || dragStateRef.current) {
+        return;
+      }
+
+      const ids = reorderTileIdsRef.current;
+      const resolvedIndex = ids.indexOf(tileId);
+      const fallbackIndex = ids[startIndex] === tileId ? startIndex : -1;
+      const nextStartIndex = resolvedIndex >= 0 ? resolvedIndex : fallbackIndex;
+      if (nextStartIndex < 0) {
+        return;
+      }
+
+      const pendingTouch: PendingReorderTouch = {
+        tileId,
+        startIndex: nextStartIndex,
+        startPageX: pageX,
+        startPageY: pageY,
+      };
+
+      clearPendingReorderTouch();
+      pendingReorderTouchRef.current = pendingTouch;
+
+      reorderLongPressTimerRef.current = setTimeout(() => {
+        const nextPendingTouch = pendingReorderTouchRef.current;
+        clearPendingReorderTouch();
+        if (!nextPendingTouch) {
+          return;
+        }
+
+        startReorderDrag(nextPendingTouch);
+      }, REORDER_LONG_PRESS_MS);
+    },
+    [
+      caregiverUnlocked,
+      clearPendingReorderTouch,
+      isReorderMode,
+      startReorderDrag,
+    ]
+  );
+
+  const handleReorderTouchMove = useCallback(
+    (pageX: number, pageY: number, gestureDx: number, gestureDy: number) => {
+      const drag = dragStateRef.current;
+      if (drag) {
+        const resolvedDx = Number.isFinite(pageX) ? pageX - drag.startPageX : gestureDx;
+        const resolvedDy = Number.isFinite(pageY) ? pageY - drag.startPageY : gestureDy;
+        moveDrag(resolvedDx, resolvedDy);
+        return;
+      }
+
+      const pendingTouch = pendingReorderTouchRef.current;
+      if (!pendingTouch) {
+        return;
+      }
+
+      const resolvedX = Number.isFinite(pageX) ? pageX : pendingTouch.startPageX + gestureDx;
+      const resolvedY = Number.isFinite(pageY) ? pageY : pendingTouch.startPageY + gestureDy;
+      const delta = Math.hypot(resolvedX - pendingTouch.startPageX, resolvedY - pendingTouch.startPageY);
+      if (delta > REORDER_LONG_PRESS_SLOP) {
+        clearPendingReorderTouch();
+      }
+    },
+    [clearPendingReorderTouch, moveDrag]
+  );
+
+  const endReorderTouch = useCallback(() => {
+    clearPendingReorderTouch();
+    if (dragStateRef.current) {
+      void commitDrag();
+    }
+  }, [clearPendingReorderTouch, commitDrag]);
+
+  const reorderGridResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => draggingTileId !== null,
-        onStartShouldSetPanResponderCapture: () => draggingTileId !== null,
-        onMoveShouldSetPanResponder: () => draggingTileId !== null,
-        onMoveShouldSetPanResponderCapture: () => draggingTileId !== null,
-        onPanResponderMove: (_event, gestureState) => {
-          if (!draggingTileId) {
-            return;
-          }
-
-          setDragOffsetX(gestureState.dx);
-          setDragOffsetY(gestureState.dy);
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: () =>
+          caregiverUnlocked && isReorderMode && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
+        onMoveShouldSetPanResponderCapture: () =>
+          caregiverUnlocked && isReorderMode && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (event, gestureState) => {
+          handleReorderTouchMove(
+            event.nativeEvent.pageX,
+            event.nativeEvent.pageY,
+            gestureState.dx,
+            gestureState.dy
+          );
         },
-        onPanResponderRelease: (_event, gestureState) => {
-          void finishBoardDrag(gestureState.dx, gestureState.dy);
+        onPanResponderRelease: () => {
+          endReorderTouch();
         },
-        onPanResponderTerminate: (_event, gestureState) => {
-          void finishBoardDrag(gestureState.dx, gestureState.dy);
+        onPanResponderTerminate: () => {
+          endReorderTouch();
         },
       }),
-    [draggingTileId, finishBoardDrag]
+    [caregiverUnlocked, endReorderTouch, handleReorderTouchMove, isReorderMode]
   );
 
   const onTileLongPress = (tileId: string) => {
-    if (!caregiverUnlocked) {
+    if (!caregiverUnlocked || isReorderMode) {
       return;
     }
 
     suppressTapAfterLongPressRef.current = true;
-
-    if (!isReorderMode) {
-      setEditorTargetTileId(tileId);
-      navigate('editor');
-      return;
-    }
-
-    const startIndex = tiles.findIndex((tile) => tile.id === tileId);
-    if (startIndex < 0) {
-      return;
-    }
-
-    setTileDragError(null);
-    setDraggingTileId(tileId);
-    setDraggingStartIndex(startIndex);
-    setDragOffsetX(0);
-    setDragOffsetY(0);
+    setEditorTargetTileId(tileId);
+    navigate('editor');
+    setTimeout(() => {
+      suppressTapAfterLongPressRef.current = false;
+    }, 0);
   };
 
   const onToggleReorderMode = () => {
@@ -230,13 +465,22 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
     }
 
     clearBoardDragState();
+    clearPendingReorderTouch();
     setTileDragError(null);
+
+    if (!isReorderMode) {
+      const nextIds = tiles.map((tile) => tile.id);
+      reorderTileIdsRef.current = nextIds;
+      setReorderTileIds(nextIds);
+    }
+
     setIsReorderMode((current) => !current);
   };
 
   const onCaregiverButtonPress = () => {
     if (caregiverUnlocked) {
       clearBoardDragState();
+      clearPendingReorderTouch();
       setTileDragError(null);
       setIsReorderMode(false);
       lockCaregiver();
@@ -244,6 +488,18 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
     }
 
     onOpenCaregiver();
+  };
+
+  const onArchiveButtonPress = () => {
+    if (!caregiverUnlocked) {
+      return;
+    }
+
+    clearBoardDragState();
+    clearPendingReorderTouch();
+    setTileDragError(null);
+    setIsReorderMode(false);
+    onOpenArchive();
   };
 
   return (
@@ -330,21 +586,36 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
           </Pressable>
 
           {caregiverUnlocked ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isReorderMode ? 'Ukončit přesun dlaždic' : 'Zapnout přesun dlaždic'}
-              onPress={onToggleReorderMode}
-              style={({ pressed }) => [
-                styles.actionButton,
-                styles.reorderModeButton,
-                isReorderMode && styles.reorderModeButtonActive,
-                pressed && styles.actionButtonPressed,
-              ]}
-            >
-              <Text style={[styles.actionText, styles.reorderModeText, isReorderMode && styles.reorderModeTextActive]}>
-                {isReorderMode ? 'HOTOVO' : 'PŘESUN'}
-              </Text>
-            </Pressable>
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isReorderMode ? 'Ukončit přesun dlaždic' : 'Zapnout přesun dlaždic'}
+                onPress={onToggleReorderMode}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.reorderModeButton,
+                  isReorderMode && styles.reorderModeButtonActive,
+                  pressed && styles.actionButtonPressed,
+                ]}
+              >
+                <Text style={[styles.actionText, styles.reorderModeText, isReorderMode && styles.reorderModeTextActive]}>
+                  {isReorderMode ? 'HOTOVO' : 'PŘESUN'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Otevřít archiv smazaných dlaždic"
+                onPress={onArchiveButtonPress}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.clearButton,
+                  pressed && styles.actionButtonPressed,
+                ]}
+              >
+                <Text style={[styles.actionText, styles.clearText]}>ARCH.</Text>
+              </Pressable>
+            </>
           ) : null}
         </View>
       </View>
@@ -354,18 +625,57 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
           {!caregiverUnlocked
             ? 'PIN odemyká režim pečovatele. Dlaždice dál fungují na mluvení.'
             : isReorderMode
-              ? 'Režim přesunu: podrž a táhni dlaždici na nové místo.'
-              : 'Režim pečovatele aktivní: podrž dlaždici pro její úpravu.'}
+              ? 'Režim přesunu: podrž dlaždici a táhni. Ostatní se přeskládají živě.'
+              : 'Režim pečovatele aktivní: podrž dlaždici pro úpravu, archiv vrací smazané položky.'}
         </Text>
         {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
       </View>
 
       <View style={styles.boardArea}>
-        <View style={styles.grid}>
-          {tiles.map((tile) => {
+        <View
+          style={styles.grid}
+          onLayout={(event) => {
+            const nextWidth = event.nativeEvent.layout.width;
+            if (nextWidth > 0 && Math.abs(nextWidth - gridWidth) > 1) {
+              setGridWidth(nextWidth);
+            }
+          }}
+          {...(isReorderMode ? reorderGridResponder.panHandlers : {})}
+        >
+          {orderedTiles.map((tile, index) => {
             const colors = CATEGORY_COLORS[tile.category];
             const highContrast = settings?.highContrast ?? false;
-            const isDraggingTile = tile.id === draggingTileId;
+            const isDraggedTile = activeDrag?.tileId === tile.id;
+
+            if (isReorderMode) {
+              return (
+                <View
+                  key={tile.id}
+                  onTouchStart={(event) => {
+                    beginReorderTouch(tile.id, index, event.nativeEvent.pageX, event.nativeEvent.pageY);
+                  }}
+                  onTouchEnd={() => {
+                    endReorderTouch();
+                  }}
+                  onTouchCancel={() => {
+                    endReorderTouch();
+                  }}
+                  style={[
+                    styles.tile,
+                    {
+                      width: tileSize,
+                      height: tileSize,
+                      backgroundColor: highContrast ? '#FFFFFF' : colors.background,
+                      borderColor: highContrast ? '#111827' : colors.border,
+                    },
+                    isDraggedTile && styles.tilePlaceholder,
+                  ]}
+                >
+                  <Text style={styles.tileEmoji}>{tile.emoji}</Text>
+                  {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
+                </View>
+              );
+            }
 
             return (
               <Pressable
@@ -374,7 +684,7 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
                 accessibilityLabel={`Řekni ${tile.labelCs}`}
                 onPress={() => onTilePress(tile.id)}
                 onLongPress={() => onTileLongPress(tile.id)}
-                delayLongPress={350}
+                delayLongPress={250}
                 style={({ pressed }) => [
                   styles.tile,
                   {
@@ -383,207 +693,42 @@ export const BoardScreen = ({ onOpenCaregiver }: BoardScreenProps) => {
                     backgroundColor: highContrast ? '#FFFFFF' : colors.background,
                     borderColor: highContrast ? '#111827' : colors.border,
                   },
-                  isDraggingTile && [styles.tileDragging, { transform: [{ translateX: dragOffsetX }, { translateY: dragOffsetY }] }],
-                  pressed && !isDraggingTile && styles.tilePressed,
+                  pressed && styles.tilePressed,
                 ]}
-                {...(isDraggingTile ? boardTileDragResponder.panHandlers : {})}
               >
                 <Text style={styles.tileEmoji}>{tile.emoji}</Text>
                 {showLabels ? <Text style={styles.tileLabel}>{tile.labelCs}</Text> : null}
               </Pressable>
             );
           })}
+
+          {isReorderMode && activeDrag && draggedTile ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.dragOverlayTile,
+                {
+                  width: tileSize,
+                  height: tileSize,
+                  left: activeDrag.startLeft + activeDrag.dx,
+                  top: activeDrag.startTop + activeDrag.dy,
+                  backgroundColor:
+                    settings?.highContrast ?? false
+                      ? '#FFFFFF'
+                      : CATEGORY_COLORS[draggedTile.category].background,
+                  borderColor:
+                    settings?.highContrast ?? false
+                      ? '#111827'
+                      : CATEGORY_COLORS[draggedTile.category].border,
+                },
+              ]}
+            >
+              <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
+              {showLabels ? <Text style={styles.tileLabel}>{draggedTile.labelCs}</Text> : null}
+            </View>
+          ) : null}
         </View>
       </View>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#F3F7FC',
-  },
-  topRow: {
-    paddingTop: 8,
-    paddingHorizontal: LAYOUT_PADDING,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  sentenceBox: {
-    flex: 1,
-    minHeight: 88,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#C6D5E7',
-    backgroundColor: '#EAF2FB',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-  },
-  sentenceContent: {
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 4,
-  },
-  placeholderText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#4E617A',
-    paddingHorizontal: 8,
-  },
-  token: {
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D6DFEB',
-    paddingHorizontal: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  tokenEmojiOnly: {
-    width: 46,
-    paddingHorizontal: 0,
-    justifyContent: 'center',
-  },
-  tokenPressed: {
-    transform: [{ scale: 0.97 }],
-  },
-  tokenEmoji: {
-    fontSize: 20,
-  },
-  tokenText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#10213A',
-  },
-  actions: {
-    width: 100,
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  actionButtonPressed: {
-    transform: [{ scale: 0.97 }],
-  },
-  actionButtonDisabled: {
-    opacity: 0.45,
-  },
-  speakButton: {
-    backgroundColor: '#26A949',
-    borderColor: '#1A8939',
-  },
-  clearButton: {
-    backgroundColor: '#FFF0F0',
-    borderColor: '#EEB0B2',
-  },
-  caregiverButton: {
-    backgroundColor: '#EAE7FF',
-    borderColor: '#9E93FF',
-  },
-  caregiverButtonUnlocked: {
-    backgroundColor: '#E8F8EC',
-    borderColor: '#8CD1A0',
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-  },
-  clearText: {
-    color: '#B23845',
-  },
-  caregiverText: {
-    color: '#3D338A',
-  },
-  caregiverTextUnlocked: {
-    color: '#1F6E39',
-  },
-  reorderModeButton: {
-    backgroundColor: '#FFF3E5',
-    borderColor: '#E8B37A',
-  },
-  reorderModeButtonActive: {
-    backgroundColor: '#FFD6A6',
-    borderColor: '#D6882B',
-  },
-  reorderModeText: {
-    color: '#8A541D',
-  },
-  reorderModeTextActive: {
-    color: '#6C3D11',
-  },
-  editorHintWrap: {
-    paddingHorizontal: LAYOUT_PADDING,
-    paddingBottom: 2,
-  },
-  editorHint: {
-    textAlign: 'center',
-    color: '#4B607E',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  editorHintError: {
-    marginTop: 4,
-    textAlign: 'center',
-    color: '#A62839',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  boardArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: LAYOUT_PADDING,
-    paddingBottom: LAYOUT_PADDING,
-  },
-  grid: {
-    width: '100%',
-    maxWidth: 760,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: GRID_GAP,
-  },
-  tile: {
-    borderRadius: 20,
-    borderWidth: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#192233',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.14,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  tilePressed: {
-    transform: [{ scale: 0.93 }],
-    opacity: 0.9,
-  },
-  tileDragging: {
-    zIndex: 20,
-    elevation: 10,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  tileEmoji: {
-    fontSize: 34,
-  },
-  tileLabel: {
-    marginTop: 6,
-    fontSize: 16,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    color: '#0E203A',
-  },
-});

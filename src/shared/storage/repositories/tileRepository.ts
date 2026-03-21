@@ -1,7 +1,9 @@
 import type { Category, SpeechMode } from '../../types/domain';
+import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/time';
 import { getDatabase } from '../db';
 import { enqueueSyncEvent } from './syncRepository';
+import { archiveDeletedTile } from './tileArchiveRepository';
 
 type TileRow = {
   id: string;
@@ -14,6 +16,17 @@ type TileRow = {
   audio_clip_id?: string | null;
   updated_at: string;
   revision: number;
+};
+
+type AudioClipRow = {
+  id: string;
+  tile_id: string;
+  local_uri?: string | null;
+  remote_path?: string | null;
+  duration_ms: number;
+  checksum?: string | null;
+  format: string;
+  updated_at: string;
 };
 
 export type TileUpdateInput = {
@@ -144,6 +157,199 @@ export const updateTilePosition = async (tileId: string, nextPosition: number): 
     await enqueueSyncEvent('tiles', id, 'upsert', {
       id,
       position: index,
+      updated_at: updatedAt,
+    });
+  }
+};
+
+export const createTileAfter = async (
+  afterTileId: string,
+  input?: {
+    labelCs?: string;
+    emoji?: string;
+    category?: Category;
+    speechMode?: SpeechMode;
+  }
+): Promise<string> => {
+  const db = await getDatabase();
+
+  const anchor = await getTileById(afterTileId);
+  if (!anchor) {
+    throw new Error('Tile not found');
+  }
+
+  const tiles = await db.getAllAsync<TileRow>(
+    `
+      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      FROM tiles
+      WHERE board_id = ?
+      ORDER BY position ASC
+    `,
+    anchor.board_id
+  );
+
+  const insertPosition = anchor.position + 1;
+  const tilesToShift = tiles.filter((tile) => tile.position >= insertPosition);
+
+  const newTileId = createId('tile');
+  const updatedAt = nowIso();
+  const labelCs = input?.labelCs ?? 'Nové';
+  const emoji = input?.emoji ?? '⭐';
+  const category = input?.category ?? 'needs';
+  const speechMode = input?.speechMode ?? 'tts';
+
+  await db.withTransactionAsync(async () => {
+    for (const tile of tilesToShift) {
+      await db.runAsync(
+        `
+          UPDATE tiles
+          SET position = ?, updated_at = ?, revision = revision + 1, dirty = 1
+          WHERE id = ?
+        `,
+        tile.position + 1,
+        updatedAt,
+        tile.id
+      );
+    }
+
+    await db.runAsync(
+      `
+        INSERT INTO tiles (
+          id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
+      `,
+      newTileId,
+      anchor.board_id,
+      insertPosition,
+      labelCs,
+      emoji,
+      category,
+      speechMode,
+      updatedAt
+    );
+  });
+
+  for (const tile of tilesToShift) {
+    await enqueueSyncEvent('tiles', tile.id, 'upsert', {
+      id: tile.id,
+      position: tile.position + 1,
+      updated_at: updatedAt,
+    });
+  }
+
+  await enqueueSyncEvent('tiles', newTileId, 'upsert', {
+    id: newTileId,
+    board_id: anchor.board_id,
+    position: insertPosition,
+    label_cs: labelCs,
+    emoji,
+    category,
+    speech_mode: speechMode,
+    audio_clip_id: null,
+    updated_at: updatedAt,
+    revision: 1,
+  });
+
+  return newTileId;
+};
+
+export const deleteTileById = async (tileId: string): Promise<void> => {
+  const db = await getDatabase();
+
+  const target = await getTileById(tileId);
+  if (!target) {
+    throw new Error('Tile not found');
+  }
+
+  const tiles = await db.getAllAsync<TileRow>(
+    `
+      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      FROM tiles
+      WHERE board_id = ?
+      ORDER BY position ASC
+    `,
+    target.board_id
+  );
+
+  if (tiles.length <= 1) {
+    throw new Error('Poslední tile nelze smazat');
+  }
+
+  const tilesToShift = tiles.filter((tile) => tile.position > target.position);
+  const updatedAt = nowIso();
+  const targetClip = target.audio_clip_id
+    ? await db.getFirstAsync<AudioClipRow>(
+        `
+          SELECT id, tile_id, local_uri, remote_path, duration_ms, checksum, format, updated_at
+          FROM audio_clips
+          WHERE id = ?
+          LIMIT 1
+        `,
+        target.audio_clip_id
+      )
+    : null;
+
+  await db.withTransactionAsync(async () => {
+    await archiveDeletedTile(
+      {
+        tile: {
+          id: target.id,
+          boardId: target.board_id,
+          position: target.position,
+          labelCs: target.label_cs,
+          emoji: target.emoji,
+          category: target.category,
+          speechMode: target.speech_mode,
+        },
+        clip: targetClip
+          ? {
+              localUri: targetClip.local_uri ?? null,
+              remotePath: targetClip.remote_path ?? null,
+              durationMs: targetClip.duration_ms,
+              checksum: targetClip.checksum ?? null,
+              format: targetClip.format,
+            }
+          : null,
+      },
+      db
+    );
+
+    if (target.audio_clip_id) {
+      await db.runAsync('DELETE FROM audio_clips WHERE id = ?', target.audio_clip_id);
+    }
+
+    await db.runAsync('DELETE FROM tiles WHERE id = ?', tileId);
+
+    for (const tile of tilesToShift) {
+      await db.runAsync(
+        `
+          UPDATE tiles
+          SET position = ?, updated_at = ?, revision = revision + 1, dirty = 1
+          WHERE id = ?
+        `,
+        tile.position - 1,
+        updatedAt,
+        tile.id
+      );
+    }
+  });
+
+  if (target.audio_clip_id) {
+    await enqueueSyncEvent('audio_clips', target.audio_clip_id, 'delete', {
+      id: target.audio_clip_id,
+      tile_id: tileId,
+    });
+  }
+
+  await enqueueSyncEvent('tiles', tileId, 'delete', {
+    id: tileId,
+    board_id: target.board_id,
+  });
+
+  for (const tile of tilesToShift) {
+    await enqueueSyncEvent('tiles', tile.id, 'upsert', {
+      id: tile.id,
+      position: tile.position - 1,
       updated_at: updatedAt,
     });
   }

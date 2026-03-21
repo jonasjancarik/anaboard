@@ -18,6 +18,9 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - tile text/emoji/category/speech mode
   - per-tile recording management
   - delete selected tile
+- Deleted-tile archive:
+  - restore removed tiles back onto the board
+  - preserves recording metadata for easy re-add
 - Board shortcuts:
   - PIN only unlocks caregiver mode; stays on board
   - caregiver unlocked: long-press tile opens editor for that tile

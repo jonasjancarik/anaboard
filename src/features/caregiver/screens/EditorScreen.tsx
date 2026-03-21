@@ -174,7 +174,7 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
       return;
     }
 
-    Alert.alert('Smazat vybranou dlaždici?', 'Dlaždice bude odstraněna z tabule.', [
+    Alert.alert('Smazat vybranou dlaždici?', 'Dlaždice zmizí z tabule a zůstane dostupná v archivu.', [
       {
         text: 'Zrušit',
         style: 'cancel',
@@ -297,7 +297,7 @@ export const EditorScreen = ({ onBack, onOpenSettings }: EditorScreenProps) => {
               </View>
 
               <Text style={styles.helperText}>
-                Po smazání se vrátíš na tabuli. Přesuny se řeší jen mimo tento screen.
+                Po smazání se vrátíš na tabuli. Obnovu najdeš v archivu, přesuny řeš jen mimo tento screen.
               </Text>
               {tileActionError ? <Text style={styles.error}>{tileActionError}</Text> : null}
             </>

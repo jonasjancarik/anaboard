@@ -49,6 +49,23 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       revision INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS tile_archive (
+      id TEXT PRIMARY KEY NOT NULL,
+      original_tile_id TEXT NOT NULL,
+      board_id TEXT NOT NULL,
+      original_position INTEGER NOT NULL,
+      label_cs TEXT NOT NULL,
+      emoji TEXT NOT NULL,
+      category TEXT NOT NULL,
+      speech_mode TEXT NOT NULL,
+      audio_local_uri TEXT,
+      audio_remote_path TEXT,
+      audio_duration_ms INTEGER,
+      audio_checksum TEXT,
+      audio_format TEXT,
+      deleted_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS audio_clips (
       id TEXT PRIMARY KEY NOT NULL,
       tile_id TEXT NOT NULL,
@@ -98,6 +115,7 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
 
     CREATE INDEX IF NOT EXISTS idx_tiles_board_position ON tiles(board_id, position);
     CREATE INDEX IF NOT EXISTS idx_tiles_dirty ON tiles(dirty);
+    CREATE INDEX IF NOT EXISTS idx_tile_archive_board_deleted ON tile_archive(board_id, deleted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audio_clips_tile_id ON audio_clips(tile_id);
     CREATE INDEX IF NOT EXISTS idx_audio_clips_dirty ON audio_clips(dirty);
     CREATE INDEX IF NOT EXISTS idx_sync_events_status_created ON sync_events(status, created_at);

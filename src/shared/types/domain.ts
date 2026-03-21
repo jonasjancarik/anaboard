@@ -43,6 +43,25 @@ export interface Tile {
   revision: number;
 }
 
+export interface ArchivedTile {
+  archiveId: string;
+  originalTileId: string;
+  boardId: string;
+  originalPosition: number;
+  labelCs: string;
+  emoji: string;
+  category: Category;
+  speechMode: SpeechMode;
+  audioClip?: {
+    localUri?: string;
+    remotePath?: string;
+    durationMs: number;
+    checksum?: string;
+    format: string;
+  };
+  deletedAt: string;
+}
+
 export interface AudioClip {
   id: string;
   tileId: string;

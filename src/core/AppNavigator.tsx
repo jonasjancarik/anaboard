@@ -6,6 +6,7 @@ import { BootstrapScreen } from '../features/auth/screens/BootstrapScreen';
 import { CaregiverGateScreen } from '../features/caregiver/screens/CaregiverGateScreen';
 import { EditorScreen } from '../features/caregiver/screens/EditorScreen';
 import { SettingsScreen } from '../features/caregiver/screens/SettingsScreen';
+import { TileArchiveScreen } from '../features/caregiver/screens/TileArchiveScreen';
 import { useAppStore } from '../store/useAppStore';
 
 export const AppNavigator = () => {
@@ -18,7 +19,7 @@ export const AppNavigator = () => {
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
 
   useEffect(() => {
-    if (!caregiverUnlocked && (currentScreen === 'editor' || currentScreen === 'settings')) {
+    if (!caregiverUnlocked && (currentScreen === 'editor' || currentScreen === 'settings' || currentScreen === 'tileArchive')) {
       navigate('caregiverGate');
     }
   }, [caregiverUnlocked, currentScreen, navigate]);
@@ -56,5 +57,9 @@ export const AppNavigator = () => {
     return <SettingsScreen onBack={() => navigate('editor')} />;
   }
 
-  return <BoardScreen onOpenCaregiver={() => navigate('caregiverGate')} />;
+  if (currentScreen === 'tileArchive') {
+    return <TileArchiveScreen onBack={() => navigate('board')} />;
+  }
+
+  return <BoardScreen onOpenCaregiver={() => navigate('caregiverGate')} onOpenArchive={() => navigate('tileArchive')} />;
 };
