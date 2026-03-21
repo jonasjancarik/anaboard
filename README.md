@@ -14,13 +14,10 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - `recording_only`
 - Recording support (`expo-av`) with per-tile clip save/delete
 - Caregiver PIN gate with lockout (3 failed attempts -> 30s)
-- Caregiver editor:
+- Caregiver tile editor:
   - tile text/emoji/category/speech mode
-  - tile reorder
-  - insert new tile after selected tile
-  - duplicate selected tile
-  - reset to defaults
-  - create board copy and switch to it
+  - per-tile recording management
+  - delete selected tile
 - Board shortcuts:
   - PIN only unlocks caregiver mode; stays on board
   - caregiver unlocked: long-press tile opens editor for that tile

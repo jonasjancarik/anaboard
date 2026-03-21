@@ -1,17 +1,14 @@
 import { create } from 'zustand';
 
 import {
-  duplicateActiveBoard,
   ensureDefaultBoard,
   getActiveBoardSnapshot,
-  resetActiveBoardToDefaults,
 } from '../shared/storage/repositories/boardRepository';
 import {
   deleteAudioClipForTile,
   saveAudioClipForTile,
 } from '../shared/storage/repositories/audioClipRepository';
 import {
-  createTileAfter as createTileAfterInRepository,
   deleteTileById,
   updateTile,
   updateTilePosition,
@@ -25,16 +22,7 @@ import {
 import { countPendingSyncEvents } from '../shared/storage/repositories/syncRepository';
 import { logError } from '../shared/telemetry/logger';
 import type { AuthStatus, RemoteContext } from '../features/auth/types';
-import type {
-  AudioClip,
-  Board,
-  Category,
-  ProfileSettings,
-  SentenceToken,
-  SpeechMode,
-  SyncStatus,
-  Tile,
-} from '../shared/types/domain';
+import type { AudioClip, Board, ProfileSettings, SentenceToken, SyncStatus, Tile } from '../shared/types/domain';
 import { createId } from '../shared/utils/id';
 
 export type ScreenName = 'board' | 'caregiverGate' | 'editor' | 'settings';
@@ -90,23 +78,12 @@ type AppStore = {
 
   updateTileDraft: (tileId: string, update: TileUpdateInput) => Promise<void>;
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
-  createTileAfter: (
-    tileId: string,
-    input?: {
-      labelCs?: string;
-      emoji?: string;
-      category?: Category;
-      speechMode?: SpeechMode;
-    }
-  ) => Promise<string>;
   deleteTile: (tileId: string) => Promise<void>;
   saveClip: (
     tileId: string,
     clipData: { localUri: string; durationMs: number; checksum?: string; format: string }
   ) => Promise<void>;
   deleteClip: (tileId: string) => Promise<void>;
-  resetBoard: () => Promise<void>;
-  duplicateBoard: () => Promise<void>;
 
   updateSettings: (update: {
     lockEnabled?: boolean;
@@ -268,13 +245,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await get().refreshPendingSyncEvents();
   },
 
-  createTileAfter: async (tileId, input) => {
-    const newTileId = await createTileAfterInRepository(tileId, input);
-    await get().refreshBoard();
-    await get().refreshPendingSyncEvents();
-    return newTileId;
-  },
-
   deleteTile: async (tileId) => {
     await deleteTileById(tileId);
     await get().refreshBoard();
@@ -293,20 +263,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deleteClip: async (tileId) => {
     await deleteAudioClipForTile(tileId);
     await get().refreshBoard();
-    await get().refreshPendingSyncEvents();
-  },
-
-  resetBoard: async () => {
-    await resetActiveBoardToDefaults();
-    await get().refreshBoard();
-    set({ sentence: [] });
-    await get().refreshPendingSyncEvents();
-  },
-
-  duplicateBoard: async () => {
-    await duplicateActiveBoard();
-    await get().refreshBoard();
-    set({ sentence: [] });
     await get().refreshPendingSyncEvents();
   },
 
