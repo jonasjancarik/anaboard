@@ -146,11 +146,104 @@ const insertDefaultBoard = async (): Promise<void> => {
   });
 };
 
+const syncDefaultBoardTiles = async (): Promise<void> => {
+  const db = await getDatabase();
+  const boardRow = await db.getFirstAsync<BoardRow>(
+    `
+      SELECT id, profile_id, name, locale, columns_count, rows_count, is_active, updated_at, revision
+      FROM boards
+      WHERE id = ?
+      LIMIT 1
+    `,
+    DEFAULT_BOARD_ID
+  );
+
+  if (!boardRow) {
+    return;
+  }
+
+  const existingTiles = await db.getAllAsync<TileRow>(
+    `
+      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      FROM tiles
+      WHERE board_id = ?
+      ORDER BY position ASC
+    `,
+    DEFAULT_BOARD_ID
+  );
+
+  const existingIds = new Set(existingTiles.map((tile) => tile.id));
+  const defaults = DEFAULT_TILES(nowIso());
+  const missingDefaults = defaults.filter((tile) => !existingIds.has(tile.id));
+
+  if (missingDefaults.length === 0) {
+    return;
+  }
+
+  const timestamp = nowIso();
+  const startPosition = existingTiles.length;
+
+  await db.withTransactionAsync(async () => {
+    for (let index = 0; index < missingDefaults.length; index += 1) {
+      const tile = missingDefaults[index];
+      const position = startPosition + index;
+
+      await db.runAsync(
+        `
+          INSERT INTO tiles (
+            id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
+        `,
+        tile.id,
+        DEFAULT_BOARD_ID,
+        position,
+        tile.labelCs,
+        tile.emoji,
+        tile.category,
+        tile.speechMode,
+        timestamp
+      );
+    }
+
+    await db.runAsync(
+      'UPDATE boards SET updated_at = ?, revision = revision + 1, dirty = 1 WHERE id = ?',
+      timestamp,
+      DEFAULT_BOARD_ID
+    );
+  });
+
+  for (let index = 0; index < missingDefaults.length; index += 1) {
+    const tile = missingDefaults[index];
+    const position = startPosition + index;
+
+    await enqueueSyncEvent('tiles', tile.id, 'upsert', {
+      id: tile.id,
+      board_id: DEFAULT_BOARD_ID,
+      position,
+      label_cs: tile.labelCs,
+      emoji: tile.emoji,
+      category: tile.category,
+      speech_mode: tile.speechMode,
+      audio_clip_id: null,
+      updated_at: timestamp,
+      revision: 1,
+    });
+  }
+
+  await enqueueSyncEvent('boards', DEFAULT_BOARD_ID, 'upsert', {
+    id: DEFAULT_BOARD_ID,
+    updated_at: timestamp,
+    revision: boardRow.revision + 1,
+  });
+};
+
 export const ensureDefaultBoard = async (): Promise<void> => {
   const db = await getDatabase();
   const existing = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM boards');
 
   if ((existing?.count ?? 0) > 0) {
+    await syncDefaultBoardTiles();
     return;
   }
 
