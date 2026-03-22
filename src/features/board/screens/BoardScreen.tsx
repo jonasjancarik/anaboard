@@ -100,12 +100,15 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
+  const boardPageIndex = useAppStore((state) => state.boardPageIndex);
   const addTileToSentence = useAppStore((state) => state.addTileToSentence);
   const removeSentenceToken = useAppStore((state) => state.removeSentenceToken);
   const clearSentence = useAppStore((state) => state.clearSentence);
   const setSpeaking = useAppStore((state) => state.setSpeaking);
+  const createTileAfter = useAppStore((state) => state.createTileAfter);
   const moveTile = useAppStore((state) => state.moveTile);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const setBoardPageIndex = useAppStore((state) => state.setBoardPageIndex);
   const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const navigate = useAppStore((state) => state.navigate);
 
@@ -117,9 +120,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const [reorderTileIds, setReorderTileIds] = useState<string[]>([]);
   const [activeDrag, setActiveDrag] = useState<BoardDragState | null>(null);
   const [wiggleActive, setWiggleActive] = useState(false);
+  const [isAddingTile, setIsAddingTile] = useState(false);
   const [boardViewportWidth, setBoardViewportWidth] = useState(0);
   const [boardViewportHeight, setBoardViewportHeight] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(boardPageIndex);
 
   const currentPageRef = useRef(0);
 
@@ -240,6 +244,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     return pages;
   }, [orderedTiles, pageCount, pageSize]);
+  const currentPageTiles = pagedTiles[currentPage] ?? [];
 
   const draggedTile = activeDrag ? tilesById[activeDrag.tileId] : undefined;
 
@@ -253,6 +258,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       const clampedPage = clampPageIndex(nextPage);
       currentPageRef.current = clampedPage;
       setCurrentPage(clampedPage);
+      setBoardPageIndex(clampedPage);
 
       if (pageWidth <= 0) {
         return;
@@ -263,7 +269,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         animated,
       });
     },
-    [clampPageIndex, pageWidth]
+    [clampPageIndex, pageWidth, setBoardPageIndex]
   );
 
   useEffect(() => {
@@ -631,6 +637,50 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     onOpenSettings();
   };
 
+  const onAddTilePress = useCallback(async () => {
+    if (!caregiverUnlocked) {
+      return;
+    }
+
+    const anchorTile = currentPageTiles[currentPageTiles.length - 1] ?? orderedTiles[orderedTiles.length - 1];
+    if (!anchorTile) {
+      return;
+    }
+
+    const anchorIndex =
+      currentPageTiles.length > 0 ? currentPage * pageSize + currentPageTiles.length - 1 : orderedTiles.length - 1;
+    const nextPage = Math.floor((anchorIndex + 1) / pageSize);
+
+    clearBoardDragState();
+    clearPendingReorderTouch();
+    setWiggleActive(false);
+    setTileDragError(null);
+    setIsAddingTile(true);
+
+    try {
+      const newTileId = await createTileAfter(anchorTile.id);
+      setBoardPageIndex(nextPage);
+      setEditorTargetTileId(newTileId);
+      navigate('editor');
+    } catch (error) {
+      setTileDragError(error instanceof Error ? error.message : 'Novou dlaždici nešlo přidat');
+    } finally {
+      setIsAddingTile(false);
+    }
+  }, [
+    caregiverUnlocked,
+    clearBoardDragState,
+    clearPendingReorderTouch,
+    createTileAfter,
+    currentPage,
+    currentPageTiles,
+    navigate,
+    orderedTiles,
+    pageSize,
+    setBoardPageIndex,
+    setEditorTargetTileId,
+  ]);
+
   const getTileWiggleStyle = useCallback(
     (index: number) => {
       const direction = index % 2 === 0 ? 1 : -1;
@@ -670,6 +720,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     const nextPage = clampPageIndex(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
     currentPageRef.current = nextPage;
     setCurrentPage(nextPage);
+    setBoardPageIndex(nextPage);
   };
 
   const getTileLabelStyle = useCallback(
@@ -941,6 +992,36 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             </View>
           ) : null}
         </View>
+
+        {caregiverUnlocked ? (
+          <View
+            style={[
+              styles.caregiverActionRow,
+              {
+                paddingLeft: LAYOUT_PADDING + insets.left,
+                paddingRight: LAYOUT_PADDING + insets.right,
+              },
+            ]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Přidat novou dlaždici"
+              onPress={() => {
+                void onAddTilePress();
+              }}
+              disabled={isAddingTile}
+              style={({ pressed }) => [
+                styles.addTileButton,
+                isAddingTile && styles.actionButtonDisabled,
+                pressed && styles.actionButtonPressed,
+              ]}
+            >
+              <Text style={styles.addTileButtonText} allowFontScaling={false}>
+                {isAddingTile ? 'Přidávám dlaždici...' : '+ Přidat dlaždici'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <View
           style={[

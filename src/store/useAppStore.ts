@@ -10,6 +10,7 @@ import {
   saveAudioClipForTile,
 } from '../shared/storage/repositories/audioClipRepository';
 import {
+  createTileAfter as createTileAfterInRepository,
   deleteTileById,
   updateTile,
   updateTilePosition,
@@ -59,6 +60,7 @@ type AppStore = {
   pendingSyncEvents: number;
   isSpeaking: boolean;
   editorTargetTileId: string | null;
+  boardPageIndex: number;
 
   navigate: (screen: ScreenName) => void;
   setAuthState: (params: {
@@ -78,6 +80,7 @@ type AppStore = {
   setSpeaking: (value: boolean) => void;
 
   updateTileDraft: (tileId: string, update: TileUpdateInput) => Promise<void>;
+  createTileAfter: (tileId: string) => Promise<string>;
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
   deleteTile: (tileId: string) => Promise<void>;
   resetBoardToDefaults: () => Promise<void>;
@@ -103,6 +106,7 @@ type AppStore = {
   registerPinFailure: () => void;
   clearPinFailures: () => void;
   setEditorTargetTileId: (tileId: string | null) => void;
+  setBoardPageIndex: (pageIndex: number) => void;
 
   setSyncStatus: (status: SyncStatus) => void;
   refreshPendingSyncEvents: () => Promise<void>;
@@ -130,6 +134,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   pendingSyncEvents: 0,
   isSpeaking: false,
   editorTargetTileId: null,
+  boardPageIndex: 0,
 
   navigate: (screen) => {
     set({ currentScreen: screen });
@@ -242,6 +247,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await get().refreshPendingSyncEvents();
   },
 
+  createTileAfter: async (tileId) => {
+    const newTileId = await createTileAfterInRepository(tileId);
+    await get().refreshBoard();
+    await get().refreshPendingSyncEvents();
+    return newTileId;
+  },
+
   moveTile: async (tileId, nextPosition) => {
     await updateTilePosition(tileId, nextPosition);
     await get().refreshBoard();
@@ -260,7 +272,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   resetBoardToDefaults: async () => {
     await resetActiveBoardToDefaults();
     await get().refreshBoard();
-    set({ sentence: [], editorTargetTileId: null });
+    set({ sentence: [], editorTargetTileId: null, boardPageIndex: 0 });
     await get().refreshPendingSyncEvents();
   },
 
@@ -309,6 +321,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setEditorTargetTileId: (tileId) => {
     set({ editorTargetTileId: tileId });
+  },
+
+  setBoardPageIndex: (pageIndex) => {
+    set({ boardPageIndex: Math.max(0, pageIndex) });
   },
 
   setSyncStatus: (status) => {

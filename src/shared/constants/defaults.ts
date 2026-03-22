@@ -92,8 +92,15 @@ export const CATEGORY_COLORS: Record<
   food: { background: "#DDEBD9", border: "#73976F" },
 };
 
+export const CATEGORY_LABELS: Record<Category, string> = {
+  needs: "Potřeby",
+  feelings: "Pocity",
+  social: "Sociální",
+  food: "Jídlo",
+};
+
 export const SPEECH_MODE_LABELS: Record<SpeechMode, string> = {
-  tts: "TTS",
-  recording_with_tts_fallback: "Nahrávka + TTS",
+  tts: "Robot",
+  recording_with_tts_fallback: "Nahrávka + robot",
   recording_only: "Jen nahrávka",
 };

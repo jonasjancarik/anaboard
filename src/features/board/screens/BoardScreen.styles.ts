@@ -178,6 +178,25 @@ export const styles = StyleSheet.create({
     gap: 12,
     flexShrink: 1,
   },
+  caregiverActionRow: {
+    marginTop: 10,
+  },
+  addTileButton: {
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.primary,
+    backgroundColor: APP_THEME.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  addTileButtonText: {
+    color: APP_THEME.primaryBorder,
+    fontSize: 16,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
   bottomBar: {
     marginTop: 12,
     flexDirection: 'row',

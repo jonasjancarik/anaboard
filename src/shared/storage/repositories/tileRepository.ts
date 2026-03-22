@@ -1,9 +1,9 @@
-import type { Category, SpeechMode } from '../../types/domain';
-import { createId } from '../../utils/id';
-import { nowIso } from '../../utils/time';
-import { getDatabase } from '../db';
-import { enqueueSyncEvent } from './syncRepository';
-import { archiveDeletedTile } from './tileArchiveRepository';
+import type { Category, SpeechMode } from "../../types/domain";
+import { createId } from "../../utils/id";
+import { nowIso } from "../../utils/time";
+import { getDatabase } from "../db";
+import { enqueueSyncEvent } from "./syncRepository";
+import { archiveDeletedTile } from "./tileArchiveRepository";
 
 type TileRow = {
   id: string;
@@ -46,16 +46,19 @@ const getTileById = async (tileId: string): Promise<TileRow | null> => {
       WHERE id = ?
       LIMIT 1
     `,
-    tileId
+    tileId,
   );
 };
 
-export const updateTile = async (tileId: string, input: TileUpdateInput): Promise<void> => {
+export const updateTile = async (
+  tileId: string,
+  input: TileUpdateInput,
+): Promise<void> => {
   const db = await getDatabase();
   const current = await getTileById(tileId);
 
   if (!current) {
-    throw new Error('Tile not found');
+    throw new Error("Tile not found");
   }
 
   await db.runAsync(
@@ -73,7 +76,7 @@ export const updateTile = async (tileId: string, input: TileUpdateInput): Promis
     current.speech_mode,
     current.audio_clip_id ?? null,
     nowIso(),
-    current.revision
+    current.revision,
   );
 
   const updatedAt = nowIso();
@@ -89,13 +92,15 @@ export const updateTile = async (tileId: string, input: TileUpdateInput): Promis
     input.emoji ?? current.emoji,
     input.category ?? current.category,
     input.speechMode ?? current.speech_mode,
-    input.audioClipId === undefined ? (current.audio_clip_id ?? null) : input.audioClipId,
+    input.audioClipId === undefined
+      ? (current.audio_clip_id ?? null)
+      : input.audioClipId,
     updatedAt,
     nextRevision,
-    tileId
+    tileId,
   );
 
-  await enqueueSyncEvent('tiles', tileId, 'upsert', {
+  await enqueueSyncEvent("tiles", tileId, "upsert", {
     id: tileId,
     board_id: current.board_id,
     label_cs: input.labelCs ?? current.label_cs,
@@ -103,18 +108,23 @@ export const updateTile = async (tileId: string, input: TileUpdateInput): Promis
     category: input.category ?? current.category,
     speech_mode: input.speechMode ?? current.speech_mode,
     audio_clip_id:
-      input.audioClipId === undefined ? (current.audio_clip_id ?? null) : input.audioClipId,
+      input.audioClipId === undefined
+        ? (current.audio_clip_id ?? null)
+        : input.audioClipId,
     updated_at: updatedAt,
     revision: nextRevision,
   });
 };
 
-export const updateTilePosition = async (tileId: string, nextPosition: number): Promise<void> => {
+export const updateTilePosition = async (
+  tileId: string,
+  nextPosition: number,
+): Promise<void> => {
   const db = await getDatabase();
 
   const target = await getTileById(tileId);
   if (!target) {
-    throw new Error('Tile not found');
+    throw new Error("Tile not found");
   }
 
   const tiles = await db.getAllAsync<TileRow>(
@@ -124,7 +134,7 @@ export const updateTilePosition = async (tileId: string, nextPosition: number): 
       WHERE board_id = ?
       ORDER BY position ASC
     `,
-    target.board_id
+    target.board_id,
   );
 
   const clampedPosition = Math.max(0, Math.min(tiles.length - 1, nextPosition));
@@ -144,17 +154,17 @@ export const updateTilePosition = async (tileId: string, nextPosition: number): 
     for (let index = 0; index < orderedIds.length; index += 1) {
       const id = orderedIds[index];
       await db.runAsync(
-        'UPDATE tiles SET position = ?, updated_at = ?, revision = revision + 1, dirty = 1 WHERE id = ?',
+        "UPDATE tiles SET position = ?, updated_at = ?, revision = revision + 1, dirty = 1 WHERE id = ?",
         index,
         updatedAt,
-        id
+        id,
       );
     }
   });
 
   for (let index = 0; index < orderedIds.length; index += 1) {
     const id = orderedIds[index];
-    await enqueueSyncEvent('tiles', id, 'upsert', {
+    await enqueueSyncEvent("tiles", id, "upsert", {
       id,
       position: index,
       updated_at: updatedAt,
@@ -169,13 +179,13 @@ export const createTileAfter = async (
     emoji?: string;
     category?: Category;
     speechMode?: SpeechMode;
-  }
+  },
 ): Promise<string> => {
   const db = await getDatabase();
 
   const anchor = await getTileById(afterTileId);
   if (!anchor) {
-    throw new Error('Tile not found');
+    throw new Error("Tile not found");
   }
 
   const tiles = await db.getAllAsync<TileRow>(
@@ -185,18 +195,18 @@ export const createTileAfter = async (
       WHERE board_id = ?
       ORDER BY position ASC
     `,
-    anchor.board_id
+    anchor.board_id,
   );
 
   const insertPosition = anchor.position + 1;
   const tilesToShift = tiles.filter((tile) => tile.position >= insertPosition);
 
-  const newTileId = createId('tile');
+  const newTileId = createId("tile");
   const updatedAt = nowIso();
-  const labelCs = input?.labelCs ?? 'Nové';
-  const emoji = input?.emoji ?? '⭐';
-  const category = input?.category ?? 'needs';
-  const speechMode = input?.speechMode ?? 'tts';
+  const labelCs = input?.labelCs ?? "Nová";
+  const emoji = input?.emoji ?? "⭐";
+  const category = input?.category ?? "needs";
+  const speechMode = input?.speechMode ?? "tts";
 
   await db.withTransactionAsync(async () => {
     for (const tile of tilesToShift) {
@@ -208,7 +218,7 @@ export const createTileAfter = async (
         `,
         tile.position + 1,
         updatedAt,
-        tile.id
+        tile.id,
       );
     }
 
@@ -225,19 +235,19 @@ export const createTileAfter = async (
       emoji,
       category,
       speechMode,
-      updatedAt
+      updatedAt,
     );
   });
 
   for (const tile of tilesToShift) {
-    await enqueueSyncEvent('tiles', tile.id, 'upsert', {
+    await enqueueSyncEvent("tiles", tile.id, "upsert", {
       id: tile.id,
       position: tile.position + 1,
       updated_at: updatedAt,
     });
   }
 
-  await enqueueSyncEvent('tiles', newTileId, 'upsert', {
+  await enqueueSyncEvent("tiles", newTileId, "upsert", {
     id: newTileId,
     board_id: anchor.board_id,
     position: insertPosition,
@@ -258,7 +268,7 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
 
   const target = await getTileById(tileId);
   if (!target) {
-    throw new Error('Tile not found');
+    throw new Error("Tile not found");
   }
 
   const tiles = await db.getAllAsync<TileRow>(
@@ -268,11 +278,11 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
       WHERE board_id = ?
       ORDER BY position ASC
     `,
-    target.board_id
+    target.board_id,
   );
 
   if (tiles.length <= 1) {
-    throw new Error('Poslední tile nelze smazat');
+    throw new Error("Poslední tile nelze smazat");
   }
 
   const tilesToShift = tiles.filter((tile) => tile.position > target.position);
@@ -285,7 +295,7 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
           WHERE id = ?
           LIMIT 1
         `,
-        target.audio_clip_id
+        target.audio_clip_id,
       )
     : null;
 
@@ -311,14 +321,17 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
             }
           : null,
       },
-      db
+      db,
     );
 
     if (target.audio_clip_id) {
-      await db.runAsync('DELETE FROM audio_clips WHERE id = ?', target.audio_clip_id);
+      await db.runAsync(
+        "DELETE FROM audio_clips WHERE id = ?",
+        target.audio_clip_id,
+      );
     }
 
-    await db.runAsync('DELETE FROM tiles WHERE id = ?', tileId);
+    await db.runAsync("DELETE FROM tiles WHERE id = ?", tileId);
 
     for (const tile of tilesToShift) {
       await db.runAsync(
@@ -329,25 +342,25 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
         `,
         tile.position - 1,
         updatedAt,
-        tile.id
+        tile.id,
       );
     }
   });
 
   if (target.audio_clip_id) {
-    await enqueueSyncEvent('audio_clips', target.audio_clip_id, 'delete', {
+    await enqueueSyncEvent("audio_clips", target.audio_clip_id, "delete", {
       id: target.audio_clip_id,
       tile_id: tileId,
     });
   }
 
-  await enqueueSyncEvent('tiles', tileId, 'delete', {
+  await enqueueSyncEvent("tiles", tileId, "delete", {
     id: tileId,
     board_id: target.board_id,
   });
 
   for (const tile of tilesToShift) {
-    await enqueueSyncEvent('tiles', tile.id, 'upsert', {
+    await enqueueSyncEvent("tiles", tile.id, "upsert", {
       id: tile.id,
       position: tile.position - 1,
       updated_at: updatedAt,

@@ -1,34 +1,53 @@
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { CATEGORY_COLORS, SPEECH_MODE_LABELS } from '../../../shared/constants/defaults';
-import { APP_THEME } from '../../../shared/constants/theme';
-import type { Category, SpeechMode } from '../../../shared/types/domain';
-import { useAppStore } from '../../../store/useAppStore';
-import { recordingService } from '../../speech/recordingService';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_COLORS,
+  SPEECH_MODE_LABELS,
+} from "../../../shared/constants/defaults";
+import { APP_THEME } from "../../../shared/constants/theme";
+import type { Category, SpeechMode } from "../../../shared/types/domain";
+import { useAppStore } from "../../../store/useAppStore";
+import { recordingService } from "../../speech/recordingService";
 
 type EditorScreenProps = {
   onBack: () => void;
 };
 
-const categories: Category[] = ['needs', 'feelings', 'social', 'food'];
-const speechModes: SpeechMode[] = ['tts', 'recording_with_tts_fallback', 'recording_only'];
+const categories: Category[] = ["needs", "feelings", "social", "food"];
+const speechModes: SpeechMode[] = [
+  "tts",
+  "recording_with_tts_fallback",
+  "recording_only",
+];
 
 export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const tiles = useAppStore((state) => state.tiles);
   const clipsById = useAppStore((state) => state.clipsById);
+  const settings = useAppStore((state) => state.settings);
   const updateTileDraft = useAppStore((state) => state.updateTileDraft);
   const deleteTile = useAppStore((state) => state.deleteTile);
   const saveClip = useAppStore((state) => state.saveClip);
   const deleteClip = useAppStore((state) => state.deleteClip);
   const editorTargetTileId = useAppStore((state) => state.editorTargetTileId);
-  const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const setEditorTargetTileId = useAppStore(
+    (state) => state.setEditorTargetTileId,
+  );
 
-  const [labelCs, setLabelCs] = useState('');
-  const [emoji, setEmoji] = useState('');
-  const [category, setCategory] = useState<Category>('needs');
-  const [speechMode, setSpeechMode] = useState<SpeechMode>('tts');
+  const [labelCs, setLabelCs] = useState("");
+  const [emoji, setEmoji] = useState("");
+  const [category, setCategory] = useState<Category>("needs");
+  const [speechMode, setSpeechMode] = useState<SpeechMode>("tts");
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
@@ -42,12 +61,17 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       return;
     }
 
-    if (!editorTargetTileId || !tiles.some((tile) => tile.id === editorTargetTileId)) {
+    if (
+      !editorTargetTileId ||
+      !tiles.some((tile) => tile.id === editorTargetTileId)
+    ) {
       setEditorTargetTileId(tiles[0].id);
     }
   }, [editorTargetTileId, setEditorTargetTileId, tiles]);
 
-  const selectedTile = editorTargetTileId ? tiles.find((tile) => tile.id === editorTargetTileId) ?? null : null;
+  const selectedTile = editorTargetTileId
+    ? (tiles.find((tile) => tile.id === editorTargetTileId) ?? null)
+    : null;
 
   useEffect(() => {
     if (!selectedTile) {
@@ -62,10 +86,16 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setTileActionError(null);
   }, [selectedTile]);
 
-  const selectedClip = selectedTile?.audioClipId ? clipsById[selectedTile.audioClipId] : undefined;
+  const selectedClip = selectedTile?.audioClipId
+    ? clipsById[selectedTile.audioClipId]
+    : undefined;
   const previewColors = CATEGORY_COLORS[category];
-  const previewLabel = selectedTile ? labelCs.trim() || selectedTile.labelCs : '';
-  const previewEmoji = selectedTile ? emoji.trim() || selectedTile.emoji : '';
+  const previewLabel = selectedTile
+    ? labelCs.trim() || selectedTile.labelCs
+    : "";
+  const previewEmoji = selectedTile ? emoji.trim() || selectedTile.emoji : "";
+  const showLabels = settings?.showLabels ?? true;
+  const highContrast = settings?.highContrast ?? false;
 
   const buildTileUpdatePayload = () => {
     if (!selectedTile) {
@@ -96,7 +126,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     try {
       await updateTileDraft(selectedTile.id, payload);
     } catch (error) {
-      setTileActionError(error instanceof Error ? error.message : 'Dlaždici nešlo uložit');
+      setTileActionError(
+        error instanceof Error ? error.message : "Dlaždici nešlo uložit",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -114,7 +146,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         await recordingService.start();
         setIsRecording(true);
       } catch (error) {
-        setRecordingError(error instanceof Error ? error.message : 'Nahrávání se nepovedlo');
+        setRecordingError(
+          error instanceof Error ? error.message : "Nahrávání se nepovedlo",
+        );
       }
       return;
     }
@@ -124,17 +158,19 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       setIsRecording(false);
 
       if (!recording) {
-        setRecordingError('Nahrávka je prázdná');
+        setRecordingError("Nahrávka je prázdná");
         return;
       }
 
       await saveClip(selectedTile.id, {
         localUri: recording.uri,
         durationMs: recording.durationMs,
-        format: 'm4a',
+        format: "m4a",
       });
     } catch (error) {
-      setRecordingError(error instanceof Error ? error.message : 'Nahrávání se nepovedlo');
+      setRecordingError(
+        error instanceof Error ? error.message : "Nahrávání se nepovedlo",
+      );
       setIsRecording(false);
     }
   };
@@ -149,7 +185,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     try {
       await deleteClip(selectedTile.id);
     } catch (error) {
-      setRecordingError(error instanceof Error ? error.message : 'Nahrávku nešlo smazat');
+      setRecordingError(
+        error instanceof Error ? error.message : "Nahrávku nešlo smazat",
+      );
     }
   };
 
@@ -165,7 +203,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       setEditorTargetTileId(null);
       onBack();
     } catch (error) {
-      setTileActionError(error instanceof Error ? error.message : 'Dlaždici nešlo smazat');
+      setTileActionError(
+        error instanceof Error ? error.message : "Dlaždici nešlo smazat",
+      );
     }
   };
 
@@ -174,26 +214,49 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       return;
     }
 
-    Alert.alert('Smazat vybranou dlaždici?', 'Dlaždice zmizí z tabule a zůstane dostupná v archivu.', [
-      {
-        text: 'Zrušit',
-        style: 'cancel',
-      },
-      {
-        text: 'Smazat',
-        style: 'destructive',
-        onPress: () => {
-          void deleteSelectedTile();
+    Alert.alert(
+      "Smazat vybranou dlaždici?",
+      "Dlaždice zmizí z tabule a zůstane dostupná v archivu.",
+      [
+        {
+          text: "Zrušit",
+          style: "cancel",
         },
-      },
-    ]);
+        {
+          text: "Smazat",
+          style: "destructive",
+          onPress: () => {
+            void deleteSelectedTile();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleRecordingAction = () => {
+    if (isRecording) {
+      void handleRecordToggle();
+      return;
+    }
+
+    if (selectedClip) {
+      void handleDeleteClip();
+      return;
+    }
+
+    void handleRecordToggle();
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <View style={styles.topBar}>
-        <Pressable style={[styles.topButton, styles.neutralButton]} onPress={onBack}>
-          <Text style={[styles.topButtonText, styles.neutralButtonText]}>Zpět</Text>
+        <Pressable
+          style={[styles.topButton, styles.neutralButton]}
+          onPress={onBack}
+        >
+          <Text style={[styles.topButtonText, styles.neutralButtonText]}>
+            Zpět
+          </Text>
         </Pressable>
         <Text style={styles.title}>Upravit dlaždici</Text>
         <View style={styles.topButtonPlaceholder} />
@@ -201,107 +264,208 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
       <View style={styles.content}>
         <ScrollView
-          style={styles.editorPanel}
+          style={styles.editorScroll}
           contentContainerStyle={styles.editorPanelContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {selectedTile ? (
-            <>
-              <Text style={styles.sectionTitle}>Vybraná dlaždice</Text>
-
-              <View
-                style={[
-                  styles.tilePreview,
-                  {
-                    backgroundColor: previewColors.background,
-                    borderColor: previewColors.border,
-                  },
-                ]}
-              >
-                <Text style={styles.tilePreviewEmoji}>{previewEmoji || '⬜️'}</Text>
-                <View style={styles.tilePreviewTextWrap}>
-                  <Text style={styles.tilePreviewLabel}>{previewLabel}</Text>
-                  <Text style={styles.tilePreviewSub}>Pořadí měň na tabuli přes režim PŘESUN.</Text>
+          <View style={styles.editorBody}>
+            {selectedTile ? (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Vybraná dlaždice</Text>
                 </View>
-              </View>
 
-              <Text style={styles.inputLabel}>Text</Text>
-              <TextInput value={labelCs} onChangeText={setLabelCs} style={styles.input} />
-
-              <Text style={styles.inputLabel}>Emoji</Text>
-              <TextInput value={emoji} onChangeText={setEmoji} style={styles.input} maxLength={4} />
-
-              <Text style={styles.inputLabel}>Kategorie</Text>
-              <View style={styles.chipWrap}>
-                {categories.map((item) => (
-                  <Pressable
-                    key={item}
-                    onPress={() => setCategory(item)}
-                    style={[styles.chip, category === item && styles.chipSelected]}
+                <View style={styles.tilePreviewWrap}>
+                  <View
+                    style={[
+                      styles.tilePreview,
+                      highContrast
+                        ? styles.tilePreviewHighContrast
+                        : {
+                            backgroundColor: previewColors.background,
+                            borderColor: "transparent",
+                          },
+                    ]}
                   >
-                    <Text style={styles.chipText}>{item}</Text>
-                  </Pressable>
-                ))}
-              </View>
+                    <Text style={styles.tilePreviewEmoji}>
+                      {previewEmoji || "⬜️"}
+                    </Text>
+                    {showLabels ? (
+                      <Text style={styles.tilePreviewLabel}>{previewLabel}</Text>
+                    ) : null}
+                  </View>
+                </View>
 
-              <Text style={styles.inputLabel}>Režim řeči</Text>
-              <View style={styles.chipWrap}>
-                {speechModes.map((mode) => (
+                <View style={styles.divider} />
+
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldBlock}>
+                    <Text style={styles.inputLabel}>Text</Text>
+                    <TextInput
+                      value={labelCs}
+                      onChangeText={setLabelCs}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.emojiFieldBlock}>
+                    <Text style={styles.inputLabel}>Emoji</Text>
+                    <TextInput
+                      value={emoji}
+                      onChangeText={setEmoji}
+                      style={[styles.input, styles.emojiInput]}
+                      maxLength={4}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                <Text style={styles.inputLabel}>Kategorie</Text>
+                <View style={styles.chipWrap}>
+                  {categories.map((item) => {
+                    const selected = category === item;
+
+                    return (
+                      <Pressable
+                        key={item}
+                        onPress={() => setCategory(item)}
+                        style={[
+                          styles.chip,
+                          styles.categoryChip,
+                          {
+                            backgroundColor: CATEGORY_COLORS[item].background,
+                            borderColor: CATEGORY_COLORS[item].border,
+                          },
+                          selected && styles.chipSelected,
+                          selected && styles.categoryChipSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            styles.categoryChipText,
+                            selected && styles.chipTextSelected,
+                          ]}
+                        >
+                          {CATEGORY_LABELS[item]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.inputLabel}>Režim řeči</Text>
+                <View style={styles.chipWrap}>
+                  {speechModes.map((mode) => {
+                    const selected = speechMode === mode;
+
+                    return (
+                      <Pressable
+                        key={mode}
+                        onPress={() => setSpeechMode(mode)}
+                        style={[
+                          styles.chip,
+                          styles.modeChip,
+                          selected && styles.chipSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            selected && styles.chipTextSelected,
+                          ]}
+                        >
+                          {SPEECH_MODE_LABELS[mode]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.recordingRow}>
+                  <Text style={styles.inputLabel}>Nahrávka</Text>
                   <Pressable
-                    key={mode}
-                    onPress={() => setSpeechMode(mode)}
-                    style={[styles.chip, speechMode === mode && styles.chipSelected]}
+                    style={[
+                      styles.actionButton,
+                      styles.inlineActionButton,
+                      isRecording
+                        ? styles.stopButton
+                        : selectedClip
+                          ? styles.deleteRecordingButton
+                          : styles.recordButton,
+                    ]}
+                    onPress={handleRecordingAction}
                   >
-                    <Text style={styles.chipText}>{SPEECH_MODE_LABELS[mode]}</Text>
+                    <Text
+                      style={[
+                        styles.actionButtonText,
+                        selectedClip && !isRecording
+                          ? styles.deleteTileButtonText
+                          : null,
+                      ]}
+                    >
+                      {isRecording ? "Stop" : selectedClip ? "Smazat" : "Nahrát"}
+                    </Text>
                   </Pressable>
-                ))}
-              </View>
+                </View>
+                {recordingError ? (
+                  <Text style={styles.error}>{recordingError}</Text>
+                ) : null}
 
-              <Text style={styles.inputLabel}>Nahrávka</Text>
-              <Text style={styles.recordingInfo}>
-                {selectedClip ? `Délka: ${Math.round(selectedClip.durationMs / 1000)}s` : 'Bez nahrávky'}
+                <View style={styles.divider} />
+
+                <View style={styles.tileActionsRow}>
+                  <Pressable
+                    style={[
+                      styles.actionButton,
+                      styles.tileActionButton,
+                      styles.deleteTileButton,
+                      (tiles.length <= 1 || isSaving || isRecording) &&
+                        styles.actionButtonDisabled,
+                    ]}
+                    onPress={handleDeleteTile}
+                    disabled={tiles.length <= 1 || isSaving || isRecording}
+                  >
+                    <Text
+                      style={[
+                        styles.actionButtonText,
+                        styles.deleteTileButtonText,
+                      ]}
+                    >
+                      Smazat
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.actionButton,
+                      styles.tileActionButton,
+                      styles.saveButton,
+                      (isSaving || isRecording) && styles.actionButtonDisabled,
+                    ]}
+                    onPress={saveTile}
+                    disabled={isSaving || isRecording}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {isSaving ? "Ukládám..." : "Uložit"}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {tileActionError ? (
+                  <Text style={styles.error}>{tileActionError}</Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.emptyText}>
+                Dlaždice není vybraná. Otevři editor dlouhým podržením dlaždice
+                na tabuli.
               </Text>
-              {recordingError ? <Text style={styles.error}>{recordingError}</Text> : null}
-
-              <View style={styles.recordingActions}>
-                <Pressable
-                  style={[styles.actionButton, isRecording ? styles.stopButton : styles.recordButton]}
-                  onPress={handleRecordToggle}
-                >
-                  <Text style={styles.actionButtonText}>{isRecording ? 'Stop' : 'Nahrát'}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.actionButton, styles.neutralButton]}
-                  onPress={handleDeleteClip}
-                  disabled={!selectedClip}
-                >
-                  <Text style={[styles.actionButtonText, styles.neutralButtonText]}>Smazat</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.inputLabel}>Dlaždice</Text>
-              <View style={styles.bottomActions}>
-                <Pressable style={[styles.actionButton, styles.saveButton]} onPress={saveTile} disabled={isSaving}>
-                  <Text style={styles.actionButtonText}>{isSaving ? 'Ukládám...' : 'Uložit změny dlaždice'}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.actionButton, styles.deleteTileButton]}
-                  onPress={handleDeleteTile}
-                  disabled={tiles.length <= 1}
-                >
-                  <Text style={styles.actionButtonText}>Smazat vybranou dlaždici</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.helperText}>
-                Po smazání se vrátíš na tabuli. Obnovu najdeš v archivu, přesuny řeš jen mimo tento screen.
-              </Text>
-              {tileActionError ? <Text style={styles.error}>{tileActionError}</Text> : null}
-            </>
-          ) : (
-            <Text style={styles.emptyText}>Dlaždice není vybraná. Otevři editor dlouhým podržením dlaždice na tabuli.</Text>
-          )}
+            )}
+          </View>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -314,33 +478,36 @@ const styles = StyleSheet.create({
     backgroundColor: APP_THEME.background,
   },
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    gap: 8,
   },
   title: {
     flex: 1,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '800',
+    textAlign: "center",
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "800",
     color: APP_THEME.text,
   },
   topButton: {
     borderRadius: 14,
     borderWidth: 1,
-    minWidth: 86,
+    minWidth: 60,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
+    paddingVertical: 9,
+    alignItems: "center",
   },
   topButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 15,
   },
   topButtonPlaceholder: {
-    minWidth: 86,
+    width: 60,
   },
   neutralButton: {
     borderColor: APP_THEME.border,
@@ -351,124 +518,179 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 12,
   },
-  editorPanel: {
+  editorScroll: {
     flex: 1,
-    width: '100%',
+  },
+  editorBody: {
     maxWidth: 720,
-    alignSelf: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surface,
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
+    width: "100%",
+    alignSelf: "center",
+    gap: 10,
   },
   editorPanelContent: {
-    padding: 16,
-    paddingBottom: 28,
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 20,
+  },
+  sectionHeader: {
+    gap: 2,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: "800",
     color: APP_THEME.text,
-    marginBottom: 10,
+  },
+  tilePreviewWrap: {
+    alignItems: "center",
   },
   tilePreview: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-    padding: 14,
-    marginBottom: 6,
+    width: 144,
+    height: 144,
+    borderRadius: 24,
+    borderWidth: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: APP_THEME.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  tilePreviewHighContrast: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#111827",
+    borderWidth: 2,
   },
   tilePreviewEmoji: {
-    fontSize: 32,
-  },
-  tilePreviewTextWrap: {
-    flex: 1,
+    fontSize: 34,
   },
   tilePreviewLabel: {
-    fontSize: 18,
-    fontWeight: '800',
+    width: "90%",
+    marginTop: 6,
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: "800",
+    textAlign: "center",
     color: APP_THEME.text,
   },
-  tilePreviewSub: {
-    fontSize: 13,
-    color: APP_THEME.textMuted,
-    marginTop: 4,
+  divider: {
+    height: 1,
+    backgroundColor: APP_THEME.borderSoft,
+  },
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  fieldBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  emojiFieldBlock: {
+    width: 92,
+    gap: 4,
   },
   inputLabel: {
-    marginTop: 12,
-    marginBottom: 6,
     color: APP_THEME.text,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: "700",
   },
   input: {
     borderWidth: 1,
-    borderColor: APP_THEME.border,
-    borderRadius: 14,
-    backgroundColor: APP_THEME.surfaceTint,
+    borderColor: APP_THEME.borderStrong,
+    borderRadius: 16,
+    backgroundColor: APP_THEME.surface,
     minHeight: 48,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 16,
+    fontSize: 15,
+    color: APP_THEME.text,
+  },
+  emojiInput: {
+    textAlign: "center",
+    fontSize: 24,
+    paddingHorizontal: 10,
   },
   chipWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   chip: {
-    borderRadius: 999,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: APP_THEME.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: APP_THEME.surfaceTint,
+    backgroundColor: APP_THEME.surface,
+  },
+  categoryChip: {
+    minWidth: 68,
+    alignItems: "center",
+  },
+  modeChip: {
+    minHeight: 42,
+    justifyContent: "center",
   },
   chipSelected: {
-    borderColor: APP_THEME.primary,
-    backgroundColor: APP_THEME.primarySoft,
+    borderColor: APP_THEME.primaryBorder,
+    borderWidth: 2,
+    opacity: 1,
+  },
+  categoryChipSelected: {
+    shadowColor: APP_THEME.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 1,
   },
   chipText: {
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: "700",
     color: APP_THEME.text,
   },
-  recordingInfo: {
-    color: APP_THEME.textMuted,
+  categoryChipText: {
+    color: APP_THEME.text,
+  },
+  chipTextSelected: {
+    color: APP_THEME.text,
+  },
+  recordingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "space-between",
   },
   error: {
     color: APP_THEME.dangerBorder,
-    marginTop: 6,
-    fontWeight: '700',
-  },
-  recordingActions: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  bottomActions: {
-    marginTop: 16,
-    gap: 10,
+    marginTop: -2,
+    fontWeight: "700",
+    fontSize: 13,
+    lineHeight: 16,
   },
   actionButton: {
-    borderRadius: 14,
+    minHeight: 44,
+    borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inlineActionButton: {
+    minWidth: 88,
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
   },
   actionButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    textAlign: 'center',
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
   },
   recordButton: {
     borderColor: APP_THEME.successBorder,
@@ -478,23 +700,33 @@ const styles = StyleSheet.create({
     borderColor: APP_THEME.dangerBorder,
     backgroundColor: APP_THEME.danger,
   },
+  deleteRecordingButton: {
+    borderColor: APP_THEME.dangerBorder,
+    backgroundColor: APP_THEME.surface,
+  },
   saveButton: {
     borderColor: APP_THEME.primaryBorder,
     backgroundColor: APP_THEME.primary,
   },
+  tileActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  tileActionButton: {
+    flex: 1,
+  },
   deleteTileButton: {
     borderColor: APP_THEME.dangerBorder,
-    backgroundColor: APP_THEME.danger,
+    backgroundColor: APP_THEME.surface,
+  },
+  deleteTileButtonText: {
+    color: APP_THEME.dangerBorder,
   },
   emptyText: {
     color: APP_THEME.textMuted,
-    fontWeight: '700',
+    fontWeight: "700",
     lineHeight: 20,
-  },
-  helperText: {
-    marginTop: 6,
-    color: APP_THEME.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
+    textAlign: "center",
+    paddingTop: 40,
   },
 });
