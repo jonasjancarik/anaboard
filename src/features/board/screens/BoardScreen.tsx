@@ -390,8 +390,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   };
 
   const onClearSentence = () => {
-    void speechEngine.cancel();
     clearSentence();
+    setSpeaking(false);
+    void speechEngine.cancel().catch(() => {
+      // Clear should still work even if the speech engine fails to stop cleanly.
+    });
   };
 
   const moveDrag = useCallback(
@@ -719,7 +722,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               pressed && styles.actionButtonPressed,
             ]}
           >
-            <Text style={styles.actionText} {...ACTION_TEXT_PROPS}>
+            <Text style={styles.actionIcon} allowFontScaling={false}>
+              🗣️
+            </Text>
+            <Text style={[styles.actionText, styles.speakText]} {...ACTION_TEXT_PROPS}>
               Řekni
             </Text>
           </Pressable>
@@ -728,12 +734,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             accessibilityRole="button"
             accessibilityLabel="Smazat větu"
             onPress={onClearSentence}
+            disabled={sentence.length === 0}
             style={({ pressed }) => [
               styles.actionButton,
               styles.clearButton,
+              sentence.length === 0 && styles.actionButtonDisabled,
               pressed && styles.actionButtonPressed,
             ]}
           >
+            <Text style={styles.actionIcon} allowFontScaling={false}>
+              🗑️
+            </Text>
             <Text style={[styles.actionText, styles.clearText]} {...ACTION_TEXT_PROPS}>
               Smazat
             </Text>
@@ -741,18 +752,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         </View>
       </View>
 
-      <View style={styles.editorHintWrap}>
-        <Text style={styles.editorHint}>
-          {!caregiverUnlocked
-            ? pageCount > 1
-              ? 'Zámek dole vlevo odemyká režim pečovatele. Dlaždice mluví, mezi stránkami přejeď do stran.'
-              : 'Zámek dole vlevo odemyká režim pečovatele. Dlaždice mluví.'
-            : pageCount > 1
-                ? 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž dlaždici pro zapnutí přesunu a táhni, ozubené kolečko otevírá správu tabule.'
-              : 'Režim pečovatele aktivní: klepni na dlaždici pro úpravu, podrž dlaždici pro zapnutí přesunu a táhni, ozubené kolečko otevírá správu tabule.'}
-        </Text>
-        {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
-      </View>
+      {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
 
       <View style={styles.boardArea}>
         <View

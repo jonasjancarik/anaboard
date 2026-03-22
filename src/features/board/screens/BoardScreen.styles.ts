@@ -16,12 +16,11 @@ export const styles = StyleSheet.create({
   topRow: {
     paddingTop: 8,
     paddingHorizontal: LAYOUT_PADDING,
-    paddingBottom: 10,
-    flexDirection: 'row',
+    paddingBottom: 14,
     gap: 10,
   },
   sentenceBox: {
-    flex: 1,
+    width: '100%',
     minHeight: 88,
     borderRadius: 20,
     borderWidth: 2,
@@ -70,15 +69,19 @@ export const styles = StyleSheet.create({
     color: '#10213A',
   },
   actions: {
-    width: 92,
+    flexDirection: 'row',
     gap: 8,
   },
   actionButton: {
     flex: 1,
+    minHeight: 50,
     borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 10,
   },
   actionButtonPressed: {
     transform: [{ scale: 0.97 }],
@@ -87,20 +90,24 @@ export const styles = StyleSheet.create({
     opacity: 0.45,
   },
   speakButton: {
-    backgroundColor: '#26A949',
-    borderColor: '#1A8939',
+    backgroundColor: '#E7F5EB',
+    borderColor: '#B7DDBF',
   },
   clearButton: {
-    backgroundColor: '#FFF0F0',
-    borderColor: '#EEB0B2',
+    backgroundColor: '#FFF4F4',
+    borderColor: '#EDC9CB',
   },
   actionText: {
-    paddingHorizontal: 4,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    textTransform: 'uppercase',
+    color: '#3B4D66',
+  },
+  actionIcon: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  speakText: {
+    color: '#267744',
   },
   clearText: {
     color: '#B23845',
@@ -119,17 +126,9 @@ export const styles = StyleSheet.create({
   reorderModeTextActive: {
     color: '#6C3D11',
   },
-  editorHintWrap: {
-    paddingHorizontal: LAYOUT_PADDING,
-    paddingBottom: 2,
-  },
-  editorHint: {
-    textAlign: 'center',
-    color: '#4B607E',
-    fontSize: 13,
-    fontWeight: '600',
-  },
   editorHintError: {
+    paddingHorizontal: LAYOUT_PADDING,
+    paddingBottom: 6,
     marginTop: 4,
     textAlign: 'center',
     color: '#A62839',
@@ -139,6 +138,7 @@ export const styles = StyleSheet.create({
   boardArea: {
     flex: 1,
     paddingHorizontal: LAYOUT_PADDING,
+    paddingTop: 8,
     paddingBottom: LAYOUT_PADDING,
   },
   boardPagerViewport: {
