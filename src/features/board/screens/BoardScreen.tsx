@@ -57,6 +57,7 @@ type PendingReorderTouch = {
 
 const REORDER_LONG_PRESS_MS = 180;
 const REORDER_LONG_PRESS_SLOP = 8;
+const PAGE_SWITCH_EDGE_THRESHOLD = 16;
 const ACTION_TEXT_PROPS = {
   allowFontScaling: false,
   numberOfLines: 1 as const,
@@ -83,12 +84,15 @@ const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): strin
 
 export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProps) => {
   const boardPagerRef = useRef<ScrollView>(null);
+  const boardViewportRef = useRef<View>(null);
   const sentenceScrollRef = useRef<ScrollView>(null);
   const suppressTapAfterLongPressRef = useRef(false);
   const dragStateRef = useRef<BoardDragState | null>(null);
   const reorderTileIdsRef = useRef<string[]>([]);
   const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boardViewportLeftRef = useRef(0);
+  const pageSwitchArmedRef = useRef(true);
   const wiggleValue = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -360,6 +364,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   const clearBoardDragState = useCallback(() => {
+    pageSwitchArmedRef.current = true;
     dragStateRef.current = null;
     setActiveDrag(null);
   }, []);
@@ -435,7 +440,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   };
 
   const moveDrag = useCallback(
-    (dx: number, dy: number) => {
+    (pageX: number | null, dx: number, dy: number) => {
       const drag = dragStateRef.current;
       if (!drag) {
         return;
@@ -446,8 +451,30 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       setActiveDrag(nextDrag);
 
       const viewportLeft = drag.startViewportLeft + dx;
-      const dragCenterLeft = currentPageRef.current * pageWidth + viewportLeft + tileSize / 2;
-      const targetPage = clampPageIndex(Math.floor(dragCenterLeft / pageWidth));
+      const localFingerX =
+        pageX !== null ? pageX - boardViewportLeftRef.current : viewportLeft + tileSize / 2;
+      let targetPage = currentPageRef.current;
+
+      if (localFingerX >= pageWidth - PAGE_SWITCH_EDGE_THRESHOLD) {
+        if (pageSwitchArmedRef.current) {
+          const nextPage = clampPageIndex(currentPageRef.current + 1);
+          if (nextPage !== currentPageRef.current) {
+            targetPage = nextPage;
+            pageSwitchArmedRef.current = false;
+          }
+        }
+      } else if (localFingerX <= PAGE_SWITCH_EDGE_THRESHOLD) {
+        if (pageSwitchArmedRef.current) {
+          const nextPage = clampPageIndex(currentPageRef.current - 1);
+          if (nextPage !== currentPageRef.current) {
+            targetPage = nextPage;
+            pageSwitchArmedRef.current = false;
+          }
+        }
+      } else {
+        pageSwitchArmedRef.current = true;
+      }
+
       if (targetPage !== currentPageRef.current) {
         scrollToPage(targetPage, false);
       }
@@ -533,6 +560,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
       setTileDragError(null);
       setWiggleActive(true);
+      pageSwitchArmedRef.current = true;
       suppressTapAfterLongPressRef.current = true;
       dragStateRef.current = nextDrag;
       setActiveDrag(nextDrag);
@@ -587,7 +615,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       if (drag) {
         const resolvedDx = Number.isFinite(pageX) ? pageX - drag.startPageX : gestureDx;
         const resolvedDy = Number.isFinite(pageY) ? pageY - drag.startPageY : gestureDy;
-        moveDrag(resolvedDx, resolvedDy);
+        moveDrag(Number.isFinite(pageX) ? pageX : null, resolvedDx, resolvedDy);
         return;
       }
 
@@ -733,6 +761,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     const nextWidth = event.nativeEvent.layout.width;
     const nextHeight = event.nativeEvent.layout.height;
 
+    boardViewportRef.current?.measureInWindow((x) => {
+      boardViewportLeftRef.current = x;
+    });
+
     if (nextWidth > 0 && Math.abs(nextWidth - boardViewportWidth) > 1) {
       setBoardViewportWidth(nextWidth);
     }
@@ -865,6 +897,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
       <View style={styles.boardArea}>
         <View
+          ref={boardViewportRef}
           style={styles.boardPagerViewport}
           onLayout={onBoardViewportLayout}
           {...(caregiverUnlocked ? reorderGridResponder.panHandlers : {})}
