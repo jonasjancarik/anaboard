@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.anaboard"
+      "bundleIdentifier": "com.anonymous.anaboard",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Umožni AnaBoard používat Face ID pro odemknutí režimu pečovatele."
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { useEffect } from 'react';
 
 import { BoardScreen } from '../features/board/screens/BoardScreen';
@@ -7,6 +8,7 @@ import { CaregiverGateScreen } from '../features/caregiver/screens/CaregiverGate
 import { EditorScreen } from '../features/caregiver/screens/EditorScreen';
 import { SettingsScreen } from '../features/caregiver/screens/SettingsScreen';
 import { TileArchiveScreen } from '../features/caregiver/screens/TileArchiveScreen';
+import { authenticateWithDeviceForCaregiver, canUseNativeCaregiverAuth } from '../shared/utils/deviceAuth';
 import { useAppStore } from '../store/useAppStore';
 
 export const AppNavigator = () => {
@@ -14,16 +16,50 @@ export const AppNavigator = () => {
   const authStatus = useAppStore((state) => state.authStatus);
   const requiresBootstrap = useAppStore((state) => state.requiresBootstrap);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
+  const settings = useAppStore((state) => state.settings);
 
   const navigate = useAppStore((state) => state.navigate);
   const lockCaregiver = useAppStore((state) => state.lockCaregiver);
+  const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
 
   useEffect(() => {
     if (!caregiverUnlocked && (currentScreen === 'editor' || currentScreen === 'settings' || currentScreen === 'tileArchive')) {
-      navigate('caregiverGate');
+      navigate(settings?.backupPinEnabled ? 'caregiverGate' : 'board');
     }
-  }, [caregiverUnlocked, currentScreen, navigate]);
+  }, [caregiverUnlocked, currentScreen, navigate, settings?.backupPinEnabled]);
+
+  const openCaregiver = async () => {
+    if (!settings) {
+      return;
+    }
+
+    if (!settings.lockEnabled) {
+      unlockCaregiver();
+      navigate('board');
+      return;
+    }
+
+    if (settings.backupPinEnabled) {
+      navigate('caregiverGate');
+      return;
+    }
+
+    const nativeAvailable = await canUseNativeCaregiverAuth();
+    if (!nativeAvailable) {
+      Alert.alert(
+        'Ověření není dostupné',
+        'Telefon nemá dostupné systémové ověření. Zapni v nastavení volbu „Vlastní PIN v aplikaci“.'
+      );
+      return;
+    }
+
+    const result = await authenticateWithDeviceForCaregiver();
+    if (result.success) {
+      unlockCaregiver();
+      navigate('board');
+    }
+  };
 
   if (authStatus === 'signed_out') {
     return <AuthScreen />;
@@ -66,5 +102,5 @@ export const AppNavigator = () => {
     return <TileArchiveScreen onBack={() => navigate('settings')} />;
   }
 
-  return <BoardScreen onOpenCaregiver={() => navigate('caregiverGate')} onOpenSettings={() => navigate('settings')} />;
+  return <BoardScreen onOpenCaregiver={() => { void openCaregiver(); }} onOpenSettings={() => navigate('settings')} />;
 };

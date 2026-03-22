@@ -23,6 +23,7 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
   const [highContrast, setHighContrast] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(true);
+  const [backupPinEnabled, setBackupPinEnabled] = useState(true);
 
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
@@ -40,6 +41,7 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
     setHighContrast(settings.highContrast);
     setShowLabels(settings.showLabels);
     setLockEnabled(settings.lockEnabled);
+    setBackupPinEnabled(settings.backupPinEnabled);
   }, [settings]);
 
   const saveAudioSettings = async () => {
@@ -57,6 +59,7 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
       highContrast,
       showLabels,
       lockEnabled,
+      backupPinEnabled,
     });
 
     setMessage('Nastavení uloženo');
@@ -203,8 +206,13 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={styles.label}>Zámek PIN</Text>
+            <Text style={styles.label}>Zámek pečovatele</Text>
             <Switch value={lockEnabled} onValueChange={setLockEnabled} />
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>Vlastní PIN v aplikaci</Text>
+            <Switch value={backupPinEnabled} onValueChange={setBackupPinEnabled} />
           </View>
 
           <Pressable style={[styles.primaryButton, styles.saveButton]} onPress={saveAudioSettings}>
@@ -212,43 +220,45 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
           </Pressable>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Změna PIN</Text>
+        {backupPinEnabled ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Změna vlastního PINu</Text>
 
-          <Text style={styles.label}>Aktuální PIN</Text>
-          <TextInput
-            value={currentPin}
-            onChangeText={(value) => setCurrentPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
-            keyboardType="number-pad"
-            secureTextEntry
-            style={styles.input}
-            maxLength={4}
-          />
+            <Text style={styles.label}>Aktuální PIN</Text>
+            <TextInput
+              value={currentPin}
+              onChangeText={(value) => setCurrentPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              secureTextEntry
+              style={styles.input}
+              maxLength={4}
+            />
 
-          <Text style={styles.label}>Nový PIN</Text>
-          <TextInput
-            value={newPin}
-            onChangeText={(value) => setNewPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
-            keyboardType="number-pad"
-            secureTextEntry
-            style={styles.input}
-            maxLength={4}
-          />
+            <Text style={styles.label}>Nový PIN</Text>
+            <TextInput
+              value={newPin}
+              onChangeText={(value) => setNewPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              secureTextEntry
+              style={styles.input}
+              maxLength={4}
+            />
 
-          <Text style={styles.label}>Potvrď nový PIN</Text>
-          <TextInput
-            value={confirmPin}
-            onChangeText={(value) => setConfirmPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
-            keyboardType="number-pad"
-            secureTextEntry
-            style={styles.input}
-            maxLength={4}
-          />
+            <Text style={styles.label}>Potvrď nový PIN</Text>
+            <TextInput
+              value={confirmPin}
+              onChangeText={(value) => setConfirmPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              secureTextEntry
+              style={styles.input}
+              maxLength={4}
+            />
 
-          <Pressable style={[styles.primaryButton, styles.pinButton]} onPress={savePin}>
-            <Text style={styles.primaryButtonText}>Uložit PIN</Text>
-          </Pressable>
-        </View>
+            <Pressable style={[styles.primaryButton, styles.pinButton]} onPress={savePin}>
+              <Text style={styles.primaryButtonText}>Uložit PIN</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {authStatus === 'signed_in' ? (
           <View style={styles.card}>

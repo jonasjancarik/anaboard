@@ -89,6 +89,7 @@ type AppStore = {
 
   updateSettings: (update: {
     lockEnabled?: boolean;
+    backupPinEnabled?: boolean;
     ttsRate?: number;
     ttsPitch?: number;
     preferredVoice?: string | null;

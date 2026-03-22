@@ -83,6 +83,7 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       profile_id TEXT PRIMARY KEY NOT NULL,
       pin_hash TEXT NOT NULL,
       lock_enabled INTEGER NOT NULL DEFAULT 1,
+      backup_pin_enabled INTEGER NOT NULL DEFAULT 0,
       tts_rate REAL NOT NULL DEFAULT 0.86,
       tts_pitch REAL NOT NULL DEFAULT 1,
       preferred_voice TEXT,
@@ -113,6 +114,11 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       status TEXT NOT NULL DEFAULT 'pending'
     );
 
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tiles_board_position ON tiles(board_id, position);
     CREATE INDEX IF NOT EXISTS idx_tiles_dirty ON tiles(dirty);
     CREATE INDEX IF NOT EXISTS idx_tile_archive_board_deleted ON tile_archive(board_id, deleted_at DESC);
@@ -127,6 +133,26 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
   `).catch(() => {
     // Ignore if column already exists.
   });
+
+  await db.execAsync(`
+    ALTER TABLE profile_settings ADD COLUMN backup_pin_enabled INTEGER NOT NULL DEFAULT 0;
+  `).catch(() => {
+    // Ignore if column already exists.
+  });
+
+  const backupPinResetFlag = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM app_meta WHERE key = ? LIMIT 1',
+    'backup_pin_default_reset_v1'
+  );
+
+  if (!backupPinResetFlag) {
+    await db.runAsync('UPDATE profile_settings SET backup_pin_enabled = 0');
+    await db.runAsync(
+      'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
+      'backup_pin_default_reset_v1',
+      '1'
+    );
+  }
 };
 
 export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {

@@ -12,6 +12,7 @@ type SettingsRow = {
   profile_id: string;
   pin_hash: string;
   lock_enabled: number;
+  backup_pin_enabled: number;
   tts_rate: number;
   tts_pitch: number;
   preferred_voice?: string | null;
@@ -25,6 +26,7 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
   profileId: row.profile_id,
   pinHash: row.pin_hash,
   lockEnabled: row.lock_enabled === 1,
+  backupPinEnabled: row.backup_pin_enabled === 1,
   ttsRate: row.tts_rate,
   ttsPitch: row.tts_pitch,
   preferredVoice: row.preferred_voice ?? undefined,
@@ -51,13 +53,14 @@ export const ensureDefaultSettings = async (): Promise<void> => {
   await db.runAsync(
     `
       INSERT INTO profile_settings (
-        profile_id, pin_hash, lock_enabled, tts_rate, tts_pitch, preferred_voice,
+        profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
         high_contrast, show_labels, updated_at, revision, dirty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
     defaults.profileId,
     defaults.pinHash,
     defaults.lockEnabled ? 1 : 0,
+    defaults.backupPinEnabled ? 1 : 0,
     defaults.ttsRate,
     defaults.ttsPitch,
     defaults.preferredVoice ?? null,
@@ -71,6 +74,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     profile_id: defaults.profileId,
     pin_hash: defaults.pinHash,
     lock_enabled: defaults.lockEnabled ? 1 : 0,
+    backup_pin_enabled: defaults.backupPinEnabled ? 1 : 0,
     tts_rate: defaults.ttsRate,
     tts_pitch: defaults.ttsPitch,
     preferred_voice: defaults.preferredVoice ?? null,
@@ -85,7 +89,7 @@ export const getProfileSettings = async (): Promise<ProfileSettings> => {
   const db = await getDatabase();
   const row = await db.getFirstAsync<SettingsRow>(
     `
-      SELECT profile_id, pin_hash, lock_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
+      SELECT profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
            , show_labels
       FROM profile_settings
       WHERE profile_id = ?
@@ -104,6 +108,7 @@ export const getProfileSettings = async (): Promise<ProfileSettings> => {
 
 type SettingsUpdate = {
   lockEnabled?: boolean;
+  backupPinEnabled?: boolean;
   ttsRate?: number;
   ttsPitch?: number;
   preferredVoice?: string | null;
@@ -120,6 +125,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
 
   const next = {
     lockEnabled: update.lockEnabled ?? current.lockEnabled,
+    backupPinEnabled: update.backupPinEnabled ?? current.backupPinEnabled,
     ttsRate: update.ttsRate ?? current.ttsRate,
     ttsPitch: update.ttsPitch ?? current.ttsPitch,
     preferredVoice:
@@ -135,6 +141,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
       SET
         pin_hash = ?,
         lock_enabled = ?,
+        backup_pin_enabled = ?,
         tts_rate = ?,
         tts_pitch = ?,
         preferred_voice = ?,
@@ -147,6 +154,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     `,
     next.pinHash,
     next.lockEnabled ? 1 : 0,
+    next.backupPinEnabled ? 1 : 0,
     next.ttsRate,
     next.ttsPitch,
     next.preferredVoice,
@@ -161,6 +169,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     profile_id: current.profileId,
     pin_hash: next.pinHash,
     lock_enabled: next.lockEnabled ? 1 : 0,
+    backup_pin_enabled: next.backupPinEnabled ? 1 : 0,
     tts_rate: next.ttsRate,
     tts_pitch: next.ttsPitch,
     preferred_voice: next.preferredVoice,

@@ -77,6 +77,7 @@ export interface ProfileSettings {
   profileId: string;
   pinHash: string;
   lockEnabled: boolean;
+  backupPinEnabled: boolean;
   ttsRate: number;
   ttsPitch: number;
   preferredVoice?: string;

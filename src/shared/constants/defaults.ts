@@ -72,6 +72,7 @@ export const DEFAULT_PROFILE_SETTINGS = (
   profileId: DEFAULT_PROFILE_ID,
   pinHash,
   lockEnabled: true,
+  backupPinEnabled: false,
   ttsRate: 0.86,
   ttsPitch: 1,
   preferredVoice: undefined,
