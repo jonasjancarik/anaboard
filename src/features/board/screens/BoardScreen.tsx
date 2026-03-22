@@ -257,7 +257,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     (nextPage: number, animated: boolean) => {
       const clampedPage = clampPageIndex(nextPage);
       currentPageRef.current = clampedPage;
-      setCurrentPage(clampedPage);
+      setCurrentPage((page) => (page === clampedPage ? page : clampedPage));
       setBoardPageIndex(clampedPage);
 
       if (pageWidth <= 0) {
@@ -273,15 +273,45 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   useEffect(() => {
-    if (currentPage > pageCount - 1) {
-      scrollToPage(pageCount - 1, false);
-      return;
+    const nextPage = clampPageIndex(boardPageIndex);
+    if (nextPage !== boardPageIndex) {
+      setBoardPageIndex(nextPage);
+    }
+
+    if (nextPage !== currentPageRef.current) {
+      currentPageRef.current = nextPage;
+      setCurrentPage((page) => (page === nextPage ? page : nextPage));
     }
 
     if (pageWidth > 0) {
-      scrollToPage(currentPage, false);
+      boardPagerRef.current?.scrollTo({
+        x: nextPage * pageWidth,
+        animated: false,
+      });
     }
-  }, [currentPage, pageCount, pageWidth, scrollToPage]);
+  }, [boardPageIndex, clampPageIndex, pageWidth, setBoardPageIndex]);
+
+  useEffect(() => {
+    if (pageCount === 0) {
+      return;
+    }
+
+    const nextPage = clampPageIndex(currentPageRef.current);
+    if (nextPage === currentPageRef.current) {
+      return;
+    }
+
+    currentPageRef.current = nextPage;
+    setCurrentPage((page) => (page === nextPage ? page : nextPage));
+    setBoardPageIndex(nextPage);
+
+    if (pageWidth > 0) {
+      boardPagerRef.current?.scrollTo({
+        x: nextPage * pageWidth,
+        animated: false,
+      });
+    }
+  }, [clampPageIndex, pageCount, pageWidth, setBoardPageIndex]);
 
   const getSlotPosition = useCallback(
     (index: number) => {
@@ -428,7 +458,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           return currentIds;
         }
 
-        const contentLeft = currentPageRef.current * pageWidth + viewportLeft;
+        const contentLeft = targetPage * pageWidth + viewportLeft;
         const targetIndex = getTargetIndexFromPosition(
           contentLeft,
           drag.startTop + dy,
@@ -719,7 +749,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     const nextPage = clampPageIndex(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
     currentPageRef.current = nextPage;
-    setCurrentPage(nextPage);
+    setCurrentPage((page) => (page === nextPage ? page : nextPage));
     setBoardPageIndex(nextPage);
   };
 

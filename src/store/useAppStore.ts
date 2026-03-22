@@ -324,7 +324,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setBoardPageIndex: (pageIndex) => {
-    set({ boardPageIndex: Math.max(0, pageIndex) });
+    const nextPageIndex = Math.max(0, pageIndex);
+    if (get().boardPageIndex === nextPageIndex) {
+      return;
+    }
+
+    set({ boardPageIndex: nextPageIndex });
   },
 
   setSyncStatus: (status) => {
