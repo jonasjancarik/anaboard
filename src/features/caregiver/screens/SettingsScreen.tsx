@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { authService } from '../../auth/authService';
-import { hashPin, isValidPin } from '../../../shared/utils/security';
-import { useAppStore } from '../../../store/useAppStore';
+import { authService } from "../../auth/authService";
+import { hashPin, isValidPin } from "../../../shared/utils/security";
+import { useAppStore } from "../../../store/useAppStore";
 
 type SettingsScreenProps = {
   onBack: () => void;
@@ -12,22 +21,28 @@ type SettingsScreenProps = {
   onLock: () => void;
 };
 
-export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreenProps) => {
+export const SettingsScreen = ({
+  onBack,
+  onOpenArchive,
+  onLock,
+}: SettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
   const authStatus = useAppStore((state) => state.authStatus);
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
+  const resetBoardToDefaults = useAppStore(
+    (state) => state.resetBoardToDefaults,
+  );
 
-  const [ttsRateText, setTtsRateText] = useState('0.86');
-  const [ttsPitchText, setTtsPitchText] = useState('1');
+  const [ttsRateText, setTtsRateText] = useState("0.86");
+  const [ttsPitchText, setTtsPitchText] = useState("1");
   const [highContrast, setHighContrast] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
 
-  const [currentPin, setCurrentPin] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isResettingBoard, setIsResettingBoard] = useState(false);
 
@@ -49,7 +64,7 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
     const nextPitch = Number(ttsPitchText);
 
     if (!Number.isFinite(nextRate) || !Number.isFinite(nextPitch)) {
-      setMessage('Rate/Pitch musí být číslo');
+      setMessage("Rate/Pitch musí být číslo");
       return;
     }
 
@@ -62,47 +77,49 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
       backupPinEnabled,
     });
 
-    setMessage('Nastavení uloženo');
+    setMessage("Nastavení uloženo");
   };
 
   const savePin = async () => {
     if (!settings) {
-      setMessage('Nastavení není načtené');
+      setMessage("Nastavení není načtené");
       return;
     }
 
     if (!isValidPin(newPin) || !isValidPin(confirmPin)) {
-      setMessage('Nový PIN musí mít 4 číslice');
+      setMessage("Nový PIN musí mít 4 číslice");
       return;
     }
 
     if (newPin !== confirmPin) {
-      setMessage('PINy se neshodují');
+      setMessage("PINy se neshodují");
       return;
     }
 
     const currentHash = await hashPin(currentPin);
     if (currentHash !== settings.pinHash) {
-      setMessage('Aktuální PIN je špatně');
+      setMessage("Aktuální PIN je špatně");
       return;
     }
 
     const newPinHash = await hashPin(newPin);
     await updateSettings({ pinHash: newPinHash });
 
-    setCurrentPin('');
-    setNewPin('');
-    setConfirmPin('');
-    setMessage('PIN změněn');
+    setCurrentPin("");
+    setNewPin("");
+    setConfirmPin("");
+    setMessage("PIN změněn");
   };
 
   const signOut = async () => {
     try {
       await authService.signOut();
-      setMessage('Odhlášeno');
+      setMessage("Odhlášeno");
     } catch (signOutError) {
       const nextMessage =
-        signOutError instanceof Error ? signOutError.message : 'Odhlášení selhalo';
+        signOutError instanceof Error
+          ? signOutError.message
+          : "Odhlášení selhalo";
       setMessage(nextMessage);
     }
   };
@@ -113,10 +130,12 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
 
     try {
       await resetBoardToDefaults();
-      setMessage('Tabule vrácena na výchozí stav');
+      setMessage("Tabule vrácena na výchozí stav");
     } catch (resetError) {
       const nextMessage =
-        resetError instanceof Error ? resetError.message : 'Reset tabule selhal';
+        resetError instanceof Error
+          ? resetError.message
+          : "Reset tabule selhal";
       setMessage(nextMessage);
     } finally {
       setIsResettingBoard(false);
@@ -125,27 +144,30 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
 
   const confirmBoardReset = () => {
     Alert.alert(
-      'Resetovat tabuli?',
-      'Vrátí výchozí dlaždice a pořadí. Vlastní nahrávky na tabuli se smažou.',
+      "Resetovat tabuli?",
+      "Vrátí výchozí dlaždice a pořadí. Vlastní nahrávky na tabuli se smažou.",
       [
         {
-          text: 'Zrušit',
-          style: 'cancel',
+          text: "Zrušit",
+          style: "cancel",
         },
         {
-          text: 'Resetovat',
-          style: 'destructive',
+          text: "Resetovat",
+          style: "destructive",
           onPress: () => {
             void performBoardReset();
           },
         },
-      ]
+      ],
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.headerRow}>
           <Pressable style={styles.backButton} onPress={onBack}>
             <Text style={styles.backButtonText}>Zpět</Text>
@@ -157,22 +179,38 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Správa tabule</Text>
 
-          <Pressable style={[styles.primaryButton, styles.archiveButton]} onPress={onOpenArchive}>
-            <Text style={styles.primaryButtonText}>Archiv smazaných dlaždic</Text>
+          <Pressable
+            style={[styles.primaryButton, styles.archiveButton]}
+            onPress={onOpenArchive}
+          >
+            <Text style={styles.primaryButtonText}>
+              Archiv smazaných dlaždic
+            </Text>
           </Pressable>
 
           <Pressable
-            style={[styles.primaryButton, styles.resetButton, isResettingBoard && styles.buttonDisabled]}
+            style={[
+              styles.primaryButton,
+              styles.resetButton,
+              isResettingBoard && styles.buttonDisabled,
+            ]}
             onPress={confirmBoardReset}
             disabled={isResettingBoard}
           >
             <Text style={styles.primaryButtonText}>
-              {isResettingBoard ? 'Resetuji tabuli…' : 'Resetovat na výchozí set'}
+              {isResettingBoard
+                ? "Resetuji tabuli…"
+                : "Resetovat na výchozí set"}
             </Text>
           </Pressable>
 
-          <Pressable style={[styles.primaryButton, styles.lockButton]} onPress={onLock}>
-            <Text style={styles.primaryButtonText}>Zamknout režim pečovatele</Text>
+          <Pressable
+            style={[styles.primaryButton, styles.lockButton]}
+            onPress={onLock}
+          >
+            <Text style={styles.primaryButtonText}>
+              Zamknout režim pečovatele
+            </Text>
           </Pressable>
         </View>
 
@@ -212,13 +250,21 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
 
           <View style={styles.switchRow}>
             <Text style={styles.label}>Vlastní PIN v aplikaci</Text>
-            <Switch value={backupPinEnabled} onValueChange={setBackupPinEnabled} />
+            <Switch
+              value={backupPinEnabled}
+              onValueChange={setBackupPinEnabled}
+            />
           </View>
           <Text style={styles.helperText}>
-            Jen pokud nechceš používat Face ID / kód telefonu. Dá se obnovit přes ověření telefonu.
+            Jen pokud nechceš používat zámek telefonu (PIN, FaceID apod.). Dá se
+            jednoduše obejít přes ověření telefonu - může se hodit pokud
+            uživatel-dítě PIN zná nebo má nastavené odemčení přes FaceID.
           </Text>
 
-          <Pressable style={[styles.primaryButton, styles.saveButton]} onPress={saveAudioSettings}>
+          <Pressable
+            style={[styles.primaryButton, styles.saveButton]}
+            onPress={saveAudioSettings}
+          >
             <Text style={styles.primaryButtonText}>Uložit nastavení</Text>
           </Pressable>
         </View>
@@ -230,7 +276,9 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
             <Text style={styles.label}>Aktuální PIN</Text>
             <TextInput
               value={currentPin}
-              onChangeText={(value) => setCurrentPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+              onChangeText={(value) =>
+                setCurrentPin(value.replace(/[^0-9]/g, "").slice(0, 4))
+              }
               keyboardType="number-pad"
               secureTextEntry
               style={styles.input}
@@ -240,7 +288,9 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
             <Text style={styles.label}>Nový PIN</Text>
             <TextInput
               value={newPin}
-              onChangeText={(value) => setNewPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+              onChangeText={(value) =>
+                setNewPin(value.replace(/[^0-9]/g, "").slice(0, 4))
+              }
               keyboardType="number-pad"
               secureTextEntry
               style={styles.input}
@@ -250,23 +300,31 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
             <Text style={styles.label}>Potvrď nový PIN</Text>
             <TextInput
               value={confirmPin}
-              onChangeText={(value) => setConfirmPin(value.replace(/[^0-9]/g, '').slice(0, 4))}
+              onChangeText={(value) =>
+                setConfirmPin(value.replace(/[^0-9]/g, "").slice(0, 4))
+              }
               keyboardType="number-pad"
               secureTextEntry
               style={styles.input}
               maxLength={4}
             />
 
-            <Pressable style={[styles.primaryButton, styles.pinButton]} onPress={savePin}>
+            <Pressable
+              style={[styles.primaryButton, styles.pinButton]}
+              onPress={savePin}
+            >
               <Text style={styles.primaryButtonText}>Uložit PIN</Text>
             </Pressable>
           </View>
         ) : null}
 
-        {authStatus === 'signed_in' ? (
+        {authStatus === "signed_in" ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Účet</Text>
-            <Pressable style={[styles.primaryButton, styles.signOutButton]} onPress={signOut}>
+            <Pressable
+              style={[styles.primaryButton, styles.signOutButton]}
+              onPress={signOut}
+            >
               <Text style={styles.primaryButtonText}>Odhlásit</Text>
             </Pressable>
           </View>
@@ -281,7 +339,7 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F7FC',
+    backgroundColor: "#F3F7FC",
   },
   content: {
     padding: 12,
@@ -289,46 +347,46 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   title: {
     fontSize: 22,
-    fontWeight: '900',
-    color: '#1D2E4A',
+    fontWeight: "900",
+    color: "#1D2E4A",
   },
   backButton: {
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#CFD8EA',
-    backgroundColor: '#FFFFFF',
+    borderColor: "#CFD8EA",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   backButtonText: {
-    color: '#2D3F5E',
-    fontWeight: '800',
+    color: "#2D3F5E",
+    fontWeight: "800",
   },
   backButtonPlaceholder: {
     width: 58,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#D0DAED',
+    borderColor: "#D0DAED",
     padding: 12,
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '900',
-    color: '#223450',
+    fontWeight: "900",
+    color: "#223450",
     marginBottom: 8,
   },
   label: {
-    color: '#364A67',
-    fontWeight: '700',
+    color: "#364A67",
+    fontWeight: "700",
     marginTop: 8,
     marginBottom: 4,
   },
@@ -336,19 +394,19 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#CDD7EA',
+    borderColor: "#CDD7EA",
     paddingHorizontal: 10,
     fontSize: 16,
   },
   switchRow: {
     marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   helperText: {
     marginTop: 6,
-    color: '#61738F',
+    color: "#61738F",
     fontSize: 12,
     lineHeight: 17,
   },
@@ -356,44 +414,44 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 10,
     borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 10,
   },
   saveButton: {
-    backgroundColor: '#2E73CD',
-    borderColor: '#1F5BA8',
+    backgroundColor: "#2E73CD",
+    borderColor: "#1F5BA8",
   },
   pinButton: {
-    backgroundColor: '#24A44A',
-    borderColor: '#1B7C38',
+    backgroundColor: "#24A44A",
+    borderColor: "#1B7C38",
   },
   signOutButton: {
-    backgroundColor: '#C6394F',
-    borderColor: '#9E2B3E',
+    backgroundColor: "#C6394F",
+    borderColor: "#9E2B3E",
   },
   archiveButton: {
-    backgroundColor: '#596BDF',
-    borderColor: '#4053CB',
+    backgroundColor: "#596BDF",
+    borderColor: "#4053CB",
   },
   resetButton: {
-    backgroundColor: '#D35C3A',
-    borderColor: '#AE4425',
+    backgroundColor: "#D35C3A",
+    borderColor: "#AE4425",
   },
   lockButton: {
-    backgroundColor: '#7A879A',
-    borderColor: '#5B6676',
+    backgroundColor: "#7A879A",
+    borderColor: "#5B6676",
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   message: {
-    textAlign: 'center',
-    color: '#2E4768',
-    fontWeight: '700',
+    textAlign: "center",
+    color: "#2E4768",
+    fontWeight: "700",
   },
 });

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  authenticateWithDeviceForCaregiver,
+  canUseNativeCaregiverAuth,
+} from '../../../shared/utils/deviceAuth';
 import { hashPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
 
@@ -13,9 +17,12 @@ type CaregiverGateScreenProps = {
 export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenProps) => {
   const settings = useAppStore((state) => state.settings);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
+  const updateSettings = useAppStore((state) => state.updateSettings);
 
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [canRecoverWithDeviceAuth, setCanRecoverWithDeviceAuth] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const pinInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -39,6 +46,56 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
       clearTimeout(timeoutId);
     };
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const checkRecoveryPath = async () => {
+      const nativeAvailable = await canUseNativeCaregiverAuth();
+      if (!isCancelled) {
+        setCanRecoverWithDeviceAuth(nativeAvailable);
+      }
+    };
+
+    void checkRecoveryPath();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const recoverWithDeviceAuth = async () => {
+    if (!settings || isRecovering) {
+      return;
+    }
+
+    setError(null);
+    setIsRecovering(true);
+
+    try {
+      const result = await authenticateWithDeviceForCaregiver();
+      if (!result.success) {
+        if (
+          result.error === 'user_cancel' ||
+          result.error === 'system_cancel' ||
+          result.error === 'app_cancel'
+        ) {
+          return;
+        }
+
+        setError('Ověření telefonu se nepovedlo.');
+        return;
+      }
+
+      await updateSettings({ backupPinEnabled: false });
+      unlockCaregiver();
+      onPassed();
+    } catch {
+      setError('Ověření telefonu se nepovedlo.');
+    } finally {
+      setIsRecovering(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -86,6 +143,22 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {canRecoverWithDeviceAuth ? (
+        <Pressable
+          style={[styles.recoveryButton, isRecovering && styles.recoveryButtonDisabled]}
+          onPress={() => {
+            void recoverWithDeviceAuth();
+          }}
+          disabled={isRecovering}
+        >
+          {isRecovering ? (
+            <ActivityIndicator color="#355C9B" />
+          ) : (
+            <Text style={styles.recoveryButtonText}>Zapomněl(a) jsem PIN</Text>
+          )}
+        </Pressable>
+      ) : null}
 
       <View style={styles.row}>
         <Pressable style={[styles.button, styles.cancelButton]} onPress={onCancel}>
@@ -140,6 +213,24 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#BE2B3A',
     fontWeight: '700',
+  },
+  recoveryButton: {
+    marginTop: 16,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#C8D6EC',
+    backgroundColor: '#F7FAFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recoveryButtonDisabled: {
+    opacity: 0.7,
+  },
+  recoveryButtonText: {
+    color: '#355C9B',
+    fontWeight: '800',
   },
   row: {
     marginTop: 24,
