@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { authService } from '../authService';
+import { APP_THEME } from '../../../shared/constants/theme';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -98,25 +99,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    backgroundColor: '#F3F7FC',
+    backgroundColor: APP_THEME.background,
   },
   title: {
     fontSize: 30,
-    fontWeight: '900',
-    color: '#1F2E48',
+    fontWeight: '800',
+    color: APP_THEME.text,
   },
   subtitle: {
     marginTop: 8,
     marginBottom: 20,
-    color: '#4E6380',
+    color: APP_THEME.textMuted,
     fontSize: 16,
   },
   modeRow: {
     flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#CDD8EA',
-    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
     marginBottom: 12,
   },
   modeButton: {
@@ -125,42 +126,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modeButtonActive: {
-    backgroundColor: '#E3ECFF',
+    backgroundColor: APP_THEME.primarySoft,
   },
   modeButtonText: {
-    color: '#375074',
+    color: APP_THEME.textMuted,
     fontWeight: '700',
   },
   modeButtonTextActive: {
-    color: '#214D9A',
-    fontWeight: '900',
+    color: APP_THEME.primaryBorder,
+    fontWeight: '800',
   },
   input: {
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#CDD8EA',
-    backgroundColor: '#FFFFFF',
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
     paddingHorizontal: 12,
     fontSize: 16,
     marginTop: 10,
   },
   error: {
     marginTop: 10,
-    color: '#BB2539',
+    color: APP_THEME.dangerBorder,
     fontWeight: '700',
   },
   message: {
     marginTop: 10,
-    color: '#2557A7',
+    color: APP_THEME.primaryBorder,
     fontWeight: '700',
   },
   submitButton: {
     marginTop: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#1F5DAE',
-    backgroundColor: '#2F73CD',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.primaryBorder,
+    backgroundColor: APP_THEME.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
@@ -168,6 +169,6 @@ const styles = StyleSheet.create({
   submitText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: '800',
   },
 });

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CATEGORY_COLORS, SPEECH_MODE_LABELS } from '../../../shared/constants/defaults';
+import { APP_THEME } from '../../../shared/constants/theme';
 import { getArchivedTilesForBoard, restoreArchivedTileToBoard } from '../../../shared/storage/repositories/tileArchiveRepository';
 import type { ArchivedTile } from '../../../shared/types/domain';
 import { useAppStore } from '../../../store/useAppStore';
@@ -162,29 +163,29 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F7FC',
+    backgroundColor: APP_THEME.background,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
-    gap: 8,
+    paddingTop: 10,
+    paddingBottom: 6,
+    gap: 10,
   },
   backButton: {
     minWidth: 86,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#D4DCEB',
-    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   backButtonText: {
-    color: '#2B3D5C',
+    color: APP_THEME.text,
     fontWeight: '800',
   },
   backButtonPlaceholder: {
@@ -194,35 +195,40 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 24,
-    fontWeight: '900',
-    color: '#1F2E48',
+    fontWeight: '800',
+    color: APP_THEME.text,
   },
   helperText: {
     paddingHorizontal: 16,
     paddingTop: 4,
-    paddingBottom: 6,
+    paddingBottom: 8,
     textAlign: 'center',
-    color: '#4B607E',
+    color: APP_THEME.textMuted,
     fontSize: 13,
     lineHeight: 18,
   },
   content: {
     padding: 12,
-    gap: 10,
-    paddingBottom: 24,
+    gap: 12,
+    paddingBottom: 28,
   },
   infoText: {
     textAlign: 'center',
-    color: '#4E617A',
+    color: APP_THEME.textMuted,
     fontSize: 15,
     fontWeight: '700',
     paddingVertical: 24,
   },
   card: {
-    borderRadius: 16,
-    borderWidth: 2,
-    padding: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 14,
     gap: 12,
+    shadowColor: APP_THEME.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -237,22 +243,22 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#15314F',
+    fontWeight: '800',
+    color: APP_THEME.text,
   },
   cardMeta: {
-    marginTop: 2,
-    color: '#39516E',
+    marginTop: 3,
+    color: APP_THEME.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   restoreButton: {
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2A7B43',
-    backgroundColor: '#2FAA4D',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: APP_THEME.successBorder,
+    backgroundColor: APP_THEME.success,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   restoreButtonDisabled: {
@@ -264,7 +270,7 @@ const styles = StyleSheet.create({
   },
   message: {
     textAlign: 'center',
-    color: '#2C4D76',
+    color: APP_THEME.message,
     fontWeight: '700',
     paddingTop: 6,
   },

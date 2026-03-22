@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { authService } from "../../auth/authService";
+import { APP_THEME } from "../../../shared/constants/theme";
 import { hashPin, isValidPin } from "../../../shared/utils/security";
 import { useAppStore } from "../../../store/useAppStore";
 
@@ -339,12 +340,12 @@ export const SettingsScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F3F7FC",
+    backgroundColor: APP_THEME.background,
   },
   content: {
     padding: 12,
-    gap: 10,
-    paddingBottom: 24,
+    gap: 12,
+    paddingBottom: 28,
   },
   headerRow: {
     flexDirection: "row",
@@ -353,48 +354,54 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: "900",
-    color: "#1D2E4A",
+    fontWeight: "800",
+    color: APP_THEME.text,
   },
   backButton: {
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#CFD8EA",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   backButtonText: {
-    color: "#2D3F5E",
+    color: APP_THEME.text,
     fontWeight: "800",
   },
   backButtonPlaceholder: {
     width: 58,
   },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: "#D0DAED",
-    padding: 12,
+    backgroundColor: APP_THEME.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    padding: 16,
+    shadowColor: APP_THEME.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3,
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: "900",
-    color: "#223450",
-    marginBottom: 8,
+    fontWeight: "800",
+    color: APP_THEME.text,
+    marginBottom: 10,
   },
   label: {
-    color: "#364A67",
+    color: APP_THEME.text,
     fontWeight: "700",
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 10,
+    marginBottom: 6,
   },
   input: {
-    height: 42,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#CDD7EA",
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surfaceTint,
     paddingHorizontal: 10,
     fontSize: 16,
   },
@@ -405,42 +412,43 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   helperText: {
-    marginTop: 6,
-    color: "#61738F",
+    marginTop: 8,
+    color: APP_THEME.textMuted,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   primaryButton: {
     marginTop: 12,
-    borderRadius: 10,
-    borderWidth: 2,
+    borderRadius: 14,
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   saveButton: {
-    backgroundColor: "#2E73CD",
-    borderColor: "#1F5BA8",
+    backgroundColor: APP_THEME.primary,
+    borderColor: APP_THEME.primaryBorder,
   },
   pinButton: {
-    backgroundColor: "#24A44A",
-    borderColor: "#1B7C38",
+    backgroundColor: APP_THEME.success,
+    borderColor: APP_THEME.successBorder,
   },
   signOutButton: {
-    backgroundColor: "#C6394F",
-    borderColor: "#9E2B3E",
+    backgroundColor: APP_THEME.danger,
+    borderColor: APP_THEME.dangerBorder,
   },
   archiveButton: {
-    backgroundColor: "#596BDF",
-    borderColor: "#4053CB",
+    backgroundColor: APP_THEME.accent,
+    borderColor: APP_THEME.accentBorder,
   },
   resetButton: {
-    backgroundColor: "#D35C3A",
-    borderColor: "#AE4425",
+    backgroundColor: APP_THEME.critical,
+    borderColor: APP_THEME.criticalBorder,
   },
   lockButton: {
-    backgroundColor: "#7A879A",
-    borderColor: "#5B6676",
+    backgroundColor: APP_THEME.neutral,
+    borderColor: APP_THEME.neutralBorder,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -451,7 +459,7 @@ const styles = StyleSheet.create({
   },
   message: {
     textAlign: "center",
-    color: "#2E4768",
+    color: APP_THEME.message,
     fontWeight: "700",
   },
 });

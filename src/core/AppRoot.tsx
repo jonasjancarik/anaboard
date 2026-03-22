@@ -8,6 +8,7 @@ import { speechEngine } from '../features/speech/speechEngine';
 import { syncService } from '../features/sync/syncService';
 import type { AuthStatus } from '../features/auth/types';
 import { initTelemetry } from '../shared/telemetry/logger';
+import { APP_THEME } from '../shared/constants/theme';
 import { useAppStore } from '../store/useAppStore';
 
 export const AppRoot = () => {
@@ -206,7 +207,7 @@ export const AppRoot = () => {
     <SafeAreaProvider>
       {isAuthLoading || isBoardLoading || isSettingsLoading ? (
         <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color="#2E73CD" />
+          <ActivityIndicator size="large" color={APP_THEME.primary} />
           <Text style={styles.loaderText}>Načítám AnaBoard...</Text>
         </View>
       ) : (
@@ -221,11 +222,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F3F7FC',
+    backgroundColor: APP_THEME.background,
     gap: 12,
   },
   loaderText: {
-    color: '#304663',
+    color: APP_THEME.text,
     fontWeight: '700',
   },
 });

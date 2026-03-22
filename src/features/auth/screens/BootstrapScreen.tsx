@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { authService } from '../authService';
+import { APP_THEME } from '../../../shared/constants/theme';
 import { useAppStore } from '../../../store/useAppStore';
 
 export const BootstrapScreen = () => {
@@ -58,45 +59,45 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    backgroundColor: '#F3F7FC',
+    backgroundColor: APP_THEME.background,
   },
   title: {
     fontSize: 30,
-    fontWeight: '900',
-    color: '#1F2E48',
+    fontWeight: '800',
+    color: APP_THEME.text,
   },
   subtitle: {
     marginTop: 8,
     marginBottom: 20,
-    color: '#4E6380',
+    color: APP_THEME.textMuted,
     fontSize: 16,
   },
   label: {
     marginTop: 8,
-    color: '#314A6B',
+    color: APP_THEME.text,
     fontWeight: '700',
   },
   input: {
     marginTop: 4,
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#CDD8EA',
-    backgroundColor: '#FFFFFF',
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
     paddingHorizontal: 12,
     fontSize: 16,
   },
   error: {
     marginTop: 12,
-    color: '#BB2539',
+    color: APP_THEME.dangerBorder,
     fontWeight: '700',
   },
   submitButton: {
     marginTop: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#1F5DAE',
-    backgroundColor: '#2F73CD',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.primaryBorder,
+    backgroundColor: APP_THEME.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
@@ -104,6 +105,6 @@ const styles = StyleSheet.create({
   submitText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: '800',
   },
 });

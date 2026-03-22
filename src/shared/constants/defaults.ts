@@ -86,10 +86,10 @@ export const CATEGORY_COLORS: Record<
   Category,
   { background: string; border: string }
 > = {
-  needs: { background: "#D6EFFF", border: "#1D8FE1" },
-  feelings: { background: "#FFECA8", border: "#D49300" },
-  social: { background: "#FFD7EE", border: "#CB2B7A" },
-  food: { background: "#D8F7D9", border: "#2DAA48" },
+  needs: { background: "#DCEAF8", border: "#6F92BE" },
+  feelings: { background: "#F8E7BC", border: "#C39245" },
+  social: { background: "#F2DDE7", border: "#B56E8D" },
+  food: { background: "#DDEBD9", border: "#73976F" },
 };
 
 export const SPEECH_MODE_LABELS: Record<SpeechMode, string> = {

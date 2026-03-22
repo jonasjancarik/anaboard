@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { speechEngine, buildSpeechSegments } from '../../speech/speechEngine';
 import {
@@ -26,6 +26,7 @@ import {
   styles,
 } from './BoardScreen.styles';
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
+import { APP_THEME } from '../../../shared/constants/theme';
 import type { SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
@@ -61,9 +62,7 @@ const ACTION_TEXT_PROPS = {
   numberOfLines: 1 as const,
 };
 const FITTED_TILE_LABEL_PROPS = {
-  adjustsFontSizeToFit: true,
-  maxFontSizeMultiplier: 1,
-  minimumFontScale: 0.55,
+  allowFontScaling: false,
   numberOfLines: 2 as const,
 };
 
@@ -92,6 +91,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wiggleValue = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const bottomBarBottomPadding = Math.max(8, Math.min(insets.bottom, 16));
 
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
@@ -128,8 +129,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  const pageWidth = boardViewportWidth > 0 ? boardViewportWidth : width - LAYOUT_PADDING * 2;
-  const availableGridWidth = Math.min(pageWidth, MAX_GRID_WIDTH);
+  const pageWidth = boardViewportWidth > 0 ? boardViewportWidth : width;
+  const availableGridWidth = Math.min(pageWidth - LAYOUT_PADDING * 2, MAX_GRID_WIDTH);
   const tileSize = useMemo(() => {
     const widthBound = (availableGridWidth - GRID_GAP * (gridColumns - 1)) / gridColumns;
     const heightBound =
@@ -145,7 +146,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const pageGridWidth = tileSize * gridColumns + GRID_GAP * (gridColumns - 1);
   const pageGridHeight = tileSize * gridRows + GRID_GAP * (gridRows - 1);
   const effectivePageHeight = boardViewportHeight > 0 ? boardViewportHeight : pageGridHeight;
-  const horizontalGridOffset = Math.max(0, (pageWidth - pageGridWidth) / 2);
+  const horizontalGridOffset = Math.max(LAYOUT_PADDING, (pageWidth - pageGridWidth) / 2);
   const verticalGridOffset = Math.max(0, (effectivePageHeight - pageGridHeight) / 2);
 
   useEffect(() => {
@@ -671,9 +672,36 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setCurrentPage(nextPage);
   };
 
+  const getTileLabelStyle = useCallback(
+    (label: string) => {
+      const normalizedLength = label.trim().length;
+      const baseFontSize = Math.max(12, Math.min(18, Math.floor(tileSize * 0.17)));
+
+      if (normalizedLength >= 10) {
+        return {
+          fontSize: Math.max(12, baseFontSize - 3),
+          lineHeight: Math.max(14, baseFontSize - 1),
+        };
+      }
+
+      if (normalizedLength >= 7) {
+        return {
+          fontSize: Math.max(13, baseFontSize - 2),
+          lineHeight: Math.max(15, baseFontSize),
+        };
+      }
+
+      return {
+        fontSize: baseFontSize,
+        lineHeight: baseFontSize + 3,
+      };
+    },
+    [tileSize]
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
-      <StatusBar style="dark" translucent={false} backgroundColor="#F3F7FC" />
+      <StatusBar style="dark" translucent={false} backgroundColor={APP_THEME.background} />
 
       <View style={styles.topRow}>
         <View style={styles.sentenceBox}>
@@ -848,11 +876,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                             }
                             style={({ pressed }) => [
                               styles.tile,
+                              highContrast && styles.tileHighContrast,
                               {
                                 width: tileSize,
                                 height: tileSize,
                                 backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                                borderColor: highContrast ? '#111827' : colors.border,
+                                borderColor: highContrast ? '#111827' : 'transparent',
                               },
                               isDraggedTile && styles.tilePlaceholder,
                               pressed && styles.tilePressed,
@@ -860,7 +889,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                           >
                             <Text style={styles.tileEmoji}>{tile.emoji}</Text>
                             {showLabels ? (
-                              <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                              <Text
+                                style={[styles.tileLabel, getTileLabelStyle(tile.labelCs)]}
+                                {...FITTED_TILE_LABEL_PROPS}
+                              >
                                 {tile.labelCs}
                               </Text>
                             ) : null}
@@ -892,13 +924,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                   borderColor:
                     settings?.highContrast ?? false
                       ? '#111827'
-                      : CATEGORY_COLORS[draggedTile.category].border,
+                      : 'transparent',
                 },
+                settings?.highContrast ?? false ? styles.dragOverlayTileHighContrast : null,
               ]}
             >
               <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
               {showLabels ? (
-                <Text style={styles.tileLabel} {...FITTED_TILE_LABEL_PROPS}>
+                <Text
+                  style={[styles.tileLabel, getTileLabelStyle(draggedTile.labelCs)]}
+                  {...FITTED_TILE_LABEL_PROPS}
+                >
                   {draggedTile.labelCs}
                 </Text>
               ) : null}
@@ -906,7 +942,16 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           ) : null}
         </View>
 
-        <View style={styles.bottomBar}>
+        <View
+          style={[
+            styles.bottomBar,
+            {
+              paddingLeft: LAYOUT_PADDING + insets.left,
+              paddingRight: LAYOUT_PADDING + insets.right,
+              paddingBottom: bottomBarBottomPadding,
+            },
+          ]}
+        >
           <View style={styles.bottomBarSide}>
             <Pressable
               accessibilityRole="button"
@@ -956,10 +1001,6 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                   />
                 ))}
               </View>
-
-              <Text style={styles.pageCounter}>
-                {currentPage + 1}/{pageCount}
-              </Text>
 
               <Pressable
                 accessibilityRole="button"
