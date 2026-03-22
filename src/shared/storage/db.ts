@@ -3,6 +3,15 @@ import * as SQLite from 'expo-sqlite';
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let didMigrate = false;
 
+const hasColumn = async (
+  db: SQLite.SQLiteDatabase,
+  tableName: string,
+  columnName: string
+): Promise<boolean> => {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
+  return columns.some((column) => column.name === columnName);
+};
+
 const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
   await db.execAsync('PRAGMA foreign_keys = ON;');
 
@@ -128,17 +137,17 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
   `);
 
   // Forward-compatible migration for existing installs.
-  await db.execAsync(`
-    ALTER TABLE profile_settings ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0;
-  `).catch(() => {
-    // Ignore if column already exists.
-  });
+  if (!(await hasColumn(db, 'profile_settings', 'show_labels'))) {
+    await db.runAsync(
+      'ALTER TABLE profile_settings ADD COLUMN show_labels INTEGER NOT NULL DEFAULT 0'
+    );
+  }
 
-  await db.execAsync(`
-    ALTER TABLE profile_settings ADD COLUMN backup_pin_enabled INTEGER NOT NULL DEFAULT 0;
-  `).catch(() => {
-    // Ignore if column already exists.
-  });
+  if (!(await hasColumn(db, 'profile_settings', 'backup_pin_enabled'))) {
+    await db.runAsync(
+      'ALTER TABLE profile_settings ADD COLUMN backup_pin_enabled INTEGER NOT NULL DEFAULT 0'
+    );
+  }
 
   const backupPinResetFlag = await db.getFirstAsync<{ value: string }>(
     'SELECT value FROM app_meta WHERE key = ? LIMIT 1',
