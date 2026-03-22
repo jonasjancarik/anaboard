@@ -214,6 +214,9 @@ export const SettingsScreen = ({ onBack, onOpenArchive, onLock }: SettingsScreen
             <Text style={styles.label}>Vlastní PIN v aplikaci</Text>
             <Switch value={backupPinEnabled} onValueChange={setBackupPinEnabled} />
           </View>
+          <Text style={styles.helperText}>
+            Jen pokud nechceš používat Face ID / kód telefonu. Dá se obnovit přes ověření telefonu.
+          </Text>
 
           <Pressable style={[styles.primaryButton, styles.saveButton]} onPress={saveAudioSettings}>
             <Text style={styles.primaryButtonText}>Uložit nastavení</Text>
@@ -342,6 +345,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  helperText: {
+    marginTop: 6,
+    color: '#61738F',
+    fontSize: 12,
+    lineHeight: 17,
   },
   primaryButton: {
     marginTop: 12,
