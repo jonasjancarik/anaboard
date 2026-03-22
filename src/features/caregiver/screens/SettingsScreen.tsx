@@ -1,49 +1,56 @@
-import { useEffect, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { authService } from "../../auth/authService";
-import { APP_THEME } from "../../../shared/constants/theme";
-import { hashPin, isValidPin } from "../../../shared/utils/security";
-import { useAppStore } from "../../../store/useAppStore";
+import { authService } from '../../auth/authService';
+import { SettingRowButton } from '../components/SettingRowButton';
+import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
+import { SettingToggleRow } from '../components/SettingToggleRow';
+import { APP_THEME } from '../../../shared/constants/theme';
+import { useAppStore } from '../../../store/useAppStore';
 
 type SettingsScreenProps = {
   onBack: () => void;
   onOpenArchive: () => void;
-  onLock: () => void;
+  onOpenPinSettings: () => void;
+};
+
+const RATE_OPTIONS: SettingStepperOption[] = [
+  { value: 0.6, label: 'Velmi pomalu' },
+  { value: 0.75, label: 'Pomaleji' },
+  { value: 0.86, label: 'Běžně' },
+  { value: 1, label: 'Rychleji' },
+  { value: 1.15, label: 'Velmi rychle' },
+];
+
+const PITCH_OPTIONS: SettingStepperOption[] = [
+  { value: 0.8, label: 'Hlubší' },
+  { value: 0.9, label: 'Spíš hlubší' },
+  { value: 1, label: 'Běžný' },
+  { value: 1.15, label: 'Spíš vyšší' },
+  { value: 1.3, label: 'Vyšší' },
+];
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  return error instanceof Error ? error.message : fallback;
 };
 
 export const SettingsScreen = ({
   onBack,
   onOpenArchive,
-  onLock,
+  onOpenPinSettings,
 }: SettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
   const authStatus = useAppStore((state) => state.authStatus);
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const resetBoardToDefaults = useAppStore(
-    (state) => state.resetBoardToDefaults,
-  );
+  const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
 
-  const [ttsRateText, setTtsRateText] = useState("0.86");
-  const [ttsPitchText, setTtsPitchText] = useState("1");
+  const [ttsRate, setTtsRate] = useState(0.86);
+  const [ttsPitch, setTtsPitch] = useState(1);
   const [highContrast, setHighContrast] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
-
-  const [currentPin, setCurrentPin] = useState("");
-  const [newPin, setNewPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isResettingBoard, setIsResettingBoard] = useState(false);
 
@@ -52,76 +59,40 @@ export const SettingsScreen = ({
       return;
     }
 
-    setTtsRateText(String(settings.ttsRate));
-    setTtsPitchText(String(settings.ttsPitch));
+    setTtsRate(settings.ttsRate);
+    setTtsPitch(settings.ttsPitch);
     setHighContrast(settings.highContrast);
     setShowLabels(settings.showLabels);
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
   }, [settings]);
 
-  const saveAudioSettings = async () => {
-    const nextRate = Number(ttsRateText);
-    const nextPitch = Number(ttsPitchText);
+  const updateSetting = async <T,>(
+    previousValue: T,
+    nextValue: T,
+    setValue: (value: T) => void,
+    update: Parameters<typeof updateSettings>[0],
+    fallbackMessage: string
+  ) => {
+    setMessage(null);
+    setValue(nextValue);
 
-    if (!Number.isFinite(nextRate) || !Number.isFinite(nextPitch)) {
-      setMessage("Rate/Pitch musí být číslo");
-      return;
+    try {
+      await updateSettings(update);
+    } catch (error) {
+      setValue(previousValue);
+      setMessage(getErrorMessage(error, fallbackMessage));
     }
-
-    await updateSettings({
-      ttsRate: Math.min(1.2, Math.max(0.5, nextRate)),
-      ttsPitch: Math.min(2, Math.max(0.5, nextPitch)),
-      highContrast,
-      showLabels,
-      lockEnabled,
-      backupPinEnabled,
-    });
-
-    setMessage("Nastavení uloženo");
-  };
-
-  const savePin = async () => {
-    if (!settings) {
-      setMessage("Nastavení není načtené");
-      return;
-    }
-
-    if (!isValidPin(newPin) || !isValidPin(confirmPin)) {
-      setMessage("Nový PIN musí mít 4 číslice");
-      return;
-    }
-
-    if (newPin !== confirmPin) {
-      setMessage("PINy se neshodují");
-      return;
-    }
-
-    const currentHash = await hashPin(currentPin);
-    if (currentHash !== settings.pinHash) {
-      setMessage("Aktuální PIN je špatně");
-      return;
-    }
-
-    const newPinHash = await hashPin(newPin);
-    await updateSettings({ pinHash: newPinHash });
-
-    setCurrentPin("");
-    setNewPin("");
-    setConfirmPin("");
-    setMessage("PIN změněn");
   };
 
   const signOut = async () => {
+    setMessage(null);
+
     try {
       await authService.signOut();
-      setMessage("Odhlášeno");
-    } catch (signOutError) {
-      const nextMessage =
-        signOutError instanceof Error
-          ? signOutError.message
-          : "Odhlášení selhalo";
-      setMessage(nextMessage);
+      setMessage('Odhlášeno');
+    } catch (error) {
+      setMessage(getErrorMessage(error, 'Odhlášení selhalo'));
     }
   };
 
@@ -131,13 +102,9 @@ export const SettingsScreen = ({
 
     try {
       await resetBoardToDefaults();
-      setMessage("Tabule vrácena na výchozí stav");
-    } catch (resetError) {
-      const nextMessage =
-        resetError instanceof Error
-          ? resetError.message
-          : "Reset tabule selhal";
-      setMessage(nextMessage);
+      setMessage('Tabule vrácena na výchozí stav');
+    } catch (error) {
+      setMessage(getErrorMessage(error, 'Obnovení tabule selhalo'));
     } finally {
       setIsResettingBoard(false);
     }
@@ -145,30 +112,33 @@ export const SettingsScreen = ({
 
   const confirmBoardReset = () => {
     Alert.alert(
-      "Resetovat tabuli?",
-      "Vrátí výchozí dlaždice a pořadí. Vlastní nahrávky na tabuli se smažou.",
+      'Obnovit výchozí dlaždice?',
+      'Vrátí původní pořadí a smaže vlastní nahrávky na tabuli.',
       [
         {
-          text: "Zrušit",
-          style: "cancel",
+          text: 'Zrušit',
+          style: 'cancel',
         },
         {
-          text: "Resetovat",
-          style: "destructive",
+          text: 'Obnovit',
+          style: 'destructive',
           onPress: () => {
             void performBoardReset();
           },
         },
-      ],
+      ]
     );
   };
 
+  const pinDetail = !lockEnabled
+    ? 'Použije se, až znovu zapneš ochranu nastavení.'
+    : backupPinEnabled
+      ? '4 číslice pro vstup do nastavení.'
+      : 'Po uložení se tato volba automaticky zapne.';
+
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
           <Pressable style={styles.backButton} onPress={onBack}>
             <Text style={styles.backButtonText}>Zpět</Text>
@@ -178,156 +148,147 @@ export const SettingsScreen = ({
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Správa tabule</Text>
+          <Text style={styles.sectionTitle}>Hlas</Text>
+          <View style={styles.cardStack}>
+            <SettingStepper
+              title="Rychlost hlasu"
+              value={ttsRate}
+              options={RATE_OPTIONS}
+              onChange={(nextValue) => {
+                void updateSetting(
+                  ttsRate,
+                  nextValue,
+                  setTtsRate,
+                  { ttsRate: nextValue },
+                  'Rychlost hlasu nešla uložit'
+                );
+              }}
+            />
 
-          <Pressable
-            style={[styles.primaryButton, styles.archiveButton]}
-            onPress={onOpenArchive}
-          >
-            <Text style={styles.primaryButtonText}>
-              Archiv smazaných dlaždic
-            </Text>
-          </Pressable>
+            <View style={styles.divider} />
 
-          <Pressable
-            style={[
-              styles.primaryButton,
-              styles.resetButton,
-              isResettingBoard && styles.buttonDisabled,
-            ]}
-            onPress={confirmBoardReset}
-            disabled={isResettingBoard}
-          >
-            <Text style={styles.primaryButtonText}>
-              {isResettingBoard
-                ? "Resetuji tabuli…"
-                : "Resetovat na výchozí set"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.primaryButton, styles.lockButton]}
-            onPress={onLock}
-          >
-            <Text style={styles.primaryButtonText}>
-              Zamknout režim pečovatele
-            </Text>
-          </Pressable>
+            <SettingStepper
+              title="Tón hlasu"
+              value={ttsPitch}
+              options={PITCH_OPTIONS}
+              onChange={(nextValue) => {
+                void updateSetting(
+                  ttsPitch,
+                  nextValue,
+                  setTtsPitch,
+                  { ttsPitch: nextValue },
+                  'Tón hlasu nešel uložit'
+                );
+              }}
+            />
+          </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Řeč a vzhled</Text>
+          <Text style={styles.sectionTitle}>Vzhled a ochrana</Text>
+          <View style={styles.cardStack}>
+            <SettingToggleRow
+              title="Silnější kontrast"
+              value={highContrast}
+              onValueChange={(nextValue) => {
+                void updateSetting(
+                  highContrast,
+                  nextValue,
+                  setHighContrast,
+                  { highContrast: nextValue },
+                  'Kontrast nešel uložit'
+                );
+              }}
+            />
 
-          <Text style={styles.label}>TTS rate (0.5 - 1.2)</Text>
-          <TextInput
-            value={ttsRateText}
-            onChangeText={setTtsRateText}
-            keyboardType="decimal-pad"
-            style={styles.input}
-          />
+            <View style={styles.divider} />
 
-          <Text style={styles.label}>TTS pitch (0.5 - 2)</Text>
-          <TextInput
-            value={ttsPitchText}
-            onChangeText={setTtsPitchText}
-            keyboardType="decimal-pad"
-            style={styles.input}
-          />
+            <SettingToggleRow
+              title="Zobrazit názvy na dlaždicích"
+              value={showLabels}
+              onValueChange={(nextValue) => {
+                void updateSetting(
+                  showLabels,
+                  nextValue,
+                  setShowLabels,
+                  { showLabels: nextValue },
+                  'Zobrazení názvů nešlo uložit'
+                );
+              }}
+            />
 
-          <View style={styles.switchRow}>
-            <Text style={styles.label}>Vysoký kontrast</Text>
-            <Switch value={highContrast} onValueChange={setHighContrast} />
-          </View>
+            <View style={styles.divider} />
 
-          <View style={styles.switchRow}>
-            <Text style={styles.label}>Zobrazit texty na dlaždicích</Text>
-            <Switch value={showLabels} onValueChange={setShowLabels} />
-          </View>
+            <SettingToggleRow
+              title="Chránit nastavení"
+              detail="Před úpravami se ověří pečovatel."
+              value={lockEnabled}
+              onValueChange={(nextValue) => {
+                void updateSetting(
+                  lockEnabled,
+                  nextValue,
+                  setLockEnabled,
+                  { lockEnabled: nextValue },
+                  'Ochrana nastavení nešla uložit'
+                );
+              }}
+            />
 
-          <View style={styles.switchRow}>
-            <Text style={styles.label}>Zámek pečovatele</Text>
-            <Switch value={lockEnabled} onValueChange={setLockEnabled} />
-          </View>
+            <View style={styles.divider} />
 
-          <View style={styles.switchRow}>
-            <Text style={styles.label}>Vlastní PIN v aplikaci</Text>
-            <Switch
+            <SettingToggleRow
+              title="PIN přímo v aplikaci"
+              detail="Použij, když nechceš spoléhat jen na zámek telefonu."
               value={backupPinEnabled}
-              onValueChange={setBackupPinEnabled}
+              onValueChange={(nextValue) => {
+                void updateSetting(
+                  backupPinEnabled,
+                  nextValue,
+                  setBackupPinEnabled,
+                  { backupPinEnabled: nextValue },
+                  'Volba PINu nešla uložit'
+                );
+              }}
+            />
+
+            <SettingRowButton
+              title={backupPinEnabled ? 'Změnit PIN v aplikaci' : 'Nastavit PIN v aplikaci'}
+              detail={pinDetail}
+              onPress={onOpenPinSettings}
             />
           </View>
-          <Text style={styles.helperText}>
-            Jen pokud nechceš používat zámek telefonu (PIN, FaceID apod.). Dá se
-            jednoduše obejít přes ověření telefonu - může se hodit pokud
-            uživatel-dítě PIN zná nebo má nastavené odemčení přes FaceID.
-          </Text>
-
-          <Pressable
-            style={[styles.primaryButton, styles.saveButton]}
-            onPress={saveAudioSettings}
-          >
-            <Text style={styles.primaryButtonText}>Uložit nastavení</Text>
-          </Pressable>
         </View>
 
-        {backupPinEnabled ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Změna vlastního PINu</Text>
-
-            <Text style={styles.label}>Aktuální PIN</Text>
-            <TextInput
-              value={currentPin}
-              onChangeText={(value) =>
-                setCurrentPin(value.replace(/[^0-9]/g, "").slice(0, 4))
-              }
-              keyboardType="number-pad"
-              secureTextEntry
-              style={styles.input}
-              maxLength={4}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Správa tabule</Text>
+          <View style={styles.cardStack}>
+            <SettingRowButton
+              title="Archiv smazaných dlaždic"
+              detail="Vrátit dříve smazané položky."
+              onPress={onOpenArchive}
             />
 
-            <Text style={styles.label}>Nový PIN</Text>
-            <TextInput
-              value={newPin}
-              onChangeText={(value) =>
-                setNewPin(value.replace(/[^0-9]/g, "").slice(0, 4))
-              }
-              keyboardType="number-pad"
-              secureTextEntry
-              style={styles.input}
-              maxLength={4}
+            <SettingRowButton
+              title={isResettingBoard ? 'Obnovuji výchozí dlaždice…' : 'Obnovit výchozí dlaždice'}
+              detail="Vrátí původní pořadí a smaže vlastní nahrávky."
+              tone="danger"
+              disabled={isResettingBoard}
+              onPress={confirmBoardReset}
             />
-
-            <Text style={styles.label}>Potvrď nový PIN</Text>
-            <TextInput
-              value={confirmPin}
-              onChangeText={(value) =>
-                setConfirmPin(value.replace(/[^0-9]/g, "").slice(0, 4))
-              }
-              keyboardType="number-pad"
-              secureTextEntry
-              style={styles.input}
-              maxLength={4}
-            />
-
-            <Pressable
-              style={[styles.primaryButton, styles.pinButton]}
-              onPress={savePin}
-            >
-              <Text style={styles.primaryButtonText}>Uložit PIN</Text>
-            </Pressable>
           </View>
-        ) : null}
+        </View>
 
-        {authStatus === "signed_in" ? (
+        {authStatus === 'signed_in' ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Účet</Text>
-            <Pressable
-              style={[styles.primaryButton, styles.signOutButton]}
-              onPress={signOut}
-            >
-              <Text style={styles.primaryButtonText}>Odhlásit</Text>
-            </Pressable>
+            <SettingRowButton
+              title="Odhlásit"
+              detail="Odhlásí tento telefon od cloud syncu."
+              tone="danger"
+              onPress={() => {
+                void signOut();
+              }}
+            />
           </View>
         ) : null}
 
@@ -344,17 +305,17 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 12,
-    gap: 12,
+    gap: 10,
     paddingBottom: 28,
   },
   headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: '800',
     color: APP_THEME.text,
   },
   backButton: {
@@ -367,7 +328,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: APP_THEME.text,
-    fontWeight: "800",
+    fontWeight: '800',
   },
   backButtonPlaceholder: {
     width: 58,
@@ -378,6 +339,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: APP_THEME.border,
     padding: 16,
+    gap: 12,
     shadowColor: APP_THEME.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
@@ -386,80 +348,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: "800",
+    fontWeight: '800',
     color: APP_THEME.text,
-    marginBottom: 10,
   },
-  label: {
-    color: APP_THEME.text,
-    fontWeight: "700",
-    marginTop: 10,
-    marginBottom: 6,
+  cardStack: {
+    gap: 12,
   },
-  input: {
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surfaceTint,
-    paddingHorizontal: 10,
-    fontSize: 16,
-  },
-  switchRow: {
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  helperText: {
-    marginTop: 8,
-    color: APP_THEME.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  primaryButton: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  saveButton: {
-    backgroundColor: APP_THEME.primary,
-    borderColor: APP_THEME.primaryBorder,
-  },
-  pinButton: {
-    backgroundColor: APP_THEME.success,
-    borderColor: APP_THEME.successBorder,
-  },
-  signOutButton: {
-    backgroundColor: APP_THEME.danger,
-    borderColor: APP_THEME.dangerBorder,
-  },
-  archiveButton: {
-    backgroundColor: APP_THEME.accent,
-    borderColor: APP_THEME.accentBorder,
-  },
-  resetButton: {
-    backgroundColor: APP_THEME.critical,
-    borderColor: APP_THEME.criticalBorder,
-  },
-  lockButton: {
-    backgroundColor: APP_THEME.neutral,
-    borderColor: APP_THEME.neutralBorder,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
+  divider: {
+    height: 1,
+    backgroundColor: APP_THEME.borderSoft,
   },
   message: {
-    textAlign: "center",
+    textAlign: 'center',
     color: APP_THEME.message,
-    fontWeight: "700",
+    fontWeight: '700',
+    paddingVertical: 2,
   },
 });

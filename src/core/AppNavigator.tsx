@@ -6,6 +6,7 @@ import { AuthScreen } from '../features/auth/screens/AuthScreen';
 import { BootstrapScreen } from '../features/auth/screens/BootstrapScreen';
 import { CaregiverGateScreen } from '../features/caregiver/screens/CaregiverGateScreen';
 import { EditorScreen } from '../features/caregiver/screens/EditorScreen';
+import { PinSettingsScreen } from '../features/caregiver/screens/PinSettingsScreen';
 import { SettingsScreen } from '../features/caregiver/screens/SettingsScreen';
 import { TileArchiveScreen } from '../features/caregiver/screens/TileArchiveScreen';
 import { authenticateWithDeviceForCaregiver, canUseNativeCaregiverAuth } from '../shared/utils/deviceAuth';
@@ -19,12 +20,17 @@ export const AppNavigator = () => {
   const settings = useAppStore((state) => state.settings);
 
   const navigate = useAppStore((state) => state.navigate);
-  const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
 
   useEffect(() => {
-    if (!caregiverUnlocked && (currentScreen === 'editor' || currentScreen === 'settings' || currentScreen === 'tileArchive')) {
+    if (
+      !caregiverUnlocked &&
+      (currentScreen === 'editor' ||
+        currentScreen === 'settings' ||
+        currentScreen === 'pinSettings' ||
+        currentScreen === 'tileArchive')
+    ) {
       navigate(settings?.backupPinEnabled ? 'caregiverGate' : 'board');
     }
   }, [caregiverUnlocked, currentScreen, navigate, settings?.backupPinEnabled]);
@@ -90,12 +96,13 @@ export const AppNavigator = () => {
       <SettingsScreen
         onBack={() => navigate('board')}
         onOpenArchive={() => navigate('tileArchive')}
-        onLock={() => {
-          lockCaregiver();
-          navigate('board');
-        }}
+        onOpenPinSettings={() => navigate('pinSettings')}
       />
     );
+  }
+
+  if (currentScreen === 'pinSettings') {
+    return <PinSettingsScreen onBack={() => navigate('settings')} />;
   }
 
   if (currentScreen === 'tileArchive') {
