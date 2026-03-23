@@ -22,3 +22,12 @@
 - Preserve current visual direction unless user asks for a redesign.
 - Check spacing against screenshots, especially board edges, bottom bar, and long Czech words.
 - Verify both child flow and caregiver flow when touching shared tokens or spacing.
+
+## DB Migrations
+
+- App DB migrations: `src/shared/storage/migrations.ts`.
+- Use numbered steps + `PRAGMA user_version`. Append new step; no ad-hoc edits in `db.ts`.
+- On schema/data change: migrate tables + archived/history rows + pending `sync_events` payloads when shape changed.
+- Web media store separate: if media schema changes, migrate `src/shared/media/mediaStorage.ts` IndexedDB too.
+- Prefer staged/destructive-safe rollout: add/backfill first, cleanup later.
+- Verify with `npm run migrations:test`.
