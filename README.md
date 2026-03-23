@@ -25,7 +25,7 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - PIN only unlocks caregiver mode; stays on board
   - overflow tiles continue on horizontal pages
   - caregiver unlocked: long-press tile opens editor for that tile
-  - caregiver unlocked: button below the grid adds a new tile and opens editor
+  - caregiver unlocked: button below the grid adds a new tile at the end of the board
   - caregiver unlocked + `PŘESUN`: long-press + drag reorders tiles
   - caregiver locked: long-press does not trigger editor
   - caregiver mode can be locked/unlocked from board action button

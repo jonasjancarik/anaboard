@@ -303,6 +303,7 @@ export const styles = StyleSheet.create({
     borderWidth: 0,
     paddingHorizontal: 8,
     paddingVertical: 10,
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: APP_THEME.shadow,
@@ -320,6 +321,15 @@ export const styles = StyleSheet.create({
   },
   tilePlaceholder: {
     opacity: 0.22,
+  },
+  newTileFlashOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 24,
+    backgroundColor: '#FFF0A8',
   },
   dragOverlayTile: {
     position: 'absolute',

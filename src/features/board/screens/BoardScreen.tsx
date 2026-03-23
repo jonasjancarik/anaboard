@@ -56,8 +56,7 @@ type PendingReorderTouch = {
 };
 
 const REORDER_LONG_PRESS_MS = 180;
-const REORDER_LONG_PRESS_SLOP = 8;
-const PAGE_SWITCH_EDGE_THRESHOLD = 16;
+const PAGE_SWITCH_EDGE_THRESHOLD = 44;
 const ACTION_TEXT_PROPS = {
   allowFontScaling: false,
   numberOfLines: 1 as const,
@@ -86,6 +85,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const boardPagerRef = useRef<ScrollView>(null);
   const boardViewportRef = useRef<View>(null);
   const sentenceScrollRef = useRef<ScrollView>(null);
+  const flashNewTileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAnimatedPageRef = useRef<number | null>(null);
   const suppressTapAfterLongPressRef = useRef(false);
   const dragStateRef = useRef<BoardDragState | null>(null);
   const reorderTileIdsRef = useRef<string[]>([]);
@@ -94,6 +95,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const boardViewportLeftRef = useRef(0);
   const pageSwitchArmedRef = useRef(true);
   const wiggleValue = useRef(new Animated.Value(0)).current;
+  const newTileFlashValue = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomBarBottomPadding = Math.max(8, Math.min(insets.bottom, 16));
@@ -125,6 +127,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const [activeDrag, setActiveDrag] = useState<BoardDragState | null>(null);
   const [wiggleActive, setWiggleActive] = useState(false);
   const [isAddingTile, setIsAddingTile] = useState(false);
+  const [flashTileId, setFlashTileId] = useState<string | null>(null);
   const [boardViewportWidth, setBoardViewportWidth] = useState(0);
   const [boardViewportHeight, setBoardViewportHeight] = useState(0);
   const [currentPage, setCurrentPage] = useState(boardPageIndex);
@@ -248,7 +251,6 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     return pages;
   }, [orderedTiles, pageCount, pageSize]);
-  const currentPageTiles = pagedTiles[currentPage] ?? [];
 
   const draggedTile = activeDrag ? tilesById[activeDrag.tileId] : undefined;
 
@@ -288,10 +290,14 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     }
 
     if (pageWidth > 0) {
+      const shouldAnimate = pendingAnimatedPageRef.current === nextPage;
       boardPagerRef.current?.scrollTo({
         x: nextPage * pageWidth,
-        animated: false,
+        animated: shouldAnimate,
       });
+      if (shouldAnimate) {
+        pendingAnimatedPageRef.current = null;
+      }
     }
   }, [boardPageIndex, clampPageIndex, pageWidth, setBoardPageIndex]);
 
@@ -540,8 +546,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   useEffect(() => {
     return () => {
       clearPendingReorderTouch();
+      if (flashNewTileTimerRef.current) {
+        clearTimeout(flashNewTileTimerRef.current);
+      }
+      newTileFlashValue.stopAnimation();
     };
-  }, [clearPendingReorderTouch]);
+  }, [clearPendingReorderTouch, newTileFlashValue]);
 
   const startReorderDrag = useCallback(
     (pendingTouch: PendingReorderTouch) => {
@@ -590,17 +600,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       };
 
       clearPendingReorderTouch();
-      pendingReorderTouchRef.current = pendingTouch;
-
-      reorderLongPressTimerRef.current = setTimeout(() => {
-        const nextPendingTouch = pendingReorderTouchRef.current;
-        clearPendingReorderTouch();
-        if (!nextPendingTouch) {
-          return;
-        }
-
-        startReorderDrag(nextPendingTouch);
-      }, REORDER_LONG_PRESS_MS);
+      startReorderDrag(pendingTouch);
     },
     [
       caregiverUnlocked,
@@ -616,22 +616,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         const resolvedDx = Number.isFinite(pageX) ? pageX - drag.startPageX : gestureDx;
         const resolvedDy = Number.isFinite(pageY) ? pageY - drag.startPageY : gestureDy;
         moveDrag(Number.isFinite(pageX) ? pageX : null, resolvedDx, resolvedDy);
-        return;
-      }
-
-      const pendingTouch = pendingReorderTouchRef.current;
-      if (!pendingTouch) {
-        return;
-      }
-
-      const resolvedX = Number.isFinite(pageX) ? pageX : pendingTouch.startPageX + gestureDx;
-      const resolvedY = Number.isFinite(pageY) ? pageY : pendingTouch.startPageY + gestureDy;
-      const delta = Math.hypot(resolvedX - pendingTouch.startPageX, resolvedY - pendingTouch.startPageY);
-      if (delta > REORDER_LONG_PRESS_SLOP) {
-        clearPendingReorderTouch();
       }
     },
-    [clearPendingReorderTouch, moveDrag]
+    [moveDrag]
   );
 
   const endReorderTouch = useCallback(() => {
@@ -647,10 +634,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: () =>
-          caregiverUnlocked && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
-        onMoveShouldSetPanResponderCapture: () =>
-          caregiverUnlocked && (Boolean(pendingReorderTouchRef.current) || Boolean(dragStateRef.current)),
+        onMoveShouldSetPanResponder: () => caregiverUnlocked && Boolean(dragStateRef.current),
+        onMoveShouldSetPanResponderCapture: () => caregiverUnlocked && Boolean(dragStateRef.current),
         onPanResponderTerminationRequest: () => false,
         onPanResponderMove: (event, gestureState) => {
           handleReorderTouchMove(
@@ -700,14 +685,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    const anchorTile = currentPageTiles[currentPageTiles.length - 1] ?? orderedTiles[orderedTiles.length - 1];
+    const anchorTile = orderedTiles[orderedTiles.length - 1];
     if (!anchorTile) {
       return;
     }
-
-    const anchorIndex =
-      currentPageTiles.length > 0 ? currentPage * pageSize + currentPageTiles.length - 1 : orderedTiles.length - 1;
-    const nextPage = Math.floor((anchorIndex + 1) / pageSize);
 
     clearBoardDragState();
     clearPendingReorderTouch();
@@ -717,9 +698,55 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       const newTileId = await createTileAfter(anchorTile.id);
-      setBoardPageIndex(nextPage);
-      setEditorTargetTileId(newTileId);
-      navigate('editor');
+      const nextPage = Math.floor((useAppStore.getState().tiles.length - 1) / pageSize);
+      const resolvedPage = Math.max(0, nextPage);
+
+      currentPageRef.current = resolvedPage;
+      setCurrentPage(resolvedPage);
+      pendingAnimatedPageRef.current = resolvedPage;
+      setBoardPageIndex(resolvedPage);
+
+      if (flashNewTileTimerRef.current) {
+        clearTimeout(flashNewTileTimerRef.current);
+      }
+
+      newTileFlashValue.stopAnimation();
+      newTileFlashValue.setValue(0);
+      setFlashTileId(newTileId);
+
+      flashNewTileTimerRef.current = setTimeout(() => {
+        Animated.sequence([
+          Animated.timing(newTileFlashValue, {
+            toValue: 1,
+            duration: 160,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(newTileFlashValue, {
+            toValue: 0,
+            duration: 260,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(newTileFlashValue, {
+            toValue: 0.7,
+            duration: 140,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(newTileFlashValue, {
+            toValue: 0,
+            duration: 240,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start(({ finished }) => {
+          if (finished) {
+            setFlashTileId((current) => (current === newTileId ? null : current));
+          }
+          newTileFlashValue.setValue(0);
+        });
+      }, 260);
     } catch (error) {
       setTileDragError(error instanceof Error ? error.message : 'Novou dlaždici nešlo přidat');
     } finally {
@@ -730,13 +757,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     clearBoardDragState,
     clearPendingReorderTouch,
     createTileAfter,
-    currentPage,
-    currentPageTiles,
-    navigate,
+    newTileFlashValue,
     orderedTiles,
     pageSize,
     setBoardPageIndex,
-    setEditorTargetTileId,
   ]);
 
   const getTileWiggleStyle = useCallback(
@@ -962,7 +986,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                               caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`
                             }
                             onPress={() => onTilePress(tile.id)}
-                            onTouchStart={
+                            onLongPress={
                               caregiverUnlocked
                                 ? (event) => {
                                     beginReorderTouch(
@@ -974,6 +998,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                                   }
                                 : undefined
                             }
+                            delayLongPress={caregiverUnlocked ? REORDER_LONG_PRESS_MS : undefined}
                             onTouchEnd={
                               caregiverUnlocked
                                 ? () => {
@@ -1001,6 +1026,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                               pressed && styles.tilePressed,
                             ]}
                           >
+                            {flashTileId === tile.id ? (
+                              <Animated.View
+                                pointerEvents="none"
+                                style={[
+                                  styles.newTileFlashOverlay,
+                                  {
+                                    opacity: newTileFlashValue,
+                                  },
+                                ]}
+                              />
+                            ) : null}
                             <Text style={styles.tileEmoji}>{tile.emoji}</Text>
                             {showLabels ? (
                               <Text
