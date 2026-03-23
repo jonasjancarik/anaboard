@@ -50,6 +50,41 @@ npm run android
 npm run web
 ```
 
+## Android builds
+
+Tester APK via EAS Build:
+
+```bash
+npx eas-cli@latest build -p android --profile preview
+```
+
+Google Play bundle:
+
+```bash
+npx eas-cli@latest build -p android --profile production
+```
+
+Local APK on your machine:
+
+```bash
+npm run android:doctor
+npm run android:prebuild
+npm run android:apk
+```
+
+Output:
+
+```text
+android/app/build/outputs/apk/release/app-release.apk
+```
+
+Notes:
+
+- The helper script prefers Android Studio's bundled Java runtime to avoid local JDK mismatches.
+- Install Android SDK components in Android Studio if `npm run android:doctor` reports a missing SDK.
+- The generated `/android` folder is local/ignored; regenerate with `npm run android:prebuild` when native config changes.
+- The local release APK is debug-signed by Expo's generated template, good for device testing, not for Play Store upload.
+
 ## Environment
 
 Copy `.env.example` to `.env` and set values when enabling cloud sync / Sentry.
