@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let didMigrate = false;
+const LEGACY_COMBINED_SPEECH_MODE = 'recording_with_tts_fallback';
 
 const hasColumn = async (
   db: SQLite.SQLiteDatabase,
@@ -10,6 +11,91 @@ const hasColumn = async (
 ): Promise<boolean> => {
   const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
   return columns.some((column) => column.name === columnName);
+};
+
+const normalizeLegacyCombinedSpeechMode = async (
+  db: SQLite.SQLiteDatabase
+): Promise<void> => {
+  const migratedFlag = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM app_meta WHERE key = ? LIMIT 1',
+    'speech_mode_combined_removed_v1'
+  );
+
+  if (migratedFlag) {
+    return;
+  }
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `
+        UPDATE tiles
+        SET speech_mode = CASE
+          WHEN audio_clip_id IS NOT NULL THEN 'recording_only'
+          ELSE 'tts'
+        END
+        WHERE speech_mode = ?
+      `,
+      LEGACY_COMBINED_SPEECH_MODE
+    );
+
+    await db.runAsync(
+      `
+        UPDATE tiles_history
+        SET speech_mode = CASE
+          WHEN audio_clip_id IS NOT NULL THEN 'recording_only'
+          ELSE 'tts'
+        END
+        WHERE speech_mode = ?
+      `,
+      LEGACY_COMBINED_SPEECH_MODE
+    );
+
+    await db.runAsync(
+      `
+        UPDATE tile_archive
+        SET speech_mode = CASE
+          WHEN audio_duration_ms IS NOT NULL AND audio_format IS NOT NULL THEN 'recording_only'
+          ELSE 'tts'
+        END
+        WHERE speech_mode = ?
+      `,
+      LEGACY_COMBINED_SPEECH_MODE
+    );
+
+    const syncEvents = await db.getAllAsync<{ id: number; payload: string }>(
+      `
+        SELECT id, payload
+        FROM sync_events
+        WHERE entity_type = 'tiles'
+          AND status != 'synced'
+      `
+    );
+
+    for (const event of syncEvents) {
+      try {
+        const payload = JSON.parse(event.payload) as Record<string, unknown>;
+        if (payload.speech_mode !== LEGACY_COMBINED_SPEECH_MODE) {
+          continue;
+        }
+
+        payload.speech_mode = payload.audio_clip_id ? 'recording_only' : 'tts';
+
+        await db.runAsync(
+          'UPDATE sync_events SET payload = ? WHERE id = ?',
+          JSON.stringify(payload),
+          event.id
+        );
+      } catch {
+        // Leave malformed payloads untouched.
+      }
+    }
+
+    await db.runAsync(
+      'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
+      'speech_mode_combined_removed_v1',
+      '1'
+    );
+  });
 };
 
 const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
@@ -199,6 +285,8 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
   if (!(await hasColumn(db, 'tile_archive', 'image_remote_path'))) {
     await db.runAsync('ALTER TABLE tile_archive ADD COLUMN image_remote_path TEXT');
   }
+
+  await normalizeLegacyCombinedSpeechMode(db);
 
   const backupPinResetFlag = await db.getFirstAsync<{ value: string }>(
     'SELECT value FROM app_meta WHERE key = ? LIMIT 1',

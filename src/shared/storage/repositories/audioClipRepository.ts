@@ -1,5 +1,9 @@
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/time';
+import {
+  deleteManagedAudioClip,
+  persistAudioClip,
+} from '../../../features/speech/audioClipFileService';
 import { getDatabase } from '../db';
 import { enqueueSyncEvent } from './syncRepository';
 import { updateTile } from './tileRepository';
@@ -37,6 +41,11 @@ export const saveAudioClipForTile = async (
 
   const clipId = existing?.id ?? createId('clip');
   const updatedAt = nowIso();
+  const persistedLocalUri = await persistAudioClip(clipId, data.localUri);
+
+  if (existing?.local_uri && existing.local_uri !== persistedLocalUri) {
+    await deleteManagedAudioClip(existing.local_uri);
+  }
 
   await db.runAsync(
     `
@@ -54,7 +63,7 @@ export const saveAudioClipForTile = async (
     `,
     clipId,
     tileId,
-    data.localUri,
+    persistedLocalUri,
     existing?.remote_path ?? null,
     data.durationMs,
     data.checksum ?? null,
@@ -67,7 +76,7 @@ export const saveAudioClipForTile = async (
   await enqueueSyncEvent('audio_clips', clipId, 'upsert', {
     id: clipId,
     tile_id: tileId,
-    local_uri: data.localUri,
+    local_uri: persistedLocalUri,
     duration_ms: data.durationMs,
     checksum: data.checksum ?? null,
     format: data.format,
@@ -91,6 +100,7 @@ export const deleteAudioClipForTile = async (tileId: string): Promise<void> => {
     return;
   }
 
+  await deleteManagedAudioClip(existing.local_uri);
   await db.runAsync('DELETE FROM audio_clips WHERE id = ?', existing.id);
   await updateTile(tileId, { audioClipId: null });
 

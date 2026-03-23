@@ -102,6 +102,5 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 
 export const SPEECH_MODE_LABELS: Record<SpeechMode, string> = {
   tts: "Robot",
-  recording_with_tts_fallback: "Nahrávka + robot",
-  recording_only: "Jen nahrávka",
+  recording_only: "Nahrávka",
 };

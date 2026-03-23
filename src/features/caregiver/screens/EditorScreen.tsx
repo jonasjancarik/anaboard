@@ -3,10 +3,13 @@ import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { EmojiKeyboardModal } from "../components/EmojiKeyboardModal";
 import { TileAppearanceSection } from "../components/TileAppearanceSection";
+import { TileVisualOptionsModal } from "../components/TileVisualOptionsModal";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { useTileImageDraft } from "../hooks/useTileImageDraft";
 import { styles } from "./EditorScreen.styles";
+import { buildSpeechSegments, speechEngine } from "../../speech/speechEngine";
 import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
@@ -28,7 +31,6 @@ type EditorScreenProps = {
 const categories: Category[] = ["needs", "feelings", "social", "food"];
 const speechModes: SpeechMode[] = [
   "tts",
-  "recording_with_tts_fallback",
   "recording_only",
 ];
 
@@ -50,9 +52,12 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [category, setCategory] = useState<Category>("needs");
   const [speechMode, setSpeechMode] = useState<SpeechMode>("tts");
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
-  const [isEmojiKeyboardVisible, setIsEmojiKeyboardVisible] = useState(false);
+  const [isEmojiKeyboardModalOpen, setIsEmojiKeyboardModalOpen] =
+    useState(false);
+  const [isVisualMenuOpen, setIsVisualMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTestingSpeech, setIsTestingSpeech] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [tileActionError, setTileActionError] = useState<string | null>(null);
 
@@ -75,6 +80,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const selectedTile = editorTargetTileId
     ? (tiles.find((tile) => tile.id === editorTargetTileId) ?? null)
     : null;
+  const selectedTileId = selectedTile?.id ?? null;
 
   const {
     visualType,
@@ -104,22 +110,20 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setCategory(selectedTile.category);
     setSpeechMode(selectedTile.speechMode);
     setIsEmojiPickerOpen(false);
-    setIsEmojiKeyboardVisible(false);
+    setIsEmojiKeyboardModalOpen(false);
+    setIsVisualMenuOpen(false);
     setRecordingError(null);
     setTileActionError(null);
-  }, [selectedTile]);
+  }, [selectedTileId]);
 
   const selectedClip = selectedTile?.audioClipId
     ? clipsById[selectedTile.audioClipId]
     : undefined;
   const previewColors = CATEGORY_COLORS[category];
-  const showLabels = settings?.showLabels ?? true;
   const highContrast = settings?.highContrast ?? false;
   const trimmedLabel = labelCs.trim();
+  const effectiveLabel = selectedTile ? trimmedLabel || selectedTile.labelCs : "";
   const trimmedEmoji = emoji.trim();
-  const previewLabel = selectedTile
-    ? trimmedLabel || selectedTile.labelCs
-    : "";
   const previewEmoji = selectedTile ? trimmedEmoji || selectedTile.emoji : "";
   const previewVisualType: TileVisualType =
     visualType === "image" && hasPreviewImage ? "image" : "emoji";
@@ -174,6 +178,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     }
   };
 
+  const handleEditVisual = () => {
+    setIsVisualMenuOpen(true);
+  };
+
   const handleRecordToggle = async () => {
     if (!selectedTile) {
       return;
@@ -212,6 +220,73 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         error instanceof Error ? error.message : "Nahrávání se nepovedlo",
       );
       setIsRecording(false);
+    }
+  };
+
+  const canTestSpeech =
+    !isRecording &&
+    !!selectedTile &&
+    !!settings &&
+    (speechMode === "tts" || Boolean(selectedClip));
+
+  const handleTestSpeech = async () => {
+    if (isTestingSpeech) {
+      await speechEngine.cancel();
+      setIsTestingSpeech(false);
+      return;
+    }
+
+    if (!selectedTile || !settings) {
+      return;
+    }
+
+    setRecordingError(null);
+
+    const previewTile = {
+      ...selectedTile,
+      labelCs: effectiveLabel,
+      emoji: previewEmoji,
+      visualType: previewVisualType,
+      imageLocalUri: previewVisualType === "image" ? imageLocalUri ?? undefined : undefined,
+      imageRemotePath: previewVisualType === "image" ? imageRemotePath ?? undefined : undefined,
+      category,
+      speechMode,
+    };
+
+    const segments = await buildSpeechSegments({
+      tokens: [
+        {
+          tokenId: "editor-preview",
+          tileId: selectedTile.id,
+          label: effectiveLabel,
+          emoji: previewEmoji,
+          visualType: previewVisualType,
+          imageLocalUri: previewTile.imageLocalUri,
+          imageRemotePath: previewTile.imageRemotePath,
+        },
+      ],
+      tilesById: {
+        [selectedTile.id]: previewTile,
+      },
+      clipsById,
+    });
+
+    if (segments.length === 0) {
+      setRecordingError("V tomto režimu teď není co přehrát.");
+      return;
+    }
+
+    speechEngine.setSettings({
+      ttsRate: settings.ttsRate,
+      ttsPitch: settings.ttsPitch,
+      preferredVoice: settings.preferredVoice,
+    });
+
+    setIsTestingSpeech(true);
+    try {
+      await speechEngine.playSegments(segments);
+    } finally {
+      setIsTestingSpeech(false);
     }
   };
 
@@ -306,6 +381,58 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         enableRecentlyUsed
       />
 
+      <EmojiKeyboardModal
+        visible={isEmojiKeyboardModalOpen}
+        value={emoji}
+        onChange={(nextEmoji) => {
+          setEmoji(nextEmoji);
+          setTileActionError(null);
+        }}
+        onClose={() => {
+          setIsEmojiKeyboardModalOpen(false);
+        }}
+      />
+
+      <TileVisualOptionsModal
+        visible={isVisualMenuOpen}
+        hasPreviewImage={hasPreviewImage}
+        onClose={() => {
+          setIsVisualMenuOpen(false);
+        }}
+        onSelectEmoji={() => {
+          setIsVisualMenuOpen(false);
+          setVisualType("emoji");
+          setIsEmojiKeyboardModalOpen(false);
+          setIsEmojiPickerOpen(true);
+          setTileActionError(null);
+        }}
+        onSelectEmojiKeyboard={() => {
+          setIsVisualMenuOpen(false);
+          setVisualType("emoji");
+          setIsEmojiPickerOpen(false);
+          setIsEmojiKeyboardModalOpen(true);
+          setTileActionError(null);
+        }}
+        onSelectPhotoLibrary={() => {
+          setIsVisualMenuOpen(false);
+          setVisualType("image");
+          setIsEmojiPickerOpen(false);
+          setIsEmojiKeyboardModalOpen(false);
+          void pickImageFromLibrary();
+        }}
+        onSelectCamera={() => {
+          setIsVisualMenuOpen(false);
+          setVisualType("image");
+          setIsEmojiPickerOpen(false);
+          setIsEmojiKeyboardModalOpen(false);
+          void takePhoto();
+        }}
+        onRemoveImage={() => {
+          setIsVisualMenuOpen(false);
+          void removeImage();
+        }}
+      />
+
       <View style={styles.content}>
         <ScrollView
           style={styles.editorScroll}
@@ -319,47 +446,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                 <TileAppearanceSection
                   labelCs={labelCs}
                   onLabelChange={setLabelCs}
-                  emoji={emoji}
-                  onEmojiChange={(nextEmoji) => {
-                    setEmoji(nextEmoji);
-                    setTileActionError(null);
-                  }}
-                  isEmojiKeyboardVisible={isEmojiKeyboardVisible}
-                  previewLabel={previewLabel}
                   previewEmoji={previewEmoji}
                   previewVisualType={previewVisualType}
-                  visualType={visualType}
                   imageLocalUri={imageLocalUri}
                   imageRemotePath={imageRemotePath}
-                  hasPreviewImage={hasPreviewImage}
-                  showLabels={showLabels}
                   highContrast={highContrast}
                   previewBackgroundColor={previewColors.background}
-                  onOpenEmojiPicker={() => {
-                    setIsEmojiPickerOpen(true);
-                    setIsEmojiKeyboardVisible(false);
-                  }}
-                  onToggleEmojiKeyboard={() => {
-                    setIsEmojiPickerOpen(false);
-                    setIsEmojiKeyboardVisible((current) => !current);
-                  }}
-                  onVisualTypeChange={(nextVisualType) => {
-                    setVisualType(nextVisualType);
-                    if (nextVisualType !== "emoji") {
-                      setIsEmojiPickerOpen(false);
-                      setIsEmojiKeyboardVisible(false);
-                    }
-                    setTileActionError(null);
-                  }}
-                  onPickImageFromLibrary={() => {
-                    void pickImageFromLibrary();
-                  }}
-                  onTakePhoto={() => {
-                    void takePhoto();
-                  }}
-                  onRemoveImage={() => {
-                    void removeImage();
-                  }}
+                  onEditVisual={handleEditVisual}
                 />
 
                 <View style={styles.divider} />
@@ -399,31 +492,47 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                 </View>
 
                 <Text style={styles.inputLabel}>Režim řeči</Text>
-                <View style={styles.chipWrap}>
-                  {speechModes.map((mode) => {
-                    const selected = speechMode === mode;
+                <View style={styles.speechModeRow}>
+                  <View style={styles.speechModeChipRow}>
+                    {speechModes.map((mode) => {
+                      const selected = speechMode === mode;
 
-                    return (
-                      <Pressable
-                        key={mode}
-                        onPress={() => setSpeechMode(mode)}
-                        style={[
-                          styles.chip,
-                          styles.modeChip,
-                          selected && styles.chipSelected,
-                        ]}
-                      >
-                        <Text
+                      return (
+                        <Pressable
+                          key={mode}
+                          onPress={() => setSpeechMode(mode)}
                           style={[
-                            styles.chipText,
-                            selected && styles.chipTextSelected,
+                            styles.chip,
+                            styles.modeChip,
+                            selected && styles.chipSelected,
                           ]}
                         >
-                          {SPEECH_MODE_LABELS[mode]}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                          <Text
+                            style={[
+                              styles.chipText,
+                              selected && styles.chipTextSelected,
+                            ]}
+                          >
+                            {SPEECH_MODE_LABELS[mode]}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Pressable
+                    style={[
+                      styles.modeTestButton,
+                      !canTestSpeech && styles.actionButtonDisabled,
+                    ]}
+                    onPress={() => {
+                      void handleTestSpeech();
+                    }}
+                    disabled={!canTestSpeech && !isTestingSpeech}
+                  >
+                    <Text style={styles.modeTestButtonText}>
+                      {isTestingSpeech ? "■ Stop" : "🔊 Test"}
+                    </Text>
+                  </Pressable>
                 </View>
 
                 <View style={styles.divider} />

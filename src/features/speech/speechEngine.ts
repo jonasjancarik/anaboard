@@ -4,9 +4,9 @@ import {
   type AudioPlayer,
   type AudioStatus,
 } from 'expo-audio';
-import * as FileSystem from 'expo-file-system';
 import * as Speech from 'expo-speech';
 
+import { mediaAssetExists, resolveManagedMediaUri } from '../../shared/media/mediaStorage';
 import { logError, logEvent } from '../../shared/telemetry/logger';
 import type { AudioClip, ProfileSettings, SentenceToken, SpeechSegment, Tile } from '../../shared/types/domain';
 import { sleep } from '../../shared/utils/time';
@@ -21,23 +21,28 @@ type SegmentBuildInput = {
 
 const estimateTextDuration = (text: string): number => Math.max(500, text.length * 90);
 
-const hasPlayableClip = async (clip?: AudioClip): Promise<boolean> => {
+const getPlayableClipUri = async (clip?: AudioClip): Promise<string | null> => {
   if (!clip?.localUri) {
-    return false;
+    return null;
   }
 
-  try {
-    const info = await FileSystem.getInfoAsync(clip.localUri);
-    return Boolean(info.exists);
-  } catch {
-    return false;
+  const clipExists = await mediaAssetExists(clip.localUri);
+  if (!clipExists) {
+    return null;
   }
+
+  return await resolveManagedMediaUri(clip.localUri);
 };
 
-const clipSegment = (token: SentenceToken, tile: Tile, clip: AudioClip): SpeechSegment => ({
+const clipSegment = (
+  token: SentenceToken,
+  tile: Tile,
+  clip: AudioClip,
+  clipUri: string
+): SpeechSegment => ({
   tokenId: token.tokenId,
   kind: 'clip',
-  clipUri: clip.localUri,
+  clipUri,
   mode: tile.speechMode,
   estimatedMs: clip.durationMs,
   tileId: tile.id,
@@ -68,15 +73,15 @@ export const buildSpeechSegments = async ({
     }
 
     const clip = tile.audioClipId ? clipsById[tile.audioClipId] : undefined;
-    const clipExists = await hasPlayableClip(clip);
+    const clipUri = await getPlayableClipUri(clip);
 
     if (tile.speechMode === 'tts') {
       segments.push(ttsSegment(token, tile, false));
       continue;
     }
 
-    if (clip && clipExists) {
-      segments.push(clipSegment(token, tile, clip));
+    if (clip && clipUri) {
+      segments.push(clipSegment(token, tile, clip, clipUri));
       continue;
     }
 
@@ -85,9 +90,6 @@ export const buildSpeechSegments = async ({
       mode: tile.speechMode,
     });
 
-    if (tile.speechMode === 'recording_with_tts_fallback') {
-      segments.push(ttsSegment(token, tile, true));
-    }
   }
 
   return segments;

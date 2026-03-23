@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { APP_THEME } from '../constants/theme';
+import { useResolvedMediaUri } from '../media/useResolvedMediaUri';
 import type { TileVisualType } from '../types/domain';
 
 type TileVisualProps = {
@@ -23,7 +24,7 @@ type TileVisualProps = {
   emojiStyle?: StyleProp<TextStyle>;
 };
 
-const URI_SCHEME_PATTERN = /^(file|content|https?):/i;
+const URI_SCHEME_PATTERN = /^(blob|content|data|file|https?):/i;
 
 const getImageUri = (
   imageLocalUri?: string | null,
@@ -40,6 +41,46 @@ const getImageUri = (
   return null;
 };
 
+const getVisualTextMetrics = (value: string, size: number) => {
+  const trimmedValue = value.trim();
+  const length = Array.from(trimmedValue).length;
+  const hasWhitespace = /\s/.test(trimmedValue);
+  const baseSize = Math.max(18, Math.round(size * 0.62));
+
+  if (length <= 2 && !hasWhitespace) {
+    return {
+      fontSize: baseSize,
+      lineHeight: baseSize + 2,
+      width: size * 0.72,
+    };
+  }
+
+  if (length <= 4 && !hasWhitespace) {
+    const nextSize = Math.max(16, Math.round(size * 0.46));
+    return {
+      fontSize: nextSize,
+      lineHeight: nextSize + 2,
+      width: size * 0.82,
+    };
+  }
+
+  if (length <= 7 && !hasWhitespace) {
+    const nextSize = Math.max(14, Math.round(size * 0.34));
+    return {
+      fontSize: nextSize,
+      lineHeight: nextSize + 2,
+      width: size * 0.88,
+    };
+  }
+
+  const nextSize = Math.max(12, Math.round(size * 0.24));
+  return {
+    fontSize: nextSize,
+    lineHeight: nextSize + 2,
+    width: size * 0.9,
+  };
+};
+
 export const TileVisual = ({
   emoji,
   visualType = 'emoji',
@@ -51,9 +92,10 @@ export const TileVisual = ({
   emojiStyle,
 }: TileVisualProps) => {
   const [didImageFail, setDidImageFail] = useState(false);
+  const resolvedImageLocalUri = useResolvedMediaUri(imageLocalUri);
   const imageUri = useMemo(
-    () => getImageUri(imageLocalUri, imageRemotePath),
-    [imageLocalUri, imageRemotePath]
+    () => getImageUri(resolvedImageLocalUri, imageRemotePath),
+    [imageRemotePath, resolvedImageLocalUri]
   );
 
   useEffect(() => {
@@ -61,7 +103,7 @@ export const TileVisual = ({
   }, [imageUri]);
 
   const showImage = visualType === 'image' && Boolean(imageUri) && !didImageFail;
-  const emojiSize = Math.max(18, Math.round(size * 0.62));
+  const textMetrics = getVisualTextMetrics(emoji || '⬜️', size);
 
   return (
     <View
@@ -88,11 +130,16 @@ export const TileVisual = ({
       ) : (
         <Text
           allowFontScaling={false}
+          adjustsFontSizeToFit
+          minimumFontScale={0.35}
+          numberOfLines={2}
+          ellipsizeMode="clip"
           style={[
             styles.emoji,
             {
-              fontSize: emojiSize,
-              lineHeight: emojiSize + 2,
+              fontSize: textMetrics.fontSize,
+              lineHeight: textMetrics.lineHeight,
+              width: textMetrics.width,
             },
             emojiStyle,
           ]}

@@ -55,6 +55,13 @@ add column if not exists visual_type text not null default 'emoji';
 alter table tiles
 add column if not exists image_remote_path text;
 
+update tiles
+set speech_mode = case
+  when audio_clip_id is not null then 'recording_only'
+  else 'tts'
+end
+where speech_mode = 'recording_with_tts_fallback';
+
 create table if not exists audio_clips (
   id text primary key,
   tile_id text not null references tiles(id) on delete cascade,

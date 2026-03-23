@@ -59,7 +59,7 @@ export const useTileImageDraft = ({
     setVisualType(initialVisualType);
     setImageLocalUri(initialImageLocalUri ?? null);
     setImageRemotePath(initialImageRemotePath ?? null);
-  }, [initialImageLocalUri, initialImageRemotePath, initialVisualType, tileId]);
+  }, [tileId]);
 
   useEffect(() => {
     return () => {

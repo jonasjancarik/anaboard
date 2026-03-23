@@ -2,7 +2,6 @@ export type Category = 'needs' | 'feelings' | 'social' | 'food';
 
 export type SpeechMode =
   | 'tts'
-  | 'recording_with_tts_fallback'
   | 'recording_only';
 
 export type TileVisualType = 'emoji' | 'image';
