@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
+import { speechEngine } from '../../speech/speechEngine';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SettingRowButton } from '../components/SettingRowButton';
 import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
@@ -35,6 +36,8 @@ const PITCH_OPTIONS: SettingStepperOption[] = [
 const getErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error ? error.message : fallback;
 };
+
+const VOICE_PREVIEW_TEXT = 'Tohle je ukázka hlasu.';
 
 export const SettingsScreen = ({
   onBack,
@@ -73,16 +76,30 @@ export const SettingsScreen = ({
     nextValue: T,
     setValue: (value: T) => void,
     update: Parameters<typeof updateSettings>[0],
-    fallbackMessage: string
+    fallbackMessage: string,
+    onSuccess?: () => Promise<void> | void
   ) => {
     setMessage(null);
     setValue(nextValue);
 
     try {
       await updateSettings(update);
+      await onSuccess?.();
     } catch (error) {
       setValue(previousValue);
       setMessage(getErrorMessage(error, fallbackMessage));
+    }
+  };
+
+  const previewVoice = async (nextRate: number, nextPitch: number) => {
+    try {
+      await speechEngine.previewTts(VOICE_PREVIEW_TEXT, {
+        ttsRate: nextRate,
+        ttsPitch: nextPitch,
+        preferredVoice: settings?.preferredVoice,
+      });
+    } catch {
+      // Preview should stay best-effort and never block settings changes.
     }
   };
 
@@ -155,7 +172,8 @@ export const SettingsScreen = ({
                   nextValue,
                   setTtsRate,
                   { ttsRate: nextValue },
-                  'Rychlost hlasu nešla uložit'
+                  'Rychlost hlasu nešla uložit',
+                  () => previewVoice(nextValue, ttsPitch)
                 );
               }}
             />
@@ -172,7 +190,8 @@ export const SettingsScreen = ({
                   nextValue,
                   setTtsPitch,
                   { ttsPitch: nextValue },
-                  'Tón hlasu nešel uložit'
+                  'Tón hlasu nešel uložit',
+                  () => previewVoice(ttsRate, nextValue)
                 );
               }}
             />

@@ -183,17 +183,33 @@ class SpeechEngine {
     }
   };
 
-  private playTts = async (text: string, activeJob: number): Promise<void> => {
+  public previewTts = async (
+    text: string,
+    settings: Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>
+  ): Promise<void> => {
+    await this.cancel();
+    this.jobId += 1;
+    const activeJob = this.jobId;
+    await this.playTts(text, activeJob, settings);
+  };
+
+  private playTts = async (
+    text: string,
+    activeJob: number,
+    settingsOverride?: Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>
+  ): Promise<void> => {
     if (!text.trim()) {
       return;
     }
 
+    const settings = settingsOverride ?? this.settings;
+
     await new Promise<void>((resolve, reject) => {
       Speech.speak(text, {
         language: 'cs-CZ',
-        rate: this.settings.ttsRate,
-        pitch: this.settings.ttsPitch,
-        voice: this.settings.preferredVoice,
+        rate: settings.ttsRate,
+        pitch: settings.ttsPitch,
+        voice: settings.preferredVoice,
         onDone: () => {
           if (activeJob === this.jobId) {
             resolve();
