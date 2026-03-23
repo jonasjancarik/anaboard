@@ -30,6 +30,7 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - caregiver locked: long-press does not trigger editor
   - caregiver mode can be locked/unlocked from board action button
 - Settings screen:
+  - preferred voice
   - TTS rate/pitch
   - high contrast
   - PIN change

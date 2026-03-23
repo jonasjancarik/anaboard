@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
 import { speechEngine } from '../../speech/speechEngine';
+import { SettingChoiceStepper } from '../components/SettingChoiceStepper';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SettingRowButton } from '../components/SettingRowButton';
 import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
 import { SettingToggleRow } from '../components/SettingToggleRow';
+import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import {
@@ -53,6 +55,7 @@ export const SettingsScreen = ({
   const authStatus = useAppStore((state) => state.authStatus);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
+  const { voiceOptions, isVoiceOptionsLoading } = useSpeechVoiceOptions();
 
   const [ttsRate, setTtsRate] = useState(0.86);
   const [ttsPitch, setTtsPitch] = useState(1);
@@ -60,6 +63,7 @@ export const SettingsScreen = ({
   const [showLabels, setShowLabels] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
+  const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
   const [message, setMessage] = useState<string | null>(null);
   const [isResettingBoard, setIsResettingBoard] = useState(false);
   const [webPersistenceSummary, setWebPersistenceSummary] =
@@ -76,7 +80,20 @@ export const SettingsScreen = ({
     setShowLabels(settings.showLabels);
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
+    setSelectedVoiceValue(settings.preferredVoice ?? DEFAULT_VOICE_VALUE);
   }, [settings]);
+
+  useEffect(() => {
+    if (selectedVoiceValue === DEFAULT_VOICE_VALUE) {
+      return;
+    }
+
+    if (voiceOptions.some((option) => option.value === selectedVoiceValue)) {
+      return;
+    }
+
+    setSelectedVoiceValue(DEFAULT_VOICE_VALUE);
+  }, [selectedVoiceValue, voiceOptions]);
 
   useEffect(() => {
     if (!isWebPlatform) {
@@ -128,12 +145,16 @@ export const SettingsScreen = ({
     }
   };
 
-  const previewVoice = async (nextRate: number, nextPitch: number) => {
+  const previewVoice = async (
+    nextRate: number,
+    nextPitch: number,
+    nextVoiceValue: string = selectedVoiceValue
+  ) => {
     try {
       await speechEngine.previewTts(VOICE_PREVIEW_TEXT, {
         ttsRate: nextRate,
         ttsPitch: nextPitch,
-        preferredVoice: settings?.preferredVoice,
+        preferredVoice: nextVoiceValue === DEFAULT_VOICE_VALUE ? undefined : nextVoiceValue,
       });
     } catch {
       setMessage(
@@ -204,11 +225,44 @@ export const SettingsScreen = ({
         ? 'Ověřeno po obnovení stránky. Data zůstávají v tomto prohlížeči.'
         : 'První kontrola hotová. Obnov stránku ještě jednou a AnaBoard potvrdí trvalé uložení.';
 
+  const availableVoiceOptions = voiceOptions.filter((option) => option.value !== DEFAULT_VOICE_VALUE);
+  const availableVoiceCount = availableVoiceOptions.length;
+  const shouldShowVoicePicker = availableVoiceCount > 1;
+  const voiceRowTitle = 'Vybraný hlas';
+  const voiceSetupInstruction =
+    Platform.OS === 'ios'
+      ? 'Další hlasy přidáš v Nastavení > Zpřístupnění > Mluvený obsah > Hlasy.'
+      : Platform.OS === 'android'
+        ? 'Další hlasy přidáš v Nastavení > Zpřístupnění > Výstup převodu textu na řeč. U zvoleného enginu otevři jeho nastavení a nainstaluj hlasová data.'
+        : 'Další hlasy přidej v nastavení tohoto zařízení.';
+  const voiceAvailabilityTitle = isVoiceOptionsLoading
+    ? 'Načítám hlasy…'
+    : availableVoiceCount === 0
+      ? 'Český hlas'
+      : 'Dostupný hlas';
+  const voiceAvailabilityDetail = isVoiceOptionsLoading
+    ? 'Zjišťuji dostupné české hlasy v tomto zařízení.'
+    : availableVoiceCount === 0
+      ? `Na tomto zařízení není dostupný samostatný český hlas. Použije se výchozí hlas zařízení. ${voiceSetupInstruction}`
+      : `Na tomto zařízení je dostupný jen jeden český hlas: ${availableVoiceOptions[0].label}. ${voiceSetupInstruction}`;
+
+  const handleVoiceChange = (nextVoiceValue: string) => {
+    void updateSetting(
+      selectedVoiceValue,
+      nextVoiceValue,
+      setSelectedVoiceValue,
+      {
+        preferredVoice: nextVoiceValue === DEFAULT_VOICE_VALUE ? null : nextVoiceValue,
+      },
+      'Hlas nešel uložit',
+      () => previewVoice(ttsRate, ttsPitch, nextVoiceValue)
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content}>
         <ScreenHeader title="Nastavení" onBack={onBack} />
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Hlas</Text>
           <View style={styles.cardStack}>
@@ -227,9 +281,7 @@ export const SettingsScreen = ({
                 );
               }}
             />
-
             <View style={styles.divider} />
-
             <SettingStepper
               title="Tón hlasu"
               value={ttsPitch}
@@ -245,11 +297,24 @@ export const SettingsScreen = ({
                 );
               }}
             />
-
+            <View style={styles.divider} />
+            {shouldShowVoicePicker ? (
+              <SettingChoiceStepper
+                title={voiceRowTitle}
+                value={selectedVoiceValue}
+                options={voiceOptions}
+                disabled={isVoiceOptionsLoading}
+                onChange={handleVoiceChange}
+              />
+            ) : (
+              <View style={styles.statusBlock}>
+                <Text style={styles.statusTitle}>{voiceAvailabilityTitle}</Text>
+                <Text style={styles.statusDetail}>{voiceAvailabilityDetail}</Text>
+              </View>
+            )}
             {!isWebPlatform ? (
               <>
                 <View style={styles.divider} />
-
                 <View style={styles.statusBlock}>
                   <Text style={styles.statusTitle}>iPad / iPhone</Text>
                   <Text style={styles.statusDetail}>
@@ -260,7 +325,6 @@ export const SettingsScreen = ({
             ) : null}
           </View>
         </View>
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Vzhled a ochrana</Text>
           <View style={styles.cardStack}>
@@ -277,9 +341,7 @@ export const SettingsScreen = ({
                 );
               }}
             />
-
             <View style={styles.divider} />
-
             <SettingToggleRow
               title="Zobrazit názvy na dlaždicích"
               value={showLabels}
@@ -293,9 +355,7 @@ export const SettingsScreen = ({
                 );
               }}
             />
-
             <View style={styles.divider} />
-
             <SettingToggleRow
               title="Chránit nastavení"
               detail={
@@ -314,9 +374,7 @@ export const SettingsScreen = ({
                 );
               }}
             />
-
             <View style={styles.divider} />
-
             <SettingRowButton
               title={
                 isWebPlatform
@@ -328,11 +386,9 @@ export const SettingsScreen = ({
               detail={pinDetail}
               onPress={onOpenPinSettings}
             />
-
             {!isWebPlatform ? (
               <>
                 <View style={styles.divider} />
-
                 <SettingToggleRow
                   title="PIN přímo v aplikaci"
                   detail="Použij, když nechceš spoléhat jen na zámek telefonu."
@@ -351,7 +407,6 @@ export const SettingsScreen = ({
             ) : (
               <>
                 <View style={styles.divider} />
-
                 <View style={styles.statusBlock}>
                   <Text style={styles.statusTitle}>Úložiště prohlížeče</Text>
                   <Text style={styles.statusDetail}>{webStorageDetail}</Text>
@@ -360,7 +415,6 @@ export const SettingsScreen = ({
             )}
           </View>
         </View>
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Správa tabule</Text>
           <View style={styles.cardStack}>
@@ -369,7 +423,6 @@ export const SettingsScreen = ({
               detail="Vrátit dříve smazané položky."
               onPress={onOpenArchive}
             />
-
             <SettingRowButton
               title={isResettingBoard ? 'Obnovuji výchozí dlaždice…' : 'Obnovit výchozí dlaždice'}
               detail="Vrátí původní pořadí a smaže vlastní nahrávky."
@@ -379,7 +432,6 @@ export const SettingsScreen = ({
             />
           </View>
         </View>
-
         {authStatus === 'signed_in' ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Účet</Text>
@@ -393,7 +445,6 @@ export const SettingsScreen = ({
             />
           </View>
         ) : null}
-
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </ScrollView>
     </SafeAreaView>
