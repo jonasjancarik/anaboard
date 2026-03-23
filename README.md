@@ -109,6 +109,7 @@ See `/Users/janca/projects/anaboard/supabase/schema.sql` for baseline tables and
 - Default board ships as a 2-page preschool starter set: page 1 home/core words, page 2 child fringe/routines/favorites.
 - Tile labels are shown by default for easier symbol learning and partner interpretation.
 - Caregiver settings act as the central hub for archive, reset-to-defaults, appearance, speech, PIN, and account actions.
+- On physical iPhone/iPad devices, Expo TTS can still stay silent while the device is in silent mode.
 - App currently keeps web support for preview/testing.
 - Supabase sync requires schema setup and auth membership alignment for RLS policies.
 - If Supabase env vars are missing, app runs local-only mode.

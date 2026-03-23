@@ -136,7 +136,11 @@ export const SettingsScreen = ({
         preferredVoice: settings?.preferredVoice,
       });
     } catch {
-      // Preview stays best effort.
+      setMessage(
+        isWebPlatform
+          ? 'Ukázka hlasu se nepřehrála.'
+          : 'Ukázka hlasu se nepřehrála. Na iPadu/iPhonu zkontroluj tichý režim.'
+      );
     }
   };
 
@@ -241,6 +245,19 @@ export const SettingsScreen = ({
                 );
               }}
             />
+
+            {!isWebPlatform ? (
+              <>
+                <View style={styles.divider} />
+
+                <View style={styles.statusBlock}>
+                  <Text style={styles.statusTitle}>iPad / iPhone</Text>
+                  <Text style={styles.statusDetail}>
+                    Když je zařízení v tichém režimu, robotický hlas se nemusí ozvat.
+                  </Text>
+                </View>
+              </>
+            ) : null}
           </View>
         </View>
 
