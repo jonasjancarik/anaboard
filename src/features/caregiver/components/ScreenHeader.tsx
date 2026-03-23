@@ -1,6 +1,7 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
+import { isWebPlatform } from '../../../shared/platform/runtime';
 
 type ScreenHeaderProps = {
   title: string;
@@ -13,7 +14,7 @@ export const ScreenHeader = ({
   onBack,
   backLabel = 'Zpět',
 }: ScreenHeaderProps) => {
-  const showBackButton = Platform.OS === 'ios';
+  const showBackButton = Platform.OS === 'ios' || isWebPlatform;
 
   return (
     <View style={styles.container}>

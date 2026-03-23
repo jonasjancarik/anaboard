@@ -26,6 +26,7 @@ import {
   styles,
 } from './BoardScreen.styles';
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
+import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
 import type { SentenceToken, Tile } from '../../../shared/types/domain';
@@ -54,6 +55,14 @@ type PendingReorderTouch = {
   startIndex: number;
   startPageX: number;
   startPageY: number;
+};
+
+type PagerScrollEvent = {
+  nativeEvent: {
+    contentOffset: {
+      x: number;
+    };
+  };
 };
 
 const REORDER_LONG_PRESS_MS = 180;
@@ -87,6 +96,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const boardViewportRef = useRef<View>(null);
   const sentenceScrollRef = useRef<ScrollView>(null);
   const flashNewTileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pagerScrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAnimatedPageRef = useRef<number | null>(null);
   const suppressTapAfterLongPressRef = useRef(false);
   const dragStateRef = useRef<BoardDragState | null>(null);
@@ -94,6 +104,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boardViewportLeftRef = useRef(0);
+  const lastAppliedPageWidthRef = useRef(0);
   const pageSwitchArmedRef = useRef(true);
   const wiggleValue = useRef(new Animated.Value(0)).current;
   const newTileFlashValue = useRef(new Animated.Value(0)).current;
@@ -264,12 +275,36 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     [pageCount]
   );
 
+  const setVisiblePage = useCallback(
+    (nextPage: number) => {
+      const clampedPage = clampPageIndex(nextPage);
+      if (clampedPage !== currentPageRef.current) {
+        currentPageRef.current = clampedPage;
+        setCurrentPage((page) => (page === clampedPage ? page : clampedPage));
+      }
+
+      return clampedPage;
+    },
+    [clampPageIndex]
+  );
+
+  const commitVisiblePage = useCallback(
+    (nextPage: number) => {
+      const clampedPage = setVisiblePage(nextPage);
+      setBoardPageIndex(clampedPage);
+      return clampedPage;
+    },
+    [setBoardPageIndex, setVisiblePage]
+  );
+
   const scrollToPage = useCallback(
     (nextPage: number, animated: boolean) => {
-      const clampedPage = clampPageIndex(nextPage);
-      currentPageRef.current = clampedPage;
-      setCurrentPage((page) => (page === clampedPage ? page : clampedPage));
-      setBoardPageIndex(clampedPage);
+      if (pagerScrollIdleTimerRef.current) {
+        clearTimeout(pagerScrollIdleTimerRef.current);
+        pagerScrollIdleTimerRef.current = null;
+      }
+
+      const clampedPage = commitVisiblePage(nextPage);
 
       if (pageWidth <= 0) {
         return;
@@ -280,7 +315,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         animated,
       });
     },
-    [clampPageIndex, pageWidth, setBoardPageIndex]
+    [commitVisiblePage, pageWidth]
   );
 
   useEffect(() => {
@@ -289,12 +324,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       setBoardPageIndex(nextPage);
     }
 
-    if (nextPage !== currentPageRef.current) {
-      currentPageRef.current = nextPage;
-      setCurrentPage((page) => (page === nextPage ? page : nextPage));
-    }
+    const pageChanged = nextPage !== currentPageRef.current;
+    const pageWidthChanged =
+      pageWidth > 0 && Math.abs(lastAppliedPageWidthRef.current - pageWidth) > 1;
+    setVisiblePage(nextPage);
 
-    if (pageWidth > 0) {
+    if (pageWidth > 0 && (pageChanged || pageWidthChanged)) {
       const shouldAnimate = pendingAnimatedPageRef.current === nextPage;
       boardPagerRef.current?.scrollTo({
         x: nextPage * pageWidth,
@@ -304,7 +339,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         pendingAnimatedPageRef.current = null;
       }
     }
-  }, [boardPageIndex, clampPageIndex, pageWidth, setBoardPageIndex]);
+
+    lastAppliedPageWidthRef.current = pageWidth;
+  }, [boardPageIndex, clampPageIndex, pageWidth, setBoardPageIndex, setVisiblePage]);
 
   useEffect(() => {
     if (pageCount === 0) {
@@ -316,8 +353,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    currentPageRef.current = nextPage;
-    setCurrentPage((page) => (page === nextPage ? page : nextPage));
+    setVisiblePage(nextPage);
     setBoardPageIndex(nextPage);
 
     if (pageWidth > 0) {
@@ -556,6 +592,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       clearPendingReorderTouch();
       if (flashNewTileTimerRef.current) {
         clearTimeout(flashNewTileTimerRef.current);
+      }
+      if (pagerScrollIdleTimerRef.current) {
+        clearTimeout(pagerScrollIdleTimerRef.current);
       }
       newTileFlashValue.stopAnimation();
     };
@@ -806,16 +845,54 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     }
   };
 
-  const onPagerMomentumScrollEnd = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+  const settlePagerFromOffset = useCallback(
+    (offsetX: number) => {
+      if (pageWidth <= 0) {
+        return;
+      }
+
+      commitVisiblePage(Math.round(offsetX / pageWidth));
+    },
+    [commitVisiblePage, pageWidth]
+  );
+
+  const onPagerScroll = useCallback(
+    (event: PagerScrollEvent) => {
+      const offsetX = event.nativeEvent.contentOffset.x;
+      if (pageWidth <= 0) {
+        return;
+      }
+
+      setVisiblePage(Math.round(offsetX / pageWidth));
+
+      if (!isWebPlatform) {
+        return;
+      }
+
+      if (pagerScrollIdleTimerRef.current) {
+        clearTimeout(pagerScrollIdleTimerRef.current);
+      }
+
+      pagerScrollIdleTimerRef.current = setTimeout(() => {
+        settlePagerFromOffset(offsetX);
+        pagerScrollIdleTimerRef.current = null;
+      }, 120);
+    },
+    [pageWidth, setVisiblePage, settlePagerFromOffset]
+  );
+
+  const onPagerMomentumScrollEnd = useCallback((event: PagerScrollEvent) => {
+    if (pagerScrollIdleTimerRef.current) {
+      clearTimeout(pagerScrollIdleTimerRef.current);
+      pagerScrollIdleTimerRef.current = null;
+    }
+
     if (pageWidth <= 0) {
       return;
     }
 
-    const nextPage = clampPageIndex(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
-    currentPageRef.current = nextPage;
-    setCurrentPage((page) => (page === nextPage ? page : nextPage));
-    setBoardPageIndex(nextPage);
-  };
+    settlePagerFromOffset(event.nativeEvent.contentOffset.x);
+  }, [pageWidth, settlePagerFromOffset]);
 
   const getTileLabelStyle = useCallback(
     (label: string) => {
@@ -948,7 +1025,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             scrollEnabled={pageCount > 1}
             style={styles.boardPagerScroll}
             showsHorizontalScrollIndicator={false}
+            onScroll={onPagerScroll}
             onMomentumScrollEnd={onPagerMomentumScrollEnd}
+            scrollEventThrottle={16}
             decelerationRate="fast"
           >
             <View
