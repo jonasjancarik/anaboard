@@ -50,8 +50,8 @@ const getVisualTextMetrics = (value: string, size: number) => {
   if (length <= 2 && !hasWhitespace) {
     return {
       fontSize: baseSize,
-      lineHeight: baseSize + 2,
-      width: size * 0.72,
+      width: size * 0.78,
+      numberOfLines: 1 as const,
     };
   }
 
@@ -59,8 +59,8 @@ const getVisualTextMetrics = (value: string, size: number) => {
     const nextSize = Math.max(16, Math.round(size * 0.46));
     return {
       fontSize: nextSize,
-      lineHeight: nextSize + 2,
-      width: size * 0.82,
+      width: size * 0.88,
+      numberOfLines: 1 as const,
     };
   }
 
@@ -70,6 +70,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
       fontSize: nextSize,
       lineHeight: nextSize + 2,
       width: size * 0.88,
+      numberOfLines: 2 as const,
     };
   }
 
@@ -78,6 +79,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
     fontSize: nextSize,
     lineHeight: nextSize + 2,
     width: size * 0.9,
+    numberOfLines: 2 as const,
   };
 };
 
@@ -130,17 +132,19 @@ export const TileVisual = ({
       ) : (
         <Text
           allowFontScaling={false}
-          adjustsFontSizeToFit
-          minimumFontScale={0.35}
-          numberOfLines={2}
+          numberOfLines={textMetrics.numberOfLines}
           ellipsizeMode="clip"
           style={[
             styles.emoji,
             {
               fontSize: textMetrics.fontSize,
-              lineHeight: textMetrics.lineHeight,
               width: textMetrics.width,
             },
+            textMetrics.lineHeight
+              ? {
+                  lineHeight: textMetrics.lineHeight,
+                }
+              : null,
             emojiStyle,
           ]}
         >
