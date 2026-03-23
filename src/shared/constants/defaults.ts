@@ -59,6 +59,7 @@ export const DEFAULT_TILES = (updatedAt: string): Tile[] =>
     position: index,
     labelCs: item.labelCs,
     emoji: item.emoji,
+    visualType: "emoji",
     category: item.category,
     speechMode: DEFAULT_SPEECH_MODE,
     updatedAt,

@@ -1,4 +1,4 @@
-import type { Category, SpeechMode } from "../../types/domain";
+import type { Category, SpeechMode, TileVisualType } from "../../types/domain";
 import { createId } from "../../utils/id";
 import { nowIso } from "../../utils/time";
 import { getDatabase } from "../db";
@@ -11,6 +11,9 @@ type TileRow = {
   position: number;
   label_cs: string;
   emoji: string;
+  visual_type: TileVisualType;
+  image_local_uri?: string | null;
+  image_remote_path?: string | null;
   category: Category;
   speech_mode: SpeechMode;
   audio_clip_id?: string | null;
@@ -32,6 +35,9 @@ type AudioClipRow = {
 export type TileUpdateInput = {
   labelCs?: string;
   emoji?: string;
+  visualType?: TileVisualType;
+  imageLocalUri?: string | null;
+  imageRemotePath?: string | null;
   category?: Category;
   speechMode?: SpeechMode;
   audioClipId?: string | null;
@@ -41,7 +47,20 @@ const getTileById = async (tileId: string): Promise<TileRow | null> => {
   const db = await getDatabase();
   return db.getFirstAsync<TileRow>(
     `
-      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      SELECT
+        id,
+        board_id,
+        position,
+        label_cs,
+        emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
+        category,
+        speech_mode,
+        audio_clip_id,
+        updated_at,
+        revision
       FROM tiles
       WHERE id = ?
       LIMIT 1
@@ -64,14 +83,18 @@ export const updateTile = async (
   await db.runAsync(
     `
       INSERT INTO tiles_history (
-        tile_id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, archived_at, revision
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        tile_id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+        category, speech_mode, audio_clip_id, archived_at, revision
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     current.id,
     current.board_id,
     current.position,
     current.label_cs,
     current.emoji,
+    current.visual_type,
+    current.image_local_uri ?? null,
+    current.image_remote_path ?? null,
     current.category,
     current.speech_mode,
     current.audio_clip_id ?? null,
@@ -85,11 +108,29 @@ export const updateTile = async (
   await db.runAsync(
     `
       UPDATE tiles
-      SET label_cs = ?, emoji = ?, category = ?, speech_mode = ?, audio_clip_id = ?, updated_at = ?, revision = ?, dirty = 1
+      SET
+        label_cs = ?,
+        emoji = ?,
+        visual_type = ?,
+        image_local_uri = ?,
+        image_remote_path = ?,
+        category = ?,
+        speech_mode = ?,
+        audio_clip_id = ?,
+        updated_at = ?,
+        revision = ?,
+        dirty = 1
       WHERE id = ?
     `,
     input.labelCs ?? current.label_cs,
     input.emoji ?? current.emoji,
+    input.visualType ?? current.visual_type,
+    input.imageLocalUri === undefined
+      ? (current.image_local_uri ?? null)
+      : input.imageLocalUri,
+    input.imageRemotePath === undefined
+      ? (current.image_remote_path ?? null)
+      : input.imageRemotePath,
     input.category ?? current.category,
     input.speechMode ?? current.speech_mode,
     input.audioClipId === undefined
@@ -105,6 +146,11 @@ export const updateTile = async (
     board_id: current.board_id,
     label_cs: input.labelCs ?? current.label_cs,
     emoji: input.emoji ?? current.emoji,
+    visual_type: input.visualType ?? current.visual_type,
+    image_remote_path:
+      input.imageRemotePath === undefined
+        ? (current.image_remote_path ?? null)
+        : input.imageRemotePath,
     category: input.category ?? current.category,
     speech_mode: input.speechMode ?? current.speech_mode,
     audio_clip_id:
@@ -129,7 +175,20 @@ export const updateTilePosition = async (
 
   const tiles = await db.getAllAsync<TileRow>(
     `
-      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      SELECT
+        id,
+        board_id,
+        position,
+        label_cs,
+        emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
+        category,
+        speech_mode,
+        audio_clip_id,
+        updated_at,
+        revision
       FROM tiles
       WHERE board_id = ?
       ORDER BY position ASC
@@ -177,6 +236,9 @@ export const createTileAfter = async (
   input?: {
     labelCs?: string;
     emoji?: string;
+    visualType?: TileVisualType;
+    imageLocalUri?: string | null;
+    imageRemotePath?: string | null;
     category?: Category;
     speechMode?: SpeechMode;
   },
@@ -190,7 +252,20 @@ export const createTileAfter = async (
 
   const tiles = await db.getAllAsync<TileRow>(
     `
-      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      SELECT
+        id,
+        board_id,
+        position,
+        label_cs,
+        emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
+        category,
+        speech_mode,
+        audio_clip_id,
+        updated_at,
+        revision
       FROM tiles
       WHERE board_id = ?
       ORDER BY position ASC
@@ -205,6 +280,9 @@ export const createTileAfter = async (
   const updatedAt = nowIso();
   const labelCs = input?.labelCs ?? "Nová";
   const emoji = input?.emoji ?? "⭐";
+  const visualType = input?.visualType ?? "emoji";
+  const imageLocalUri = input?.imageLocalUri ?? null;
+  const imageRemotePath = input?.imageRemotePath ?? null;
   const category = input?.category ?? "needs";
   const speechMode = input?.speechMode ?? "tts";
 
@@ -225,14 +303,18 @@ export const createTileAfter = async (
     await db.runAsync(
       `
         INSERT INTO tiles (
-          id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
+          id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+          category, speech_mode, audio_clip_id, updated_at, revision, dirty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
       `,
       newTileId,
       anchor.board_id,
       insertPosition,
       labelCs,
       emoji,
+      visualType,
+      imageLocalUri,
+      imageRemotePath,
       category,
       speechMode,
       updatedAt,
@@ -253,6 +335,8 @@ export const createTileAfter = async (
     position: insertPosition,
     label_cs: labelCs,
     emoji,
+    visual_type: visualType,
+    image_remote_path: imageRemotePath,
     category,
     speech_mode: speechMode,
     audio_clip_id: null,
@@ -273,7 +357,20 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
 
   const tiles = await db.getAllAsync<TileRow>(
     `
-      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      SELECT
+        id,
+        board_id,
+        position,
+        label_cs,
+        emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
+        category,
+        speech_mode,
+        audio_clip_id,
+        updated_at,
+        revision
       FROM tiles
       WHERE board_id = ?
       ORDER BY position ASC
@@ -308,6 +405,9 @@ export const deleteTileById = async (tileId: string): Promise<void> => {
           position: target.position,
           labelCs: target.label_cs,
           emoji: target.emoji,
+          visualType: target.visual_type,
+          imageLocalUri: target.image_local_uri ?? null,
+          imageRemotePath: target.image_remote_path ?? null,
           category: target.category,
           speechMode: target.speech_mode,
         },

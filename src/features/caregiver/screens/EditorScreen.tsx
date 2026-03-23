@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { TileAppearanceSection } from "../components/TileAppearanceSection";
 import { ScreenHeader } from "../components/ScreenHeader";
+import { useTileImageDraft } from "../hooks/useTileImageDraft";
+import { styles } from "./EditorScreen.styles";
 import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
   SPEECH_MODE_LABELS,
 } from "../../../shared/constants/defaults";
-import { APP_THEME } from "../../../shared/constants/theme";
-import type { Category, SpeechMode } from "../../../shared/types/domain";
+import type {
+  Category,
+  SpeechMode,
+  TileVisualType,
+} from "../../../shared/types/domain";
 import { useAppStore } from "../../../store/useAppStore";
 import { recordingService } from "../../speech/recordingService";
+import type { TileUpdateInput } from "../../../shared/storage/repositories/tileRepository";
 
 type EditorScreenProps = {
   onBack: () => void;
@@ -49,6 +49,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [emoji, setEmoji] = useState("");
   const [category, setCategory] = useState<Category>("needs");
   const [speechMode, setSpeechMode] = useState<SpeechMode>("tts");
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [isEmojiKeyboardVisible, setIsEmojiKeyboardVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
@@ -74,6 +76,24 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     ? (tiles.find((tile) => tile.id === editorTargetTileId) ?? null)
     : null;
 
+  const {
+    visualType,
+    setVisualType,
+    imageLocalUri,
+    imageRemotePath,
+    hasPreviewImage,
+    pickImageFromLibrary,
+    takePhoto,
+    removeImage,
+    commitDraft,
+  } = useTileImageDraft({
+    tileId: selectedTile?.id ?? null,
+    initialVisualType: selectedTile?.visualType ?? "emoji",
+    initialImageLocalUri: selectedTile?.imageLocalUri,
+    initialImageRemotePath: selectedTile?.imageRemotePath,
+    onError: setTileActionError,
+  });
+
   useEffect(() => {
     if (!selectedTile) {
       return;
@@ -83,6 +103,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setEmoji(selectedTile.emoji);
     setCategory(selectedTile.category);
     setSpeechMode(selectedTile.speechMode);
+    setIsEmojiPickerOpen(false);
+    setIsEmojiKeyboardVisible(false);
     setRecordingError(null);
     setTileActionError(null);
   }, [selectedTile]);
@@ -91,21 +113,35 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     ? clipsById[selectedTile.audioClipId]
     : undefined;
   const previewColors = CATEGORY_COLORS[category];
-  const previewLabel = selectedTile
-    ? labelCs.trim() || selectedTile.labelCs
-    : "";
-  const previewEmoji = selectedTile ? emoji.trim() || selectedTile.emoji : "";
   const showLabels = settings?.showLabels ?? true;
   const highContrast = settings?.highContrast ?? false;
+  const trimmedLabel = labelCs.trim();
+  const trimmedEmoji = emoji.trim();
+  const previewLabel = selectedTile
+    ? trimmedLabel || selectedTile.labelCs
+    : "";
+  const previewEmoji = selectedTile ? trimmedEmoji || selectedTile.emoji : "";
+  const previewVisualType: TileVisualType =
+    visualType === "image" && hasPreviewImage ? "image" : "emoji";
+  const visualSelectionIncomplete =
+    visualType === "image" && !hasPreviewImage;
 
-  const buildTileUpdatePayload = () => {
+  const buildTileUpdatePayload = (): TileUpdateInput | null => {
     if (!selectedTile) {
       return null;
     }
 
+    if (visualSelectionIncomplete) {
+      setTileActionError("Nejdřív přidej fotku z foťáku nebo knihovny.");
+      return null;
+    }
+
     return {
-      labelCs: labelCs.trim() || selectedTile.labelCs,
-      emoji: emoji.trim() || selectedTile.emoji,
+      labelCs: trimmedLabel || selectedTile.labelCs,
+      emoji: trimmedEmoji || selectedTile.emoji,
+      visualType: previewVisualType,
+      imageLocalUri: previewVisualType === "image" ? imageLocalUri : null,
+      imageRemotePath: previewVisualType === "image" ? imageRemotePath : null,
       category,
       speechMode,
     };
@@ -126,6 +162,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     try {
       await updateTileDraft(selectedTile.id, payload);
+      await commitDraft(
+        payload.visualType === "image" && Boolean(payload.imageLocalUri),
+      );
     } catch (error) {
       setTileActionError(
         error instanceof Error ? error.message : "Dlaždici nešlo uložit",
@@ -252,6 +291,21 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <ScreenHeader title="Upravit dlaždici" onBack={onBack} />
 
+      <EmojiPicker
+        open={isEmojiPickerOpen}
+        onClose={() => {
+          setIsEmojiPickerOpen(false);
+        }}
+        onEmojiSelected={(selected: EmojiType) => {
+          setEmoji(selected.emoji);
+          setTileActionError(null);
+          setIsEmojiPickerOpen(false);
+        }}
+        translation={cs}
+        enableSearchBar
+        enableRecentlyUsed
+      />
+
       <View style={styles.content}>
         <ScrollView
           style={styles.editorScroll}
@@ -262,53 +316,51 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           <View style={styles.editorBody}>
             {selectedTile ? (
               <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Vybraná dlaždice</Text>
-                </View>
-
-                <View style={styles.tilePreviewWrap}>
-                  <View
-                    style={[
-                      styles.tilePreview,
-                      highContrast
-                        ? styles.tilePreviewHighContrast
-                        : {
-                            backgroundColor: previewColors.background,
-                            borderColor: "transparent",
-                          },
-                    ]}
-                  >
-                    <Text style={styles.tilePreviewEmoji}>
-                      {previewEmoji || "⬜️"}
-                    </Text>
-                    {showLabels ? (
-                      <Text style={styles.tilePreviewLabel}>{previewLabel}</Text>
-                    ) : null}
-                  </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.fieldRow}>
-                  <View style={styles.fieldBlock}>
-                    <Text style={styles.inputLabel}>Text</Text>
-                    <TextInput
-                      value={labelCs}
-                      onChangeText={setLabelCs}
-                      style={styles.input}
-                    />
-                  </View>
-
-                  <View style={styles.emojiFieldBlock}>
-                    <Text style={styles.inputLabel}>Emoji</Text>
-                    <TextInput
-                      value={emoji}
-                      onChangeText={setEmoji}
-                      style={[styles.input, styles.emojiInput]}
-                      maxLength={4}
-                    />
-                  </View>
-                </View>
+                <TileAppearanceSection
+                  labelCs={labelCs}
+                  onLabelChange={setLabelCs}
+                  emoji={emoji}
+                  onEmojiChange={(nextEmoji) => {
+                    setEmoji(nextEmoji);
+                    setTileActionError(null);
+                  }}
+                  isEmojiKeyboardVisible={isEmojiKeyboardVisible}
+                  previewLabel={previewLabel}
+                  previewEmoji={previewEmoji}
+                  previewVisualType={previewVisualType}
+                  visualType={visualType}
+                  imageLocalUri={imageLocalUri}
+                  imageRemotePath={imageRemotePath}
+                  hasPreviewImage={hasPreviewImage}
+                  showLabels={showLabels}
+                  highContrast={highContrast}
+                  previewBackgroundColor={previewColors.background}
+                  onOpenEmojiPicker={() => {
+                    setIsEmojiPickerOpen(true);
+                    setIsEmojiKeyboardVisible(false);
+                  }}
+                  onToggleEmojiKeyboard={() => {
+                    setIsEmojiPickerOpen(false);
+                    setIsEmojiKeyboardVisible((current) => !current);
+                  }}
+                  onVisualTypeChange={(nextVisualType) => {
+                    setVisualType(nextVisualType);
+                    if (nextVisualType !== "emoji") {
+                      setIsEmojiPickerOpen(false);
+                      setIsEmojiKeyboardVisible(false);
+                    }
+                    setTileActionError(null);
+                  }}
+                  onPickImageFromLibrary={() => {
+                    void pickImageFromLibrary();
+                  }}
+                  onTakePhoto={() => {
+                    void takePhoto();
+                  }}
+                  onRemoveImage={() => {
+                    void removeImage();
+                  }}
+                />
 
                 <View style={styles.divider} />
 
@@ -434,10 +486,11 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                       styles.actionButton,
                       styles.tileActionButton,
                       styles.saveButton,
-                      (isSaving || isRecording) && styles.actionButtonDisabled,
+                      (isSaving || isRecording || visualSelectionIncomplete) &&
+                        styles.actionButtonDisabled,
                     ]}
                     onPress={saveTile}
-                    disabled={isSaving || isRecording}
+                    disabled={isSaving || isRecording || visualSelectionIncomplete}
                   >
                     <Text style={styles.actionButtonText}>
                       {isSaving ? "Ukládám..." : "Uložit"}
@@ -461,223 +514,3 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: APP_THEME.background,
-  },
-  content: {
-    flex: 1,
-  },
-  editorScroll: {
-    flex: 1,
-  },
-  editorBody: {
-    maxWidth: 720,
-    width: "100%",
-    alignSelf: "center",
-    gap: 10,
-  },
-  editorPanelContent: {
-    paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 20,
-  },
-  sectionHeader: {
-    gap: 2,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: APP_THEME.text,
-  },
-  tilePreviewWrap: {
-    alignItems: "center",
-  },
-  tilePreview: {
-    width: 144,
-    height: 144,
-    borderRadius: 24,
-    borderWidth: 0,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  tilePreviewHighContrast: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#111827",
-    borderWidth: 2,
-  },
-  tilePreviewEmoji: {
-    fontSize: 34,
-  },
-  tilePreviewLabel: {
-    width: "90%",
-    marginTop: 6,
-    fontSize: 15,
-    lineHeight: 18,
-    fontWeight: "800",
-    textAlign: "center",
-    color: APP_THEME.text,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: APP_THEME.borderSoft,
-  },
-  fieldRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-  },
-  fieldBlock: {
-    flex: 1,
-    gap: 4,
-  },
-  emojiFieldBlock: {
-    width: 92,
-    gap: 4,
-  },
-  inputLabel: {
-    color: APP_THEME.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: APP_THEME.borderStrong,
-    borderRadius: 16,
-    backgroundColor: APP_THEME.surface,
-    minHeight: 48,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: APP_THEME.text,
-  },
-  emojiInput: {
-    textAlign: "center",
-    fontSize: 24,
-    paddingHorizontal: 10,
-  },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: APP_THEME.surface,
-  },
-  categoryChip: {
-    minWidth: 68,
-    alignItems: "center",
-  },
-  modeChip: {
-    minHeight: 42,
-    justifyContent: "center",
-  },
-  chipSelected: {
-    borderColor: APP_THEME.primaryBorder,
-    borderWidth: 2,
-    opacity: 1,
-  },
-  categoryChipSelected: {
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: APP_THEME.text,
-  },
-  categoryChipText: {
-    color: APP_THEME.text,
-  },
-  chipTextSelected: {
-    color: APP_THEME.text,
-  },
-  recordingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    justifyContent: "space-between",
-  },
-  error: {
-    color: APP_THEME.dangerBorder,
-    marginTop: -2,
-    fontWeight: "700",
-    fontSize: 13,
-    lineHeight: 16,
-  },
-  actionButton: {
-    minHeight: 44,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  inlineActionButton: {
-    minWidth: 88,
-  },
-  actionButtonDisabled: {
-    opacity: 0.5,
-  },
-  actionButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  recordButton: {
-    borderColor: APP_THEME.successBorder,
-    backgroundColor: APP_THEME.success,
-  },
-  stopButton: {
-    borderColor: APP_THEME.dangerBorder,
-    backgroundColor: APP_THEME.danger,
-  },
-  deleteRecordingButton: {
-    borderColor: APP_THEME.dangerBorder,
-    backgroundColor: APP_THEME.surface,
-  },
-  saveButton: {
-    borderColor: APP_THEME.primaryBorder,
-    backgroundColor: APP_THEME.primary,
-  },
-  tileActionsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  tileActionButton: {
-    flex: 1,
-  },
-  deleteTileButton: {
-    borderColor: APP_THEME.dangerBorder,
-    backgroundColor: APP_THEME.surface,
-  },
-  deleteTileButtonText: {
-    color: APP_THEME.dangerBorder,
-  },
-  emptyText: {
-    color: APP_THEME.textMuted,
-    fontWeight: "700",
-    lineHeight: 20,
-    textAlign: "center",
-    paddingTop: 40,
-  },
-});

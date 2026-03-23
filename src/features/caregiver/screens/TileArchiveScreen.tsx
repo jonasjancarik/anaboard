@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CATEGORY_COLORS, SPEECH_MODE_LABELS } from '../../../shared/constants/defaults';
+import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { getArchivedTilesForBoard, restoreArchivedTileToBoard } from '../../../shared/storage/repositories/tileArchiveRepository';
 import type { ArchivedTile } from '../../../shared/types/domain';
@@ -124,7 +125,14 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
                   ]}
                 >
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardEmoji}>{tile.emoji}</Text>
+                    <TileVisual
+                      emoji={tile.emoji}
+                      visualType={tile.visualType}
+                      imageLocalUri={tile.imageLocalUri}
+                      imageRemotePath={tile.imageRemotePath}
+                      size={46}
+                      cornerRadius={14}
+                    />
                     <View style={styles.cardTextWrap}>
                       <Text style={styles.cardTitle}>{tile.labelCs}</Text>
                       <Text style={styles.cardMeta}>
@@ -196,9 +204,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
-  },
-  cardEmoji: {
-    fontSize: 30,
   },
   cardTextWrap: {
     flex: 1,

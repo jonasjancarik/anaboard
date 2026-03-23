@@ -1,6 +1,6 @@
 import type * as SQLite from 'expo-sqlite';
 
-import type { ArchivedTile, Category, SpeechMode } from '../../types/domain';
+import type { ArchivedTile, Category, SpeechMode, TileVisualType } from '../../types/domain';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/time';
 import { getDatabase } from '../db';
@@ -13,6 +13,9 @@ type ArchivedTileRow = {
   original_position: number;
   label_cs: string;
   emoji: string;
+  visual_type: TileVisualType;
+  image_local_uri?: string | null;
+  image_remote_path?: string | null;
   category: Category;
   speech_mode: SpeechMode;
   audio_local_uri?: string | null;
@@ -34,6 +37,9 @@ export type ArchivedTileInput = {
   position: number;
   labelCs: string;
   emoji: string;
+  visualType: TileVisualType;
+  imageLocalUri?: string | null;
+  imageRemotePath?: string | null;
   category: Category;
   speechMode: SpeechMode;
 };
@@ -53,6 +59,9 @@ const mapArchivedTileRow = (row: ArchivedTileRow): ArchivedTile => ({
   originalPosition: row.original_position,
   labelCs: row.label_cs,
   emoji: row.emoji,
+  visualType: row.visual_type,
+  imageLocalUri: row.image_local_uri ?? undefined,
+  imageRemotePath: row.image_remote_path ?? undefined,
   category: row.category,
   speechMode: row.speech_mode,
   audioClip:
@@ -78,9 +87,10 @@ export const archiveDeletedTile = async (input: {
   await db.runAsync(
     `
       INSERT INTO tile_archive (
-        id, original_tile_id, board_id, original_position, label_cs, emoji, category, speech_mode,
-        audio_local_uri, audio_remote_path, audio_duration_ms, audio_checksum, audio_format, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, original_tile_id, board_id, original_position, label_cs, emoji, visual_type, image_local_uri,
+        image_remote_path, category, speech_mode, audio_local_uri, audio_remote_path, audio_duration_ms,
+        audio_checksum, audio_format, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     archiveId,
     input.tile.id,
@@ -88,6 +98,9 @@ export const archiveDeletedTile = async (input: {
     input.tile.position,
     input.tile.labelCs,
     input.tile.emoji,
+    input.tile.visualType,
+    input.tile.imageLocalUri ?? null,
+    input.tile.imageRemotePath ?? null,
     input.tile.category,
     input.tile.speechMode,
     input.clip?.localUri ?? null,
@@ -110,6 +123,9 @@ export const getArchivedTilesForBoard = async (boardId: string): Promise<Archive
         original_position,
         label_cs,
         emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
         category,
         speech_mode,
         audio_local_uri,
@@ -139,6 +155,9 @@ export const restoreArchivedTileToBoard = async (archiveId: string): Promise<str
         original_position,
         label_cs,
         emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
         category,
         speech_mode,
         audio_local_uri,
@@ -183,14 +202,18 @@ export const restoreArchivedTileToBoard = async (archiveId: string): Promise<str
     await db.runAsync(
       `
         INSERT INTO tiles (
-          id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
+          id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+          category, speech_mode, audio_clip_id, updated_at, revision, dirty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
       `,
       newTileId,
       archived.board_id,
       restoredPosition,
       archived.label_cs,
       archived.emoji,
+      archived.visual_type,
+      archived.image_local_uri ?? null,
+      archived.image_remote_path ?? null,
       archived.category,
       archived.speech_mode,
       nextClipId,
@@ -224,6 +247,8 @@ export const restoreArchivedTileToBoard = async (archiveId: string): Promise<str
     position: restoredPosition,
     label_cs: archived.label_cs,
     emoji: archived.emoji,
+    visual_type: archived.visual_type,
+    image_remote_path: archived.image_remote_path ?? null,
     category: archived.category,
     speech_mode: archived.speech_mode,
     audio_clip_id: nextClipId,

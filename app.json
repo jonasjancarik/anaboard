@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.anaboard",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Umožni AnaBoard používat Face ID pro odemknutí režimu pečovatele."
+        "NSFaceIDUsageDescription": "Umožni AnaBoard používat Face ID pro odemknutí režimu pečovatele.",
+        "NSPhotoLibraryUsageDescription": "Umožni AnaBoard vybrat fotku pro dlaždici.",
+        "NSCameraUsageDescription": "Umožni AnaBoard vyfotit obrázek pro dlaždici."
       }
     },
     "android": {
@@ -28,6 +30,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
@@ -38,7 +41,15 @@
     "plugins": [
       "expo-sqlite",
       "sentry-expo",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Umožni AnaBoard vybrat fotku pro dlaždici.",
+          "cameraPermission": "Umožni AnaBoard vyfotit obrázek pro dlaždici.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

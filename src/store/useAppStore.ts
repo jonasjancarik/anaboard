@@ -220,6 +220,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tileId: tile.id,
       label: tile.labelCs,
       emoji: tile.emoji,
+      visualType: tile.visualType,
+      imageLocalUri: tile.imageLocalUri,
+      imageRemotePath: tile.imageRemotePath,
     };
 
     set((state) => ({

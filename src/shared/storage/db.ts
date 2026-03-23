@@ -35,6 +35,9 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       position INTEGER NOT NULL,
       label_cs TEXT NOT NULL,
       emoji TEXT NOT NULL,
+      visual_type TEXT NOT NULL DEFAULT 'emoji',
+      image_local_uri TEXT,
+      image_remote_path TEXT,
       category TEXT NOT NULL,
       speech_mode TEXT NOT NULL,
       audio_clip_id TEXT,
@@ -51,6 +54,9 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       position INTEGER NOT NULL,
       label_cs TEXT NOT NULL,
       emoji TEXT NOT NULL,
+      visual_type TEXT NOT NULL DEFAULT 'emoji',
+      image_local_uri TEXT,
+      image_remote_path TEXT,
       category TEXT NOT NULL,
       speech_mode TEXT NOT NULL,
       audio_clip_id TEXT,
@@ -65,6 +71,9 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
       original_position INTEGER NOT NULL,
       label_cs TEXT NOT NULL,
       emoji TEXT NOT NULL,
+      visual_type TEXT NOT NULL DEFAULT 'emoji',
+      image_local_uri TEXT,
+      image_remote_path TEXT,
       category TEXT NOT NULL,
       speech_mode TEXT NOT NULL,
       audio_local_uri TEXT,
@@ -147,6 +156,48 @@ const migrate = async (db: SQLite.SQLiteDatabase): Promise<void> => {
     await db.runAsync(
       'ALTER TABLE profile_settings ADD COLUMN backup_pin_enabled INTEGER NOT NULL DEFAULT 0'
     );
+  }
+
+  if (!(await hasColumn(db, 'tiles', 'visual_type'))) {
+    await db.runAsync(
+      "ALTER TABLE tiles ADD COLUMN visual_type TEXT NOT NULL DEFAULT 'emoji'"
+    );
+  }
+
+  if (!(await hasColumn(db, 'tiles', 'image_local_uri'))) {
+    await db.runAsync('ALTER TABLE tiles ADD COLUMN image_local_uri TEXT');
+  }
+
+  if (!(await hasColumn(db, 'tiles', 'image_remote_path'))) {
+    await db.runAsync('ALTER TABLE tiles ADD COLUMN image_remote_path TEXT');
+  }
+
+  if (!(await hasColumn(db, 'tiles_history', 'visual_type'))) {
+    await db.runAsync(
+      "ALTER TABLE tiles_history ADD COLUMN visual_type TEXT NOT NULL DEFAULT 'emoji'"
+    );
+  }
+
+  if (!(await hasColumn(db, 'tiles_history', 'image_local_uri'))) {
+    await db.runAsync('ALTER TABLE tiles_history ADD COLUMN image_local_uri TEXT');
+  }
+
+  if (!(await hasColumn(db, 'tiles_history', 'image_remote_path'))) {
+    await db.runAsync('ALTER TABLE tiles_history ADD COLUMN image_remote_path TEXT');
+  }
+
+  if (!(await hasColumn(db, 'tile_archive', 'visual_type'))) {
+    await db.runAsync(
+      "ALTER TABLE tile_archive ADD COLUMN visual_type TEXT NOT NULL DEFAULT 'emoji'"
+    );
+  }
+
+  if (!(await hasColumn(db, 'tile_archive', 'image_local_uri'))) {
+    await db.runAsync('ALTER TABLE tile_archive ADD COLUMN image_local_uri TEXT');
+  }
+
+  if (!(await hasColumn(db, 'tile_archive', 'image_remote_path'))) {
+    await db.runAsync('ALTER TABLE tile_archive ADD COLUMN image_remote_path TEXT');
   }
 
   const backupPinResetFlag = await db.getFirstAsync<{ value: string }>(

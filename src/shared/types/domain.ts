@@ -5,6 +5,8 @@ export type SpeechMode =
   | 'recording_with_tts_fallback'
   | 'recording_only';
 
+export type TileVisualType = 'emoji' | 'image';
+
 export type SyncStatus =
   | 'idle'
   | 'syncing'
@@ -36,6 +38,9 @@ export interface Tile {
   position: number;
   labelCs: string;
   emoji: string;
+  visualType: TileVisualType;
+  imageLocalUri?: string;
+  imageRemotePath?: string;
   category: Category;
   speechMode: SpeechMode;
   audioClipId?: string;
@@ -50,6 +55,9 @@ export interface ArchivedTile {
   originalPosition: number;
   labelCs: string;
   emoji: string;
+  visualType: TileVisualType;
+  imageLocalUri?: string;
+  imageRemotePath?: string;
   category: Category;
   speechMode: SpeechMode;
   audioClip?: {
@@ -103,6 +111,9 @@ export interface SentenceToken {
   tileId: string;
   label: string;
   emoji: string;
+  visualType: TileVisualType;
+  imageLocalUri?: string;
+  imageRemotePath?: string;
 }
 
 export interface SyncEvent {

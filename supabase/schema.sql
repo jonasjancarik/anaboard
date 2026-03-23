@@ -39,6 +39,8 @@ create table if not exists tiles (
   position int not null,
   label_cs text not null,
   emoji text not null,
+  visual_type text not null default 'emoji',
+  image_remote_path text,
   category text not null,
   speech_mode text not null,
   audio_clip_id text,
@@ -46,6 +48,12 @@ create table if not exists tiles (
   revision int not null default 1,
   created_at timestamptz not null default now()
 );
+
+alter table tiles
+add column if not exists visual_type text not null default 'emoji';
+
+alter table tiles
+add column if not exists image_remote_path text;
 
 create table if not exists audio_clips (
   id text primary key,

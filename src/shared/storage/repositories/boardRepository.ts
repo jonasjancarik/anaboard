@@ -3,7 +3,15 @@ import {
   DEFAULT_PROFILE_ID,
   DEFAULT_TILES,
 } from '../../constants/defaults';
-import type { AudioClip, Board, BoardSnapshot, Category, SpeechMode, Tile } from '../../types/domain';
+import type {
+  AudioClip,
+  Board,
+  BoardSnapshot,
+  Category,
+  SpeechMode,
+  Tile,
+  TileVisualType,
+} from '../../types/domain';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/time';
 import { getDatabase } from '../db';
@@ -27,6 +35,9 @@ type TileRow = {
   position: number;
   label_cs: string;
   emoji: string;
+  visual_type: TileVisualType;
+  image_local_uri?: string | null;
+  image_remote_path?: string | null;
   category: Category;
   speech_mode: SpeechMode;
   audio_clip_id?: string | null;
@@ -63,6 +74,9 @@ const mapTileRow = (row: TileRow): Tile => ({
   position: row.position,
   labelCs: row.label_cs,
   emoji: row.emoji,
+  visualType: row.visual_type,
+  imageLocalUri: row.image_local_uri ?? undefined,
+  imageRemotePath: row.image_remote_path ?? undefined,
   category: row.category,
   speechMode: row.speech_mode,
   audioClipId: row.audio_clip_id ?? undefined,
@@ -104,15 +118,19 @@ const insertDefaultBoard = async (): Promise<void> => {
     await db.runAsync(
       `
         INSERT INTO tiles (
-          id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
+          id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+          category, speech_mode, audio_clip_id, updated_at, revision, dirty
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `,
       tile.id,
       tile.boardId,
       tile.position,
       tile.labelCs,
       tile.emoji,
+      tile.visualType,
+      tile.imageLocalUri ?? null,
+      tile.imageRemotePath ?? null,
       tile.category,
       tile.speechMode,
       tile.audioClipId ?? null,
@@ -126,6 +144,8 @@ const insertDefaultBoard = async (): Promise<void> => {
       position: tile.position,
       label_cs: tile.labelCs,
       emoji: tile.emoji,
+      visual_type: tile.visualType,
+      image_remote_path: tile.imageRemotePath ?? null,
       category: tile.category,
       speech_mode: tile.speechMode,
       audio_clip_id: null,
@@ -164,7 +184,20 @@ const syncDefaultBoardTiles = async (): Promise<void> => {
 
   const existingTiles = await db.getAllAsync<TileRow>(
     `
-      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      SELECT
+        id,
+        board_id,
+        position,
+        label_cs,
+        emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
+        category,
+        speech_mode,
+        audio_clip_id,
+        updated_at,
+        revision
       FROM tiles
       WHERE board_id = ?
       ORDER BY position ASC
@@ -191,15 +224,19 @@ const syncDefaultBoardTiles = async (): Promise<void> => {
       await db.runAsync(
         `
           INSERT INTO tiles (
-            id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
+            id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+            category, speech_mode, audio_clip_id, updated_at, revision, dirty
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
         `,
         tile.id,
         DEFAULT_BOARD_ID,
         position,
         tile.labelCs,
         tile.emoji,
+        tile.visualType,
+        tile.imageLocalUri ?? null,
+        tile.imageRemotePath ?? null,
         tile.category,
         tile.speechMode,
         timestamp
@@ -223,6 +260,8 @@ const syncDefaultBoardTiles = async (): Promise<void> => {
       position,
       label_cs: tile.labelCs,
       emoji: tile.emoji,
+      visual_type: tile.visualType,
+      image_remote_path: tile.imageRemotePath ?? null,
       category: tile.category,
       speech_mode: tile.speechMode,
       audio_clip_id: null,
@@ -268,7 +307,20 @@ export const getActiveBoardSnapshot = async (): Promise<BoardSnapshot | null> =>
 
   const tileRows = await db.getAllAsync<TileRow>(
     `
-      SELECT id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision
+      SELECT
+        id,
+        board_id,
+        position,
+        label_cs,
+        emoji,
+        visual_type,
+        image_local_uri,
+        image_remote_path,
+        category,
+        speech_mode,
+        audio_clip_id,
+        updated_at,
+        revision
       FROM tiles
       WHERE board_id = ?
       ORDER BY position ASC
@@ -327,14 +379,18 @@ export const resetActiveBoardToDefaults = async (): Promise<void> => {
       await db.runAsync(
         `
           INSERT INTO tiles (
-            id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
+            id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+            category, speech_mode, audio_clip_id, updated_at, revision, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
         `,
         tile.id,
         snapshot.board.id,
         tile.position,
         tile.labelCs,
         tile.emoji,
+        tile.visualType,
+        tile.imageLocalUri ?? null,
+        tile.imageRemotePath ?? null,
         tile.category,
         tile.speechMode,
         timestamp
@@ -367,6 +423,8 @@ export const resetActiveBoardToDefaults = async (): Promise<void> => {
       position: tile.position,
       label_cs: tile.labelCs,
       emoji: tile.emoji,
+      visual_type: tile.visualType,
+      image_remote_path: tile.imageRemotePath ?? null,
       category: tile.category,
       speech_mode: tile.speechMode,
       audio_clip_id: null,
@@ -417,14 +475,18 @@ export const duplicateActiveBoard = async (): Promise<void> => {
       await db.runAsync(
         `
           INSERT INTO tiles (
-            id, board_id, position, label_cs, emoji, category, speech_mode, audio_clip_id, updated_at, revision, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
+            id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+            category, speech_mode, audio_clip_id, updated_at, revision, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, 1)
         `,
         newTileId,
         newBoardId,
         tile.position,
         tile.labelCs,
         tile.emoji,
+        tile.visualType,
+        tile.imageLocalUri ?? null,
+        tile.imageRemotePath ?? null,
         tile.category,
         tile.speechMode,
         timestamp
@@ -438,6 +500,8 @@ export const duplicateActiveBoard = async (): Promise<void> => {
           position: tile.position,
           label_cs: tile.labelCs,
           emoji: tile.emoji,
+          visual_type: tile.visualType,
+          image_remote_path: tile.imageRemotePath ?? null,
           category: tile.category,
           speech_mode: tile.speechMode,
           audio_clip_id: null,

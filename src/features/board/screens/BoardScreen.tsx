@@ -26,6 +26,7 @@ import {
   styles,
 } from './BoardScreen.styles';
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
+import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
 import type { SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
@@ -159,6 +160,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const effectivePageHeight = boardViewportHeight > 0 ? boardViewportHeight : pageGridHeight;
   const horizontalGridOffset = Math.max(LAYOUT_PADDING, (pageWidth - pageGridWidth) / 2);
   const verticalGridOffset = Math.max(0, (effectivePageHeight - pageGridHeight) / 2);
+  const tileVisualSize = showLabels
+    ? Math.max(42, Math.min(tileSize - 26, 60))
+    : Math.max(48, Math.min(tileSize - 18, 70));
+  const tokenVisualSize = showLabels ? 24 : 26;
 
   useEffect(() => {
     reorderTileIdsRef.current = reorderTileIds;
@@ -429,6 +434,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         tileId,
         label: tile.labelCs,
         emoji: tile.emoji,
+        visualType: tile.visualType,
+        imageLocalUri: tile.imageLocalUri,
+        imageRemotePath: tile.imageRemotePath,
       },
     ]);
   };
@@ -866,7 +874,14 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                     pressed && styles.tokenPressed,
                   ]}
                 >
-                  <Text style={styles.tokenEmoji}>{token.emoji}</Text>
+                  <TileVisual
+                    emoji={token.emoji}
+                    visualType={token.visualType}
+                    imageLocalUri={token.imageLocalUri}
+                    imageRemotePath={token.imageRemotePath}
+                    size={tokenVisualSize}
+                    cornerRadius={10}
+                  />
                   {showLabels ? <Text style={styles.tokenText}>{token.label}</Text> : null}
                 </Pressable>
               ))
@@ -1037,7 +1052,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                                 ]}
                               />
                             ) : null}
-                            <Text style={styles.tileEmoji}>{tile.emoji}</Text>
+                            <TileVisual
+                              emoji={tile.emoji}
+                              visualType={tile.visualType}
+                              imageLocalUri={tile.imageLocalUri}
+                              imageRemotePath={tile.imageRemotePath}
+                              size={tileVisualSize}
+                            />
                             {showLabels ? (
                               <Text
                                 style={[styles.tileLabel, getTileLabelStyle(tile.labelCs)]}
@@ -1079,7 +1100,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                 settings?.highContrast ?? false ? styles.dragOverlayTileHighContrast : null,
               ]}
             >
-              <Text style={styles.tileEmoji}>{draggedTile.emoji}</Text>
+              <TileVisual
+                emoji={draggedTile.emoji}
+                visualType={draggedTile.visualType}
+                imageLocalUri={draggedTile.imageLocalUri}
+                imageRemotePath={draggedTile.imageRemotePath}
+                size={tileVisualSize}
+              />
               {showLabels ? (
                 <Text
                   style={[styles.tileLabel, getTileLabelStyle(draggedTile.labelCs)]}
