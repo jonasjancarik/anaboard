@@ -21,16 +21,18 @@ export const SettingToggleRow = ({
         <Text style={styles.title}>{title}</Text>
         {detail ? <Text style={styles.detail}>{detail}</Text> : null}
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{
-          false: APP_THEME.borderStrong,
-          true: APP_THEME.success,
-        }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor={APP_THEME.borderStrong}
-      />
+      <View style={styles.switchWrap}>
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{
+            false: APP_THEME.borderStrong,
+            true: APP_THEME.success,
+          }}
+          thumbColor="#FFFFFF"
+          ios_backgroundColor={APP_THEME.borderStrong}
+        />
+      </View>
     </View>
   );
 };
@@ -47,6 +49,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
     paddingRight: 6,
+  },
+  switchWrap: {
+    minWidth: 52,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   title: {
     color: APP_THEME.text,
