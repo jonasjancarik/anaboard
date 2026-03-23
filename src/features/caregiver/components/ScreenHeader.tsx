@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
 
@@ -13,21 +13,25 @@ export const ScreenHeader = ({
   onBack,
   backLabel = 'Zpět',
 }: ScreenHeaderProps) => {
+  const showBackButton = Platform.OS === 'ios';
+
   return (
     <View style={styles.container}>
       <View style={styles.side}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={backLabel}
-          hitSlop={8}
-          onPress={onBack}
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-        >
-          <Text style={styles.chevron} allowFontScaling={false}>
-            ‹
-          </Text>
-          <Text style={styles.backLabel}>{backLabel}</Text>
-        </Pressable>
+        {showBackButton ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={backLabel}
+            hitSlop={8}
+            onPress={onBack}
+            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          >
+            <Text style={styles.chevron} allowFontScaling={false}>
+              ‹
+            </Text>
+            <Text style={styles.backLabel}>{backLabel}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <Text style={styles.title} numberOfLines={1}>
