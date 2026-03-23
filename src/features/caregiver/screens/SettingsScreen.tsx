@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
@@ -9,6 +9,11 @@ import { SettingRowButton } from '../components/SettingRowButton';
 import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
 import { SettingToggleRow } from '../components/SettingToggleRow';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { isWebPlatform } from '../../../shared/platform/runtime';
+import {
+  getWebPersistenceSmokeSummary,
+  type WebPersistenceSmokeSummary,
+} from '../../../shared/storage/webPersistenceSmoke';
 import { useAppStore } from '../../../store/useAppStore';
 
 type SettingsScreenProps = {
@@ -33,11 +38,11 @@ const PITCH_OPTIONS: SettingStepperOption[] = [
   { value: 1.3, label: 'Vyšší' },
 ];
 
+const VOICE_PREVIEW_TEXT = 'Tohle je ukázka hlasu.';
+
 const getErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error ? error.message : fallback;
 };
-
-const VOICE_PREVIEW_TEXT = 'Tohle je ukázka hlasu.';
 
 export const SettingsScreen = ({
   onBack,
@@ -57,6 +62,8 @@ export const SettingsScreen = ({
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [isResettingBoard, setIsResettingBoard] = useState(false);
+  const [webPersistenceSummary, setWebPersistenceSummary] =
+    useState<WebPersistenceSmokeSummary | null>(null);
 
   useEffect(() => {
     if (!settings) {
@@ -70,6 +77,36 @@ export const SettingsScreen = ({
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
   }, [settings]);
+
+  useEffect(() => {
+    if (!isWebPlatform) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadWebPersistenceSummary = async () => {
+      try {
+        const summary = await getWebPersistenceSmokeSummary();
+        if (!isCancelled) {
+          setWebPersistenceSummary(summary);
+        }
+      } catch {
+        if (!isCancelled) {
+          setWebPersistenceSummary({
+            status: 'pending_reload',
+            bootCount: 0,
+          });
+        }
+      }
+    };
+
+    void loadWebPersistenceSummary();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const updateSetting = async <T,>(
     previousValue: T,
@@ -99,7 +136,7 @@ export const SettingsScreen = ({
         preferredVoice: settings?.preferredVoice,
       });
     } catch {
-      // Preview should stay best-effort and never block settings changes.
+      // Preview stays best effort.
     }
   };
 
@@ -150,9 +187,18 @@ export const SettingsScreen = ({
 
   const pinDetail = !lockEnabled
     ? 'Použije se, až znovu zapneš ochranu nastavení.'
-    : backupPinEnabled
-      ? '4 číslice pro vstup do nastavení.'
-      : 'Po uložení se tato volba automaticky zapne.';
+    : isWebPlatform
+      ? 'V prohlížeči se používá vždy pro odemknutí úprav.'
+      : backupPinEnabled
+        ? '4 číslice pro vstup do nastavení.'
+        : 'Po uložení se tato volba automaticky zapne.';
+
+  const webStorageDetail =
+    webPersistenceSummary === null
+      ? 'Kontroluji, jestli data přežijí obnovení stránky.'
+      : webPersistenceSummary.status === 'passed'
+        ? 'Ověřeno po obnovení stránky. Data zůstávají v tomto prohlížeči.'
+        : 'První kontrola hotová. Obnov stránku ještě jednou a AnaBoard potvrdí trvalé uložení.';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -235,7 +281,11 @@ export const SettingsScreen = ({
 
             <SettingToggleRow
               title="Chránit nastavení"
-              detail="Před úpravami se ověří pečovatel."
+              detail={
+                isWebPlatform
+                  ? 'Před úpravami se zadá PIN v aplikaci.'
+                  : 'Před úpravami se ověří pečovatel.'
+              }
               value={lockEnabled}
               onValueChange={(nextValue) => {
                 void updateSetting(
@@ -250,26 +300,47 @@ export const SettingsScreen = ({
 
             <View style={styles.divider} />
 
-            <SettingToggleRow
-              title="PIN přímo v aplikaci"
-              detail="Použij, když nechceš spoléhat jen na zámek telefonu."
-              value={backupPinEnabled}
-              onValueChange={(nextValue) => {
-                void updateSetting(
-                  backupPinEnabled,
-                  nextValue,
-                  setBackupPinEnabled,
-                  { backupPinEnabled: nextValue },
-                  'Volba PINu nešla uložit'
-                );
-              }}
-            />
-
             <SettingRowButton
-              title={backupPinEnabled ? 'Změnit PIN v aplikaci' : 'Nastavit PIN v aplikaci'}
+              title={
+                isWebPlatform
+                  ? 'PIN v aplikaci'
+                  : backupPinEnabled
+                    ? 'Změnit PIN v aplikaci'
+                    : 'Nastavit PIN v aplikaci'
+              }
               detail={pinDetail}
               onPress={onOpenPinSettings}
             />
+
+            {!isWebPlatform ? (
+              <>
+                <View style={styles.divider} />
+
+                <SettingToggleRow
+                  title="PIN přímo v aplikaci"
+                  detail="Použij, když nechceš spoléhat jen na zámek telefonu."
+                  value={backupPinEnabled}
+                  onValueChange={(nextValue) => {
+                    void updateSetting(
+                      backupPinEnabled,
+                      nextValue,
+                      setBackupPinEnabled,
+                      { backupPinEnabled: nextValue },
+                      'Volba PINu nešla uložit'
+                    );
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <View style={styles.divider} />
+
+                <View style={styles.statusBlock}>
+                  <Text style={styles.statusTitle}>Úložiště prohlížeče</Text>
+                  <Text style={styles.statusDetail}>{webStorageDetail}</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -352,5 +423,24 @@ const styles = StyleSheet.create({
     color: APP_THEME.message,
     fontWeight: '700',
     paddingVertical: 2,
+  },
+  statusBlock: {
+    gap: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surfaceTint,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  statusTitle: {
+    color: APP_THEME.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  statusDetail: {
+    color: APP_THEME.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

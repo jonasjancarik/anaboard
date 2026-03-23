@@ -7,6 +7,7 @@ import {
   canUseNativeCaregiverAuth,
 } from '../../../shared/utils/deviceAuth';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hashPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
 
@@ -52,6 +53,11 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
     let isCancelled = false;
 
     const checkRecoveryPath = async () => {
+      if (isWebPlatform) {
+        setCanRecoverWithDeviceAuth(false);
+        return;
+      }
+
       const nativeAvailable = await canUseNativeCaregiverAuth();
       if (!isCancelled) {
         setCanRecoverWithDeviceAuth(nativeAvailable);
@@ -102,7 +108,11 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.card}>
         <Text style={styles.title}>Režim pečovatele</Text>
-        <Text style={styles.subtitle}>Zadej vlastní PIN pro úpravy tabule</Text>
+        <Text style={styles.subtitle}>
+          {isWebPlatform
+            ? 'V prohlížeči se pro úpravy vždy používá PIN.'
+            : 'Zadej vlastní PIN pro úpravy tabule'}
+        </Text>
 
         <Text style={styles.pinTitle}>Vlastní PIN v aplikaci</Text>
 

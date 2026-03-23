@@ -9,6 +9,7 @@ import { EditorScreen } from '../features/caregiver/screens/EditorScreen';
 import { PinSettingsScreen } from '../features/caregiver/screens/PinSettingsScreen';
 import { SettingsScreen } from '../features/caregiver/screens/SettingsScreen';
 import { TileArchiveScreen } from '../features/caregiver/screens/TileArchiveScreen';
+import { isWebPlatform } from '../shared/platform/runtime';
 import { authenticateWithDeviceForCaregiver, canUseNativeCaregiverAuth } from '../shared/utils/deviceAuth';
 import { useAppStore } from '../store/useAppStore';
 
@@ -22,6 +23,7 @@ export const AppNavigator = () => {
   const navigate = useAppStore((state) => state.navigate);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const usesAppPin = isWebPlatform || Boolean(settings?.backupPinEnabled);
 
   const goBack = useCallback((): boolean => {
     if (currentScreen === 'pinSettings' || currentScreen === 'tileArchive') {
@@ -51,9 +53,9 @@ export const AppNavigator = () => {
         currentScreen === 'pinSettings' ||
         currentScreen === 'tileArchive')
     ) {
-      navigate(settings?.backupPinEnabled ? 'caregiverGate' : 'board');
+      navigate(usesAppPin ? 'caregiverGate' : 'board');
     }
-  }, [caregiverUnlocked, currentScreen, navigate, settings?.backupPinEnabled]);
+  }, [caregiverUnlocked, currentScreen, navigate, usesAppPin]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -76,7 +78,7 @@ export const AppNavigator = () => {
       return;
     }
 
-    if (settings.backupPinEnabled) {
+    if (usesAppPin) {
       navigate('caregiverGate');
       return;
     }

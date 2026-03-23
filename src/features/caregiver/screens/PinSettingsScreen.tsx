@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../components/ScreenHeader';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hashPin, isValidPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
 
@@ -25,7 +26,9 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
   const [isSaving, setIsSaving] = useState(false);
 
   const title = useMemo(() => {
-    return settings?.backupPinEnabled ? 'Změnit PIN v aplikaci' : 'Nastavit PIN v aplikaci';
+    return isWebPlatform || settings?.backupPinEnabled
+      ? 'Změnit PIN v aplikaci'
+      : 'Nastavit PIN v aplikaci';
   }, [settings?.backupPinEnabled]);
 
   const savePin = async () => {
@@ -67,7 +70,9 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>{title}</Text>
         <Text style={styles.helperText}>
-          Aktuální PIN tady nepotřebuješ. Tento screen je už chráněný.
+          {isWebPlatform
+            ? 'V prohlížeči se tento PIN používá vždy pro odemknutí úprav.'
+            : 'Aktuální PIN tady nepotřebuješ. Tento screen je už chráněný.'}
         </Text>
 
         <Text style={styles.label}>Nový PIN</Text>

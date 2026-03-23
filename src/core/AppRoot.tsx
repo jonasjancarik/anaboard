@@ -1,17 +1,36 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppNavigator } from './AppNavigator';
+import { UnsupportedBrowserScreen } from './UnsupportedBrowserScreen';
 import { authService } from '../features/auth/authService';
 import { speechEngine } from '../features/speech/speechEngine';
 import { syncService } from '../features/sync/syncService';
 import type { AuthStatus } from '../features/auth/types';
-import { initTelemetry } from '../shared/telemetry/logger';
 import { APP_THEME } from '../shared/constants/theme';
+import { isWebPlatform } from '../shared/platform/runtime';
+import { getWebStorageSupport } from '../shared/platform/webStorageSupport';
+import { runWebPersistenceSmokeTest } from '../shared/storage/webPersistenceSmoke';
+import { initTelemetry, logEvent } from '../shared/telemetry/logger';
 import { useAppStore } from '../store/useAppStore';
 
 export const AppRoot = () => {
+  const [webSupportState, setWebSupportState] = useState<{
+    status: 'checking' | 'supported' | 'unsupported';
+    message: string;
+  }>(() =>
+    isWebPlatform
+      ? {
+          status: 'checking',
+          message: '',
+        }
+      : {
+          status: 'supported',
+          message: '',
+        }
+  );
+
   const initializeApp = useAppStore((state) => state.initializeApp);
   const setAuthState = useAppStore((state) => state.setAuthState);
   const setAuthLoading = useAppStore((state) => state.setAuthLoading);
@@ -27,12 +46,59 @@ export const AppRoot = () => {
   const setSyncStatus = useAppStore((state) => state.setSyncStatus);
   const settings = useAppStore((state) => state.settings);
 
+  const canBootApp = webSupportState.status === 'supported';
+
   useEffect(() => {
-    initTelemetry();
-    void initializeApp();
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      initTelemetry();
+
+      if (isWebPlatform) {
+        const support = await getWebStorageSupport();
+        if (!isMounted) {
+          return;
+        }
+
+        if (!support.supported) {
+          setWebSupportState({
+            status: 'unsupported',
+            message: support.message,
+          });
+          return;
+        }
+
+        setWebSupportState({
+          status: 'supported',
+          message: '',
+        });
+      }
+
+      await initializeApp();
+
+      if (!isMounted || !isWebPlatform) {
+        return;
+      }
+
+      const summary = await runWebPersistenceSmokeTest();
+      logEvent('web_storage_smoke', {
+        status: summary.status,
+        boot_count: summary.bootCount,
+      });
+    };
+
+    void bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
   }, [initializeApp]);
 
   useEffect(() => {
+    if (!canBootApp) {
+      return;
+    }
+
     let isMounted = true;
 
     const applyAuthState = async (
@@ -169,16 +235,24 @@ export const AppRoot = () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [setAuthLoading, setAuthState, setRemoteContext, setRequiresBootstrap]);
+  }, [canBootApp, setAuthLoading, setAuthState, setRemoteContext, setRequiresBootstrap]);
 
   useEffect(() => {
+    if (!canBootApp) {
+      return;
+    }
+
     syncService.setRuntime({
       isAuthenticated: authStatus === 'signed_in' && !requiresBootstrap,
       remoteContext,
     });
-  }, [authStatus, remoteContext, requiresBootstrap]);
+  }, [authStatus, canBootApp, remoteContext, requiresBootstrap]);
 
   useEffect(() => {
+    if (!canBootApp) {
+      return;
+    }
+
     syncService.start({
       onStatusChange: (status) => setSyncStatus(status),
       onPendingCountChange: () => {
@@ -189,10 +263,10 @@ export const AppRoot = () => {
     return () => {
       syncService.stop();
     };
-  }, [refreshPendingSyncEvents, setSyncStatus]);
+  }, [canBootApp, refreshPendingSyncEvents, setSyncStatus]);
 
   useEffect(() => {
-    if (!settings) {
+    if (!canBootApp || !settings) {
       return;
     }
 
@@ -201,14 +275,27 @@ export const AppRoot = () => {
       ttsPitch: settings.ttsPitch,
       preferredVoice: settings.preferredVoice,
     });
-  }, [settings]);
+  }, [canBootApp, settings]);
+
+  if (webSupportState.status === 'unsupported') {
+    return (
+      <SafeAreaProvider>
+        <UnsupportedBrowserScreen message={webSupportState.message} />
+      </SafeAreaProvider>
+    );
+  }
+
+  const isLoading =
+    webSupportState.status === 'checking' || isAuthLoading || isBoardLoading || isSettingsLoading;
+  const loaderText =
+    webSupportState.status === 'checking' ? 'Ověřuji prohlížeč...' : 'Načítám AnaBoard...';
 
   return (
     <SafeAreaProvider>
-      {isAuthLoading || isBoardLoading || isSettingsLoading ? (
+      {isLoading ? (
         <View style={styles.loaderWrap}>
           <ActivityIndicator size="large" color={APP_THEME.primary} />
-          <Text style={styles.loaderText}>Načítám AnaBoard...</Text>
+          <Text style={styles.loaderText}>{loaderText}</Text>
         </View>
       ) : (
         <AppNavigator />
