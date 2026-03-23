@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ScreenHeader } from '../components/ScreenHeader';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { hashPin, isValidPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
@@ -61,13 +62,7 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.headerRow}>
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>Zpět</Text>
-        </Pressable>
-        <Text style={styles.title}>PIN</Text>
-        <View style={styles.backButtonPlaceholder} />
-      </View>
+      <ScreenHeader title="PIN" onBack={onBack} />
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>{title}</Text>
@@ -121,31 +116,6 @@ const styles = StyleSheet.create({
     backgroundColor: APP_THEME.background,
     padding: 12,
     gap: 10,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: APP_THEME.text,
-  },
-  backButton: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  backButtonText: {
-    color: APP_THEME.text,
-    fontWeight: '800',
-  },
-  backButtonPlaceholder: {
-    width: 58,
   },
   card: {
     backgroundColor: APP_THEME.surface,

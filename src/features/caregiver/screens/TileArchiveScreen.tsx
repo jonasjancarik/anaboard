@@ -7,6 +7,7 @@ import { APP_THEME } from '../../../shared/constants/theme';
 import { getArchivedTilesForBoard, restoreArchivedTileToBoard } from '../../../shared/storage/repositories/tileArchiveRepository';
 import type { ArchivedTile } from '../../../shared/types/domain';
 import { useAppStore } from '../../../store/useAppStore';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type TileArchiveScreenProps = {
   onBack: () => void;
@@ -93,13 +94,7 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.headerRow}>
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>Zpět</Text>
-        </Pressable>
-        <Text style={styles.title}>Archiv dlaždic</Text>
-        <View style={styles.backButtonPlaceholder} />
-      </View>
+      <ScreenHeader title="Archiv dlaždic" onBack={onBack} />
 
       <Text style={styles.helperText}>
         Smazané dlaždice vrátíš jedním klepnutím. Obnovená dlaždice se přidá na konec tabule, pak ji přesuň přes režim PŘESUN.
@@ -164,39 +159,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: APP_THEME.background,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
-    gap: 10,
-  },
-  backButton: {
-    minWidth: 86,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surface,
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  backButtonText: {
-    color: APP_THEME.text,
-    fontWeight: '800',
-  },
-  backButtonPlaceholder: {
-    minWidth: 86,
-  },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '800',
-    color: APP_THEME.text,
   },
   helperText: {
     paddingHorizontal: 16,

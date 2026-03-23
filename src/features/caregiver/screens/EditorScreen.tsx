@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenHeader } from "../components/ScreenHeader";
 import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
@@ -249,18 +250,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <View style={styles.topBar}>
-        <Pressable
-          style={[styles.topButton, styles.neutralButton]}
-          onPress={onBack}
-        >
-          <Text style={[styles.topButtonText, styles.neutralButtonText]}>
-            Zpět
-          </Text>
-        </Pressable>
-        <Text style={styles.title}>Upravit dlaždici</Text>
-        <View style={styles.topButtonPlaceholder} />
-      </View>
+      <ScreenHeader title="Upravit dlaždici" onBack={onBack} />
 
       <View style={styles.content}>
         <ScrollView
@@ -476,45 +466,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: APP_THEME.background,
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    gap: 8,
-  },
-  title: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: "800",
-    color: APP_THEME.text,
-  },
-  topButton: {
-    borderRadius: 14,
-    borderWidth: 1,
-    minWidth: 60,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    alignItems: "center",
-  },
-  topButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  topButtonPlaceholder: {
-    width: 60,
-  },
-  neutralButton: {
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surface,
-  },
-  neutralButtonText: {
-    color: APP_THEME.text,
   },
   content: {
     flex: 1,

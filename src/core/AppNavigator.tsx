@@ -1,5 +1,5 @@
-import { Alert } from 'react-native';
-import { useEffect } from 'react';
+import { Alert, BackHandler } from 'react-native';
+import { useCallback, useEffect } from 'react';
 
 import { BoardScreen } from '../features/board/screens/BoardScreen';
 import { AuthScreen } from '../features/auth/screens/AuthScreen';
@@ -14,14 +14,34 @@ import { useAppStore } from '../store/useAppStore';
 
 export const AppNavigator = () => {
   const currentScreen = useAppStore((state) => state.currentScreen);
-  const authStatus = useAppStore((state) => state.authStatus);
   const requiresBootstrap = useAppStore((state) => state.requiresBootstrap);
+  const authStatus = useAppStore((state) => state.authStatus);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const settings = useAppStore((state) => state.settings);
 
   const navigate = useAppStore((state) => state.navigate);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+
+  const goBack = useCallback((): boolean => {
+    if (currentScreen === 'pinSettings' || currentScreen === 'tileArchive') {
+      navigate('settings');
+      return true;
+    }
+
+    if (currentScreen === 'editor' || currentScreen === 'settings') {
+      navigate('board');
+      return true;
+    }
+
+    if (currentScreen === 'caregiverGate') {
+      setEditorTargetTileId(null);
+      navigate('board');
+      return true;
+    }
+
+    return false;
+  }, [currentScreen, navigate, setEditorTargetTileId]);
 
   useEffect(() => {
     if (
@@ -34,6 +54,16 @@ export const AppNavigator = () => {
       navigate(settings?.backupPinEnabled ? 'caregiverGate' : 'board');
     }
   }, [caregiverUnlocked, currentScreen, navigate, settings?.backupPinEnabled]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      return goBack();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [goBack]);
 
   const openCaregiver = async () => {
     if (!settings) {
@@ -80,8 +110,7 @@ export const AppNavigator = () => {
       <CaregiverGateScreen
         onPassed={() => navigate('board')}
         onCancel={() => {
-          setEditorTargetTileId(null);
-          navigate('board');
+          goBack();
         }}
       />
     );
