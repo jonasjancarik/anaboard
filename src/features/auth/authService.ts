@@ -1,4 +1,5 @@
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+import { isWebPlatform } from '../../shared/platform/runtime';
 
 import { logError } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
@@ -28,6 +29,30 @@ const getClient = () => {
   }
 
   return supabaseClient;
+};
+
+const parseAuthCallbackParams = (url: string): URLSearchParams => {
+  const parsedUrl = new URL(url);
+  const params = new URLSearchParams(parsedUrl.search);
+  const hashParams = new URLSearchParams(parsedUrl.hash.startsWith('#') ? parsedUrl.hash.slice(1) : parsedUrl.hash);
+
+  hashParams.forEach((value, key) => {
+    if (!params.has(key)) {
+      params.set(key, value);
+    }
+  });
+
+  return params;
+};
+
+const stripAuthCallbackParams = (url: string): string => {
+  const parsedUrl = new URL(url);
+  parsedUrl.hash = '';
+  parsedUrl.searchParams.delete('access_token');
+  parsedUrl.searchParams.delete('refresh_token');
+  parsedUrl.searchParams.delete('token_hash');
+  parsedUrl.searchParams.delete('type');
+  return parsedUrl.toString();
 };
 
 const ensureProfileForFamily = async (
@@ -136,22 +161,62 @@ export const authService = {
     };
   },
 
-  async signIn(email: string, password: string): Promise<void> {
+  async sendMagicLink(email: string, emailRedirectTo: string): Promise<void> {
     const client = getClient();
-    const { error } = await client.auth.signInWithPassword({ email, password });
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo,
+      },
+    });
 
     if (error) {
       throw error;
     }
   },
 
-  async signUp(email: string, password: string): Promise<void> {
+  async consumeMagicLinkUrl(url: string): Promise<boolean> {
     const client = getClient();
-    const { error } = await client.auth.signUp({ email, password });
+    const params = parseAuthCallbackParams(url);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const tokenHash = params.get('token_hash');
 
-    if (error) {
-      throw error;
+    if (accessToken && refreshToken) {
+      const { error } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (isWebPlatform && typeof window !== 'undefined') {
+        window.history.replaceState({}, document.title, stripAuthCallbackParams(window.location.href));
+      }
+
+      return true;
     }
+
+    if (tokenHash) {
+      const { error } = await client.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: 'email',
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (isWebPlatform && typeof window !== 'undefined') {
+        window.history.replaceState({}, document.title, stripAuthCallbackParams(window.location.href));
+      }
+
+      return true;
+    }
+
+    return false;
   },
 
   async signOut(): Promise<void> {

@@ -1,23 +1,23 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-
 import { authService } from '../authService';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { isWebPlatform } from '../../../shared/platform/runtime';
 
-type AuthMode = 'signin' | 'signup';
+type AuthScreenProps = {
+  onBack: () => void;
+};
 
-export const AuthScreen = () => {
-  const [mode, setMode] = useState<AuthMode>('signin');
+export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async () => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || password.length < 6) {
-      setError('Zadej e-mail a heslo (min 6 znaků)');
+    if (!normalizedEmail) {
+      setError('Zadej e-mail');
       return;
     }
 
@@ -26,15 +26,13 @@ export const AuthScreen = () => {
     setMessage(null);
 
     try {
-      if (mode === 'signin') {
-        await authService.signIn(normalizedEmail, password);
-        setMessage('Přihlášení proběhlo');
-      } else {
-        await authService.signUp(normalizedEmail, password);
-        setMessage('Účet vytvořen. Pokud máš potvrzení e-mailu zapnuté, potvrď ho.');
-      }
+      const emailRedirectTo = isWebPlatform
+        ? window.location.origin
+        : 'anaboard://auth';
+      await authService.sendMagicLink(normalizedEmail, emailRedirectTo);
+      setMessage('Odkaz jsme poslali do e-mailu. Otevři ho na tomto zařízení.');
     } catch (submitError) {
-      const nextError = submitError instanceof Error ? submitError.message : 'Přihlášení selhalo';
+      const nextError = submitError instanceof Error ? submitError.message : 'Odeslání odkazu selhalo';
       setError(nextError);
     } finally {
       setIsSubmitting(false);
@@ -43,27 +41,11 @@ export const AuthScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>AnaBoard účet</Text>
-      <Text style={styles.subtitle}>Cloud sync a rodinné profily</Text>
-
-      <View style={styles.modeRow}>
-        <Pressable
-          style={[styles.modeButton, mode === 'signin' && styles.modeButtonActive]}
-          onPress={() => setMode('signin')}
-        >
-          <Text style={[styles.modeButtonText, mode === 'signin' && styles.modeButtonTextActive]}>
-            Přihlásit
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
-          onPress={() => setMode('signup')}
-        >
-          <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>
-            Vytvořit účet
-          </Text>
-        </Pressable>
-      </View>
+      <Pressable style={styles.backButton} onPress={onBack}>
+        <Text style={styles.backText}>Zpět</Text>
+      </Pressable>
+      <Text style={styles.title}>Cloud sync</Text>
+      <Text style={styles.subtitle}>Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.</Text>
 
       <TextInput
         style={styles.input}
@@ -75,20 +57,11 @@ export const AuthScreen = () => {
         placeholderTextColor="#7C8DA7"
       />
 
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Heslo"
-        placeholderTextColor="#7C8DA7"
-      />
-
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {message ? <Text style={styles.message}>{message}</Text> : null}
 
       <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
-        <Text style={styles.submitText}>{isSubmitting ? 'Pracuju...' : 'Pokračovat'}</Text>
+        <Text style={styles.submitText}>{isSubmitting ? 'Posílám...' : 'Poslat odkaz do e-mailu'}</Text>
       </Pressable>
     </View>
   );
@@ -101,6 +74,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     backgroundColor: APP_THEME.background,
   },
+  backButton: {
+    position: 'absolute',
+    top: 64,
+    left: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  backText: {
+    color: APP_THEME.primaryBorder,
+    fontSize: 17,
+    fontWeight: '700',
+  },
   title: {
     fontSize: 30,
     fontWeight: '800',
@@ -111,30 +96,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: APP_THEME.textMuted,
     fontSize: 16,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surface,
-    marginBottom: 12,
-  },
-  modeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  modeButtonActive: {
-    backgroundColor: APP_THEME.primarySoft,
-  },
-  modeButtonText: {
-    color: APP_THEME.textMuted,
-    fontWeight: '700',
-  },
-  modeButtonTextActive: {
-    color: APP_THEME.primaryBorder,
-    fontWeight: '800',
   },
   input: {
     height: 48,

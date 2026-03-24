@@ -28,10 +28,14 @@ create table if not exists boards (
   locale text not null,
   columns_count int not null,
   rows_count int not null,
+  is_active boolean not null default true,
   updated_at timestamptz not null,
   revision int not null default 1,
   created_at timestamptz not null default now()
 );
+
+alter table boards
+add column if not exists is_active boolean not null default true;
 
 create table if not exists tiles (
   id text primary key,
@@ -77,6 +81,7 @@ create table if not exists profile_settings (
   profile_id text primary key,
   pin_hash text not null,
   lock_enabled boolean not null default true,
+  backup_pin_enabled boolean not null default false,
   tts_rate real not null default 0.86,
   tts_pitch real not null default 1,
   preferred_voice text,
@@ -88,6 +93,9 @@ create table if not exists profile_settings (
   revision int not null default 1,
   created_at timestamptz not null default now()
 );
+
+alter table profile_settings
+add column if not exists backup_pin_enabled boolean not null default false;
 
 alter table profile_settings
 add column if not exists show_labels boolean not null default false;
@@ -186,3 +194,97 @@ with check (true);
 insert into storage.buckets (id, name, public)
 values ('audio-clips', 'audio-clips', false)
 on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('tile-images', 'tile-images', false)
+on conflict (id) do nothing;
+
+create policy if not exists audio_clips_storage_select on storage.objects
+for select to authenticated
+using (
+  bucket_id = 'audio-clips'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+);
+
+create policy if not exists audio_clips_storage_insert on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'audio-clips'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+);
+
+create policy if not exists audio_clips_storage_update on storage.objects
+for update to authenticated
+using (
+  bucket_id = 'audio-clips'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+)
+with check (
+  bucket_id = 'audio-clips'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+);
+
+create policy if not exists tile_images_storage_select on storage.objects
+for select to authenticated
+using (
+  bucket_id = 'tile-images'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+);
+
+create policy if not exists tile_images_storage_insert on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'tile-images'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+);
+
+create policy if not exists tile_images_storage_update on storage.objects
+for update to authenticated
+using (
+  bucket_id = 'tile-images'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+)
+with check (
+  bucket_id = 'tile-images'
+  and exists (
+    select 1
+    from caregivers c
+    where c.id = auth.uid()
+      and c.family_id::text = (storage.foldername(name))[1]
+  )
+);

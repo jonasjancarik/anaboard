@@ -42,10 +42,10 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - PIN change
 - Sync service scaffold with pending event queue and optional Supabase push
 - Supabase auth flow:
-  - sign in / sign up screen
+  - optional email magic-link sign in
   - first-run family + child profile bootstrap
   - persisted session via AsyncStorage
-- Telemetry abstraction with optional Sentry init
+- Telemetry abstraction with console logging
 
 ## Run
 
@@ -94,17 +94,22 @@ Notes:
 
 ## Environment
 
-Copy `.env.example` to `.env` and set values when enabling cloud sync / Sentry.
+Copy `.env.example` to `.env.local` and set values when enabling cloud sync.
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 Env vars:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_SENTRY_DSN`
+
+For magic-link auth:
+
+- add `anaboard://**` to Supabase Auth redirect URLs
+- add your web preview URL too if you want magic links on web
+- rebuild native app after changing the Expo `scheme`
 
 ## Supabase schema
 

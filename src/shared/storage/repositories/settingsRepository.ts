@@ -41,10 +41,14 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
 });
 
 export const ensureDefaultSettings = async (): Promise<void> => {
+  return ensureDefaultSettingsForProfile(DEFAULT_PROFILE_ID);
+};
+
+export const ensureDefaultSettingsForProfile = async (profileId: string): Promise<void> => {
   const db = await getDatabase();
   const existing = await db.getFirstAsync<{ count: number }>(
     'SELECT COUNT(*) AS count FROM profile_settings WHERE profile_id = ?',
-    DEFAULT_PROFILE_ID
+    profileId
   );
 
   if ((existing?.count ?? 0) > 0) {
@@ -61,7 +65,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
         high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision, dirty
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
-    defaults.profileId,
+    profileId,
     defaults.pinHash,
     defaults.lockEnabled ? 1 : 0,
     defaults.backupPinEnabled ? 1 : 0,
@@ -76,8 +80,8 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     defaults.revision
   );
 
-  await enqueueSyncEvent('profile_settings', defaults.profileId, 'upsert', {
-    profile_id: defaults.profileId,
+  await enqueueSyncEvent('profile_settings', profileId, 'upsert', {
+    profile_id: profileId,
     pin_hash: defaults.pinHash,
     lock_enabled: defaults.lockEnabled ? 1 : 0,
     backup_pin_enabled: defaults.backupPinEnabled ? 1 : 0,
@@ -93,7 +97,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
   });
 };
 
-export const getProfileSettings = async (): Promise<ProfileSettings> => {
+export const getProfileSettings = async (profileId = DEFAULT_PROFILE_ID): Promise<ProfileSettings> => {
   const db = await getDatabase();
   const row = await db.getFirstAsync<SettingsRow>(
     `
@@ -103,12 +107,12 @@ export const getProfileSettings = async (): Promise<ProfileSettings> => {
       WHERE profile_id = ?
       LIMIT 1
     `,
-    DEFAULT_PROFILE_ID
+    profileId
   );
 
   if (!row) {
-    await ensureDefaultSettings();
-    return getProfileSettings();
+    await ensureDefaultSettingsForProfile(profileId);
+    return getProfileSettings(profileId);
   }
 
   return mapRow(row);
@@ -127,8 +131,11 @@ type SettingsUpdate = {
   pinHash?: string;
 };
 
-export const updateProfileSettings = async (update: SettingsUpdate): Promise<void> => {
-  const current = await getProfileSettings();
+export const updateProfileSettings = async (
+  profileId: string,
+  update: SettingsUpdate
+): Promise<void> => {
+  const current = await getProfileSettings(profileId);
   const db = await getDatabase();
   const updatedAt = nowIso();
   const revision = current.revision + 1;

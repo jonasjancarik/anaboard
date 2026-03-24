@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 
 import { AppNavigator } from './AppNavigator';
 import { UnsupportedBrowserScreen } from './UnsupportedBrowserScreen';
@@ -43,10 +44,14 @@ export const AppRoot = () => {
   const isBoardLoading = useAppStore((state) => state.isBoardLoading);
   const isSettingsLoading = useAppStore((state) => state.isSettingsLoading);
   const refreshPendingSyncEvents = useAppStore((state) => state.refreshPendingSyncEvents);
+  const refreshBoard = useAppStore((state) => state.refreshBoard);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const refreshPhrases = useAppStore((state) => state.refreshPhrases);
   const setSyncStatus = useAppStore((state) => state.setSyncStatus);
   const settings = useAppStore((state) => state.settings);
 
   const canBootApp = webSupportState.status === 'supported';
+  const authCallbackUrl = Linking.useURL();
 
   useEffect(() => {
     let isMounted = true;
@@ -246,7 +251,25 @@ export const AppRoot = () => {
       isAuthenticated: authStatus === 'signed_in' && !requiresBootstrap,
       remoteContext,
     });
+
+    if (authStatus === 'signed_in' && !requiresBootstrap && remoteContext) {
+      void syncService.runOnce();
+    }
   }, [authStatus, canBootApp, remoteContext, requiresBootstrap]);
+
+  useEffect(() => {
+    if (!canBootApp || !authCallbackUrl || !authService.isEnabled()) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        await authService.consumeMagicLinkUrl(authCallbackUrl);
+      } catch {
+        // Auth screen handles the next retry; keep local app usable.
+      }
+    })();
+  }, [authCallbackUrl, canBootApp]);
 
   useEffect(() => {
     if (!canBootApp) {
@@ -258,12 +281,27 @@ export const AppRoot = () => {
       onPendingCountChange: () => {
         void refreshPendingSyncEvents();
       },
+      onDataChanged: () => {
+        void (async () => {
+          await refreshBoard();
+          await refreshSettings();
+          await refreshPhrases();
+          await refreshPendingSyncEvents();
+        })();
+      },
     });
 
     return () => {
       syncService.stop();
     };
-  }, [canBootApp, refreshPendingSyncEvents, setSyncStatus]);
+  }, [
+    canBootApp,
+    refreshBoard,
+    refreshPendingSyncEvents,
+    refreshPhrases,
+    refreshSettings,
+    setSyncStatus,
+  ]);
 
   useEffect(() => {
     if (!canBootApp || !settings) {

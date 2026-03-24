@@ -549,6 +549,18 @@ export const duplicateActiveBoard = async (): Promise<void> => {
     }
   });
 
+  await enqueueSyncEvent('boards', snapshot.board.id, 'upsert', {
+    id: snapshot.board.id,
+    profile_id: snapshot.board.profileId,
+    name: snapshot.board.name,
+    locale: snapshot.board.locale,
+    columns_count: snapshot.board.columns,
+    rows_count: snapshot.board.rows,
+    is_active: false,
+    updated_at: timestamp,
+    revision: snapshot.board.revision + 1,
+  });
+
   await enqueueSyncEvent('boards', newBoardId, 'upsert', {
     id: newBoardId,
     profile_id: snapshot.board.profileId,
@@ -556,6 +568,7 @@ export const duplicateActiveBoard = async (): Promise<void> => {
     locale: snapshot.board.locale,
     columns_count: snapshot.board.columns,
     rows_count: snapshot.board.rows,
+    is_active: true,
     updated_at: timestamp,
     revision: 1,
   });

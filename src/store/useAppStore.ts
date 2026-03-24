@@ -31,7 +31,7 @@ import {
   savePhrase,
   toPhraseTokenSnapshot,
 } from '../shared/storage/repositories/phraseRepository';
-import { countPendingSyncEvents } from '../shared/storage/repositories/syncRepository';
+import { getSyncOverview } from '../features/sync/syncStateRepository';
 import { logError } from '../shared/telemetry/logger';
 import type { AuthStatus, RemoteContext } from '../features/auth/types';
 import type {
@@ -49,7 +49,14 @@ import type {
 import { DEFAULT_PROFILE_ID } from '../shared/constants/defaults';
 import { createId } from '../shared/utils/id';
 
-export type ScreenName = 'board' | 'caregiverGate' | 'editor' | 'settings' | 'pinSettings' | 'tileArchive';
+export type ScreenName =
+  | 'board'
+  | 'caregiverGate'
+  | 'editor'
+  | 'settings'
+  | 'pinSettings'
+  | 'tileArchive'
+  | 'auth';
 export type PendingCaregiverAction = 'savePhrase' | null;
 
 type ClipMap = Record<string, AudioClip>;
@@ -102,6 +109,10 @@ type AppStore = {
   lockoutUntil: number | null;
   syncStatus: SyncStatus;
   pendingSyncEvents: number;
+  syncErrorEvents: number;
+  lastSuccessfulSyncAt: string | null;
+  lastSyncPullAt: string | null;
+  syncBoundProfileId: string | null;
   isSpeaking: boolean;
   editorTargetTileId: string | null;
   boardPageIndex: number;
@@ -195,6 +206,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   lockoutUntil: null,
   syncStatus: 'idle',
   pendingSyncEvents: 0,
+  syncErrorEvents: 0,
+  lastSuccessfulSyncAt: null,
+  lastSyncPullAt: null,
+  syncBoundProfileId: null,
   isSpeaking: false,
   editorTargetTileId: null,
   boardPageIndex: 0,
@@ -231,17 +246,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
       await ensureDefaultSettings();
       await ensureDefaultBoard();
 
-      const [snapshot, settings, pendingSyncEvents] = await Promise.all([
-        getActiveBoardSnapshot(),
-        getProfileSettings(),
-        countPendingSyncEvents(),
-      ]);
+      const snapshot = await getActiveBoardSnapshot();
 
       if (!snapshot) {
         throw new Error('Board snapshot missing');
       }
 
-      const [savedPhrases, recentPhrases, suggestionPhrases] = await Promise.all([
+      const [settings, syncOverview, savedPhrases, recentPhrases, suggestionPhrases] = await Promise.all([
+        getProfileSettings(snapshot.board.profileId),
+        getSyncOverview(),
         getSavedPhrases(snapshot.board.profileId),
         getRecentPhraseEvents(snapshot.board.profileId),
         getSuggestionPhraseEvents(snapshot.board.profileId),
@@ -255,7 +268,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         savedPhrases,
         recentPhrases,
         suggestionPhrases,
-        pendingSyncEvents,
+        pendingSyncEvents: syncOverview.pendingCount,
+        syncErrorEvents: syncOverview.errorCount,
+        lastSuccessfulSyncAt: syncOverview.lastSuccessfulSyncAt,
+        lastSyncPullAt: syncOverview.lastPullAt,
+        syncBoundProfileId: syncOverview.boundProfileId,
       });
     } catch (error) {
       logError('initialize_app_failed', error);
@@ -278,7 +295,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   refreshSettings: async () => {
-    const settings = await getProfileSettings();
+    const settings = await getProfileSettings(getActiveProfileId(get()));
     set({ settings });
   },
 
@@ -443,7 +460,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateSettings: async (update) => {
-    await updateProfileSettings(update);
+    await updateProfileSettings(getActiveProfileId(get()), update);
     await get().refreshSettings();
     await get().refreshPendingSyncEvents();
   },
@@ -499,8 +516,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   refreshPendingSyncEvents: async () => {
-    const pendingSyncEvents = await countPendingSyncEvents();
-    set({ pendingSyncEvents });
+    const overview = await getSyncOverview();
+    set({
+      pendingSyncEvents: overview.pendingCount,
+      syncErrorEvents: overview.errorCount,
+      lastSuccessfulSyncAt: overview.lastSuccessfulSyncAt,
+      lastSyncPullAt: overview.lastPullAt,
+      syncBoundProfileId: overview.boundProfileId,
+    });
   },
 }));
 

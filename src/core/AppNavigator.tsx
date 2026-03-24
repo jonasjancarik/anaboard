@@ -37,6 +37,11 @@ export const AppNavigator = () => {
       return true;
     }
 
+    if (currentScreen === 'auth') {
+      navigate('settings');
+      return true;
+    }
+
     if (currentScreen === 'caregiverGate') {
       clearPendingCaregiverAction();
       setEditorTargetTileId(null);
@@ -58,6 +63,12 @@ export const AppNavigator = () => {
       navigate(usesAppPin ? 'caregiverGate' : 'board');
     }
   }, [caregiverUnlocked, currentScreen, navigate, usesAppPin]);
+
+  useEffect(() => {
+    if (currentScreen === 'auth' && authStatus === 'signed_in' && !requiresBootstrap) {
+      navigate('settings');
+    }
+  }, [authStatus, currentScreen, navigate, requiresBootstrap]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -104,12 +115,12 @@ export const AppNavigator = () => {
     return false;
   };
 
-  if (authStatus === 'signed_out') {
-    return <AuthScreen />;
-  }
-
   if (authStatus === 'signed_in' && requiresBootstrap) {
     return <BootstrapScreen />;
+  }
+
+  if (currentScreen === 'auth') {
+    return <AuthScreen onBack={() => navigate('settings')} />;
   }
 
   if (currentScreen === 'caregiverGate') {
@@ -133,6 +144,7 @@ export const AppNavigator = () => {
         onBack={() => navigate('board')}
         onOpenArchive={() => navigate('tileArchive')}
         onOpenPinSettings={() => navigate('pinSettings')}
+        onOpenAuth={() => navigate('auth')}
       />
     );
   }

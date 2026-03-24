@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
 import { speechEngine } from '../../speech/speechEngine';
+import { syncService } from '../../sync/syncService';
 import { SettingChoiceStepper } from '../components/SettingChoiceStepper';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SettingRowButton } from '../components/SettingRowButton';
@@ -12,6 +13,7 @@ import { SettingToggleRow } from '../components/SettingToggleRow';
 import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
+import { hasSupabaseConfig } from '../../../shared/services/supabaseClient';
 import {
   getWebPersistenceSmokeSummary,
   type WebPersistenceSmokeSummary,
@@ -22,6 +24,7 @@ type SettingsScreenProps = {
   onBack: () => void;
   onOpenArchive: () => void;
   onOpenPinSettings: () => void;
+  onOpenAuth: () => void;
 };
 
 const RATE_OPTIONS: SettingStepperOption[] = [
@@ -54,15 +57,41 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error ? error.message : fallback;
 };
 
+const formatTimestamp = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat('cs-CZ', {
+    day: 'numeric',
+    month: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+};
+
 export const SettingsScreen = ({
   onBack,
   onOpenArchive,
   onOpenPinSettings,
+  onOpenAuth,
 }: SettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
   const authStatus = useAppStore((state) => state.authStatus);
+  const remoteContext = useAppStore((state) => state.remoteContext);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
+  const refreshPendingSyncEvents = useAppStore((state) => state.refreshPendingSyncEvents);
+  const syncStatus = useAppStore((state) => state.syncStatus);
+  const pendingSyncEvents = useAppStore((state) => state.pendingSyncEvents);
+  const syncErrorEvents = useAppStore((state) => state.syncErrorEvents);
+  const lastSuccessfulSyncAt = useAppStore((state) => state.lastSuccessfulSyncAt);
+  const lastSyncPullAt = useAppStore((state) => state.lastSyncPullAt);
   const { voiceOptions, isVoiceOptionsLoading } = useSpeechVoiceOptions();
 
   const [ttsRate, setTtsRate] = useState(0.86);
@@ -76,6 +105,7 @@ export const SettingsScreen = ({
   const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
   const [message, setMessage] = useState<string | null>(null);
   const [isResettingBoard, setIsResettingBoard] = useState(false);
+  const [isSyncActionRunning, setIsSyncActionRunning] = useState(false);
   const [webPersistenceSummary, setWebPersistenceSummary] =
     useState<WebPersistenceSmokeSummary | null>(null);
 
@@ -202,6 +232,21 @@ export const SettingsScreen = ({
     }
   };
 
+  const runSyncAction = async (action: () => Promise<void>, successMessage: string) => {
+    setIsSyncActionRunning(true);
+    setMessage(null);
+
+    try {
+      await action();
+      await refreshPendingSyncEvents();
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(getErrorMessage(error, 'Cloud sync selhal'));
+    } finally {
+      setIsSyncActionRunning(false);
+    }
+  };
+
   const confirmBoardReset = () => {
     Alert.alert(
       'Obnovit výchozí dlaždice?',
@@ -271,10 +316,101 @@ export const SettingsScreen = ({
     );
   };
 
+  const lastSuccessfulSyncLabel = formatTimestamp(lastSuccessfulSyncAt);
+  const lastPullLabel = formatTimestamp(lastSyncPullAt);
+  const syncUnavailable = !hasSupabaseConfig || authStatus === 'disabled';
+  const syncSignedOut = !syncUnavailable && authStatus === 'signed_out';
+  const syncStatusTitle = syncUnavailable
+    ? 'Cloud sync není nastavený'
+    : syncSignedOut
+      ? 'Cloud sync je připravený'
+      : syncStatus === 'offline'
+      ? 'Zařízení je offline'
+      : syncStatus === 'syncing'
+        ? 'Probíhá sync'
+        : syncStatus === 'error'
+          ? 'Sync potřebuje zásah'
+          : pendingSyncEvents > 0
+            ? 'Čekají změny'
+            : 'Cloud sync běží';
+  const syncStatusDetailParts = syncUnavailable
+    ? [
+        'V této verzi aplikace chybí Supabase konfigurace.',
+        pendingSyncEvents > 0
+          ? `Místní změny čekají: ${pendingSyncEvents}`
+          : 'Místní změny čekají: 0',
+        syncErrorEvents > 0 ? `Dřívější chyby syncu: ${syncErrorEvents}` : null,
+        'Přihlášení ani cloud sync tu teď nepoběží.',
+      ]
+    : syncSignedOut
+      ? [
+          'Aplikace běží dál lokálně i bez přihlášení.',
+          pendingSyncEvents > 0
+            ? `Místní změny čekají: ${pendingSyncEvents}`
+            : 'Místní změny čekají: 0',
+          'Přihlas se, až budeš chtít zapnout cloud sync mezi zařízeními.',
+        ]
+    : [
+        remoteContext?.caregiverEmail ? `Účet: ${remoteContext.caregiverEmail}` : null,
+        pendingSyncEvents > 0 ? `Ve frontě: ${pendingSyncEvents}` : 'Ve frontě: 0',
+        syncErrorEvents > 0 ? `Chyby: ${syncErrorEvents}` : 'Chyby: 0',
+        lastSuccessfulSyncLabel ? `Poslední hotovo: ${lastSuccessfulSyncLabel}` : null,
+        lastPullLabel ? `Naposledy staženo: ${lastPullLabel}` : null,
+      ];
+  const syncStatusDetail = syncStatusDetailParts.filter(Boolean).join('\n');
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content}>
         <ScreenHeader title="Nastavení" onBack={onBack} />
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Cloud sync</Text>
+          <View style={styles.cardStack}>
+            <View style={styles.statusBlock}>
+              <Text style={styles.statusTitle}>{syncStatusTitle}</Text>
+              <Text style={styles.statusDetail}>{syncStatusDetail}</Text>
+            </View>
+            {syncSignedOut ? (
+              <>
+                <View style={styles.divider} />
+                <SettingRowButton
+                  title="Přihlásit ke cloud syncu"
+                  detail="Otevře přihlášení a pak propojí tuto tabuli s cloudem."
+                  onPress={onOpenAuth}
+                />
+              </>
+            ) : null}
+            {hasSupabaseConfig && authStatus === 'signed_in' ? (
+              <>
+                <View style={styles.divider} />
+                <SettingRowButton
+                  title={isSyncActionRunning ? 'Synchronizuji…' : 'Synchronizovat teď'}
+                  detail="Odešle čekající změny a stáhne novější data z cloudu."
+                  disabled={isSyncActionRunning}
+                  onPress={() => {
+                    void runSyncAction(() => syncService.runOnce(), 'Sync zkontrolován');
+                  }}
+                />
+                {syncErrorEvents > 0 ? (
+                  <>
+                    <View style={styles.divider} />
+                    <SettingRowButton
+                      title="Zkusit znovu chybné položky"
+                      detail="Vrátí chybné změny do fronty a hned je zkusí znovu."
+                      disabled={isSyncActionRunning}
+                      onPress={() => {
+                        void runSyncAction(
+                          () => syncService.retryFailed(),
+                          'Chybné položky vráceny do syncu'
+                        );
+                      }}
+                    />
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </View>
+        </View>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Hlas</Text>
           <View style={styles.cardStack}>
