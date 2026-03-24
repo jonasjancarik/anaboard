@@ -1,5 +1,5 @@
 import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
-import { generateJsonText } from '../_shared/gemini.ts';
+import { generateJsonText } from '../_shared/openai.ts';
 import { requireUser } from '../_shared/supabase.ts';
 
 type Candidate = {
@@ -16,7 +16,7 @@ type RequestBody = {
   limit?: number;
 };
 
-type GeminiSuggestion = {
+type ProviderSuggestion = {
   tileId?: string;
   confidence?: number;
   reason?: string;
@@ -74,17 +74,39 @@ Deno.serve(async (request: Request) => {
     if (candidates.length === 0) {
       return jsonResponse({
         suggestions: [],
-        provider: 'gemini',
+        provider: 'openai',
       });
     }
 
-    const result = await generateJsonText<{ suggestions?: GeminiSuggestion[] }>(
-      buildPrompt({
+    const result = await generateJsonText<{ suggestions?: ProviderSuggestion[] }>({
+      prompt: buildPrompt({
         locale,
         sentenceLabels,
         candidates,
-      })
-    );
+      }),
+      schemaName: 'autocomplete_rerank',
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          suggestions: {
+            type: 'array',
+            maxItems: limit,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                tileId: { type: 'string' },
+                confidence: { type: 'number' },
+                reason: { type: 'string' },
+              },
+              required: ['tileId', 'confidence'],
+            },
+          },
+        },
+        required: ['suggestions'],
+      },
+    });
 
     return jsonResponse({
       suggestions: (result.suggestions ?? [])
@@ -95,7 +117,7 @@ Deno.serve(async (request: Request) => {
           confidence: clampConfidence(suggestion.confidence),
           reason: suggestion.reason?.trim() || undefined,
         })),
-      provider: 'gemini',
+      provider: 'openai',
     });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Autocomplete rerank failed', 500);

@@ -4,10 +4,12 @@ import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmojiKeyboardModal } from "../components/EmojiKeyboardModal";
+import { GeneratedImageDraftSection } from "../components/GeneratedImageDraftSection";
 import { EmojiSuggestionSection } from "../components/EmojiSuggestionSection";
 import { TileAppearanceSection } from "../components/TileAppearanceSection";
 import { TileVisualOptionsModal } from "../components/TileVisualOptionsModal";
 import { useEmojiSuggestions } from "../hooks/useEmojiSuggestions";
+import { imageDraftService } from "../../ai/imageDraftService";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { useTileImageDraft } from "../hooks/useTileImageDraft";
 import { styles } from "./EditorScreen.styles";
@@ -64,6 +66,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTestingSpeech, setIsTestingSpeech] = useState(false);
+  const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
+  const [isApplyingAiImage, setIsApplyingAiImage] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [tileActionError, setTileActionError] = useState<string | null>(null);
 
@@ -93,7 +97,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setVisualType,
     imageLocalUri,
     imageRemotePath,
+    previewImageLocalUri,
+    previewImageRemotePath,
+    generatedDraft,
     hasPreviewImage,
+    setGeneratedDraftPreview,
+    clearGeneratedDraft,
+    applyGeneratedDraft,
     pickImageFromLibrary,
     takePhoto,
     removeImage,
@@ -118,6 +128,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setIsEmojiPickerOpen(false);
     setIsEmojiKeyboardModalOpen(false);
     setIsVisualMenuOpen(false);
+    setIsGeneratingAiImage(false);
+    setIsApplyingAiImage(false);
     setRecordingError(null);
     setTileActionError(null);
   }, [selectedTileId]);
@@ -139,6 +151,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     AI_FEATURE_FLAGS.emojiSuggestions &&
     authStatus === "signed_in" &&
     Boolean(remoteContext);
+  const aiGeneratedTileImagesEnabled =
+    AI_FEATURE_FLAGS.generatedTileImages &&
+    authStatus === "signed_in" &&
+    Boolean(remoteContext);
   const {
     clearSuggestions: clearEmojiSuggestions,
     error: emojiSuggestionError,
@@ -155,6 +171,11 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const buildTileUpdatePayload = (): TileUpdateInput | null => {
     if (!selectedTile) {
+      return null;
+    }
+
+    if (generatedDraft) {
+      setTileActionError("Nejdřív potvrď AI obrázek tlačítkem Použít.");
       return null;
     }
 
@@ -203,6 +224,75 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const handleEditVisual = () => {
     setIsVisualMenuOpen(true);
+  };
+
+  const handleGenerateAiImage = async () => {
+    if (!selectedTile || !remoteContext) {
+      return;
+    }
+
+    const normalizedLabel = effectiveLabel.trim();
+    if (!normalizedLabel) {
+      setTileActionError("Nejdřív napiš text dlaždice.");
+      return;
+    }
+
+    setIsGeneratingAiImage(true);
+    setTileActionError(null);
+
+    try {
+      const draft = await imageDraftService.generateDraft({
+        profileId: remoteContext.profileId,
+        tileId: selectedTile.id,
+        label: normalizedLabel,
+        locale: board?.locale ?? "cs-CZ",
+        category,
+        stylePreset: "warm-flat-pictogram-v1",
+      });
+
+      setGeneratedDraftPreview({
+        draftId: draft.draftId,
+        storagePath: draft.storagePath,
+        previewUrl: draft.signedUrl,
+      });
+      setVisualType("image");
+    } catch (error) {
+      setTileActionError(
+        error instanceof Error ? error.message : "AI obrázek nešel vytvořit",
+      );
+    } finally {
+      setIsGeneratingAiImage(false);
+    }
+  };
+
+  const handleApplyAiImage = async () => {
+    if (!selectedTile || !remoteContext || !generatedDraft) {
+      return;
+    }
+
+    setIsApplyingAiImage(true);
+    setTileActionError(null);
+
+    try {
+      const promoted = await imageDraftService.promoteDraft({
+        profileId: remoteContext.profileId,
+        tileId: selectedTile.id,
+        draftId: generatedDraft.draftId,
+        draftStoragePath: generatedDraft.storagePath,
+      });
+
+      await applyGeneratedDraft({
+        localUri: promoted.localUri,
+        remotePath: promoted.storagePath,
+      });
+      setVisualType("image");
+    } catch (error) {
+      setTileActionError(
+        error instanceof Error ? error.message : "AI obrázek nešel použít",
+      );
+    } finally {
+      setIsApplyingAiImage(false);
+    }
   };
 
   const handleRecordToggle = async () => {
@@ -270,8 +360,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       labelCs: effectiveLabel,
       emoji: previewEmoji,
       visualType: previewVisualType,
-      imageLocalUri: previewVisualType === "image" ? imageLocalUri ?? undefined : undefined,
-      imageRemotePath: previewVisualType === "image" ? imageRemotePath ?? undefined : undefined,
+      imageLocalUri:
+        previewVisualType === "image" ? previewImageLocalUri ?? undefined : undefined,
+      imageRemotePath:
+        previewVisualType === "image" ? previewImageRemotePath ?? undefined : undefined,
       category,
       speechMode,
     };
@@ -419,12 +511,16 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       <TileVisualOptionsModal
         visible={isVisualMenuOpen}
         hasPreviewImage={hasPreviewImage}
+        showGenerateImageAction={aiGeneratedTileImagesEnabled}
+        canGenerateImage={Boolean(effectiveLabel.trim())}
+        isGeneratingImage={isGeneratingAiImage}
         onClose={() => {
           setIsVisualMenuOpen(false);
         }}
         onSelectEmoji={() => {
           setIsVisualMenuOpen(false);
           setVisualType("emoji");
+          clearGeneratedDraft();
           setIsEmojiKeyboardModalOpen(false);
           setIsEmojiPickerOpen(true);
           setTileActionError(null);
@@ -432,6 +528,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         onSelectEmojiKeyboard={() => {
           setIsVisualMenuOpen(false);
           setVisualType("emoji");
+          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(true);
           setTileActionError(null);
@@ -439,6 +536,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         onSelectPhotoLibrary={() => {
           setIsVisualMenuOpen(false);
           setVisualType("image");
+          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(false);
           void pickImageFromLibrary();
@@ -446,12 +544,20 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         onSelectCamera={() => {
           setIsVisualMenuOpen(false);
           setVisualType("image");
+          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(false);
           void takePhoto();
         }}
+        onGenerateImage={() => {
+          setIsVisualMenuOpen(false);
+          setIsEmojiPickerOpen(false);
+          setIsEmojiKeyboardModalOpen(false);
+          void handleGenerateAiImage();
+        }}
         onRemoveImage={() => {
           setIsVisualMenuOpen(false);
+          clearGeneratedDraft();
           void removeImage();
         }}
       />
@@ -471,11 +577,30 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                   onLabelChange={setLabelCs}
                   previewEmoji={previewEmoji}
                   previewVisualType={previewVisualType}
-                  imageLocalUri={imageLocalUri}
-                  imageRemotePath={imageRemotePath}
+                  imageLocalUri={previewImageLocalUri}
+                  imageRemotePath={previewImageRemotePath}
                   highContrast={highContrast}
                   previewBackgroundColor={previewColors.background}
                   onEditVisual={handleEditVisual}
+                />
+
+                <GeneratedImageDraftSection
+                  visible={
+                    aiGeneratedTileImagesEnabled &&
+                    (isGeneratingAiImage || Boolean(generatedDraft))
+                  }
+                  isGenerating={isGeneratingAiImage}
+                  isApplying={isApplyingAiImage}
+                  onApply={() => {
+                    void handleApplyAiImage();
+                  }}
+                  onRetry={() => {
+                    void handleGenerateAiImage();
+                  }}
+                  onDiscard={() => {
+                    clearGeneratedDraft();
+                    setTileActionError(null);
+                  }}
                 />
 
                 <EmojiSuggestionSection

@@ -167,6 +167,11 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
+  aiImageActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   aiSuggestionWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -182,6 +187,15 @@ export const styles = StyleSheet.create({
   aiSuggestionChipText: {
     fontSize: 24,
     lineHeight: 28,
+  },
+  aiSecondaryButton: {
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
+  },
+  aiSecondaryButtonText: {
+    color: APP_THEME.textMuted,
+    fontSize: 13,
+    fontWeight: "800",
   },
   visualPanel: {
     gap: 10,

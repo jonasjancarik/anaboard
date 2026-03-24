@@ -1,5 +1,5 @@
 import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
-import { generateJsonText } from '../_shared/gemini.ts';
+import { generateJsonText } from '../_shared/openai.ts';
 import { requireUser } from '../_shared/supabase.ts';
 
 type RequestBody = {
@@ -9,7 +9,7 @@ type RequestBody = {
   existingEmoji?: string;
 };
 
-type GeminiSuggestion = {
+type ProviderSuggestion = {
   value?: string;
   confidence?: number;
   reason?: string;
@@ -25,7 +25,7 @@ const clampConfidence = (value: number | undefined): number => {
   return Math.max(0, Math.min(1, value));
 };
 
-const sanitizeSuggestions = (suggestions: GeminiSuggestion[]) => {
+const sanitizeSuggestions = (suggestions: ProviderSuggestion[]) => {
   const seen = new Set<string>();
 
   return suggestions
@@ -83,18 +83,40 @@ Deno.serve(async (request: Request) => {
       return errorResponse('Label is required');
     }
 
-    const result = await generateJsonText<{ suggestions?: GeminiSuggestion[] }>(
-      buildPrompt({
+    const result = await generateJsonText<{ suggestions?: ProviderSuggestion[] }>({
+      prompt: buildPrompt({
         label,
         locale,
         category: body.category,
         existingEmoji: body.existingEmoji,
-      })
-    );
+      }),
+      schemaName: 'emoji_suggestions',
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          suggestions: {
+            type: 'array',
+            maxItems: MAX_SUGGESTIONS,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                value: { type: 'string' },
+                confidence: { type: 'number' },
+                reason: { type: 'string' },
+              },
+              required: ['value', 'confidence'],
+            },
+          },
+        },
+        required: ['suggestions'],
+      },
+    });
 
     return jsonResponse({
       suggestions: sanitizeSuggestions(result.suggestions ?? []),
-      provider: 'gemini',
+      provider: 'openai',
       cached: false,
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import type { Category } from '../types/domain';
 
-export type AiProvider = 'gemini';
+export type AiProvider = 'openai';
 
 export type EmojiSuggestion = {
   value: string;

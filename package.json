@@ -10,7 +10,8 @@
     "android:apk": "bash ./scripts/android-local-build.sh apk",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "migrations:test": "node --experimental-strip-types scripts/test-db-migrations.mjs"
+    "migrations:test": "node --experimental-strip-types scripts/test-db-migrations.mjs",
+    "functions:check": "deno check --config supabase/functions/deno.json supabase/functions/ai-emoji-suggest/index.ts supabase/functions/ai-autocomplete-rerank/index.ts supabase/functions/ai-image-draft-generate/index.ts supabase/functions/ai-image-draft-promote/index.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

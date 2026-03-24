@@ -96,7 +96,7 @@ Revisit monorepo only if one of these becomes true:
 
 ## Why proxy / server functions
 
-Do not call Gemini/OpenAI directly from the app.
+Do not call OpenAI directly from the app.
 
 Reasons:
 
@@ -108,7 +108,7 @@ Official references:
 
 - Expo env safety: <https://docs.expo.dev/eas/environment-variables/manage/>
 - Supabase Edge Functions: <https://supabase.com/docs/guides/functions>
-- Gemini image generation: <https://ai.google.dev/gemini-api/docs/image-generation>
+- OpenAI images: <https://platform.openai.com/docs/guides/images>
 
 ## Backend choice
 
@@ -131,13 +131,13 @@ Do not add a separate Node server in V1 unless one of these happens:
 
 ## Provider choice
 
-Gemini is a reasonable default for V1 image generation.
+OpenAI is the provider for this iteration.
 
 Expected usage:
 
 - emoji suggestion: text response
 - autocomplete rerank: text/JSON response
-- image generation: Gemini returns image bytes inline; the function stores the result in Supabase Storage
+- image generation: OpenAI returns base64 image data; the function stores the result in Supabase Storage
 
 Important:
 
@@ -146,7 +146,7 @@ Important:
 
 Official reference:
 
-- Gemini image generation examples show `inlineData` returned and then written to a file: <https://ai.google.dev/gemini-api/docs/image-generation>
+- OpenAI image generation supports transparent backgrounds and returns image data for app-controlled storage: <https://platform.openai.com/docs/guides/images/image-generation>
 
 ## Supabase limits and cost notes
 
@@ -162,7 +162,7 @@ At the time of writing:
 - Supabase Functions pricing: <https://supabase.com/docs/guides/functions/pricing>
 - Supabase billing/storage overview: <https://supabase.com/docs/guides/platform/billing-on-supabase>
 - Supabase storage bandwidth doc: <https://supabase.com/docs/guides/storage/serving/bandwidth>
-- Gemini billing/spend caps: <https://ai.google.dev/gemini-api/docs/billing/>
+- OpenAI image model docs: <https://platform.openai.com/docs/models/gpt-image-1.5>
 
 Design assumption:
 
@@ -264,7 +264,7 @@ Response:
     { "value": "🍌", "confidence": 0.95, "reason": "direct match" },
     { "value": "🥭", "confidence": 0.23, "reason": "fruit alternative" }
   ],
-  "provider": "gemini",
+  "provider": "openai",
   "cached": false
 }
 ```
@@ -299,7 +299,7 @@ Response:
     { "tileId": "tile-pit", "confidence": 0.82, "reason": "common continuation" },
     { "tileId": "tile-banan", "confidence": 0.44, "reason": "object after desire verb" }
   ],
-  "provider": "gemini"
+  "provider": "openai"
 }
 ```
 
@@ -333,10 +333,10 @@ Response:
   "storagePath": "family-id/profile-id/ai-drafts/draft_123.png",
   "signedUrl": "https://....",
   "mimeType": "image/png",
-  "width": 512,
-  "height": 512,
-  "provider": "gemini",
-  "promptVersion": "tile-image-v1"
+  "width": 1024,
+  "height": 1024,
+  "provider": "openai",
+  "promptVersion": "tile-image-v1-openai"
 }
 ```
 
@@ -395,8 +395,8 @@ Cleanup policy:
 
 1. Caregiver taps `Vygenerovat obrázek`.
 2. App calls `ai-image-draft-generate`.
-3. Function calls Gemini.
-4. Gemini returns image bytes inline.
+3. Function calls OpenAI.
+4. OpenAI returns base64 image data.
 5. Function uploads bytes to `tile-images/{familyId}/{profileId}/ai-drafts/{draftId}.png`.
 6. Function returns:
    - `draftId`
@@ -637,7 +637,7 @@ Avoid sending:
 ## Open questions
 
 1. Signed-in only for all AI, or allow emoji suggestion without account via another backend path?
-2. Gemini only, or provider abstraction from day 1?
+2. OpenAI only, or provider abstraction from day 1?
 3. Do we want one fixed visual preset or 2-3 presets for caregiver choice?
 4. How aggressive should autocomplete reranking be before it feels unstable?
 5. Should accepted generated images immediately replace local draft image, or wait until tile save?
@@ -669,7 +669,7 @@ This keeps V1 cheap, reversible, and aligned with the app's local-first architec
   - <https://supabase.com/docs/guides/platform/billing-on-supabase>
 - Supabase storage bandwidth:
   - <https://supabase.com/docs/guides/storage/serving/bandwidth>
-- Gemini image generation:
-  - <https://ai.google.dev/gemini-api/docs/image-generation>
-- Gemini billing and spend caps:
-  - <https://ai.google.dev/gemini-api/docs/billing/>
+- OpenAI image generation:
+  - <https://platform.openai.com/docs/guides/images/image-generation>
+- OpenAI models:
+  - <https://platform.openai.com/docs/models/gpt-image-1.5>

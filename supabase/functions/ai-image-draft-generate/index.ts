@@ -1,6 +1,6 @@
 import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
 import { getAuthorizedStorageContext } from '../_shared/context.ts';
-import { generateImage } from '../_shared/gemini.ts';
+import { generateTransparentImage } from '../_shared/openai.ts';
 import { buildTileImageDraftPath, TILE_IMAGES_BUCKET } from '../_shared/storage.ts';
 import { requireUser } from '../_shared/supabase.ts';
 
@@ -61,7 +61,7 @@ Deno.serve(async (request: Request) => {
 
     const { admin, familyId } = await getAuthorizedStorageContext(user.id, profileId);
     const draftId = crypto.randomUUID();
-    const image = await generateImage(
+    const image = await generateTransparentImage(
       buildPrompt({
         label,
         locale,
@@ -98,8 +98,10 @@ Deno.serve(async (request: Request) => {
       storagePath,
       signedUrl: signedUrlData.signedUrl,
       mimeType: image.mimeType,
-      provider: 'gemini',
-      promptVersion: 'tile-image-v1',
+      width: image.width,
+      height: image.height,
+      provider: 'openai',
+      promptVersion: 'tile-image-v1-openai',
     });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Image draft generation failed', 500);

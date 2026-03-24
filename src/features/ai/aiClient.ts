@@ -80,7 +80,7 @@ export const aiClient = {
     if (!normalizedRequest.label) {
       return {
         suggestions: [],
-        provider: 'gemini',
+        provider: 'openai',
         cached: false,
       };
     }
@@ -97,7 +97,7 @@ export const aiClient = {
     const response = await invokeFunction<EmojiSuggestionResponse>('ai-emoji-suggest', normalizedRequest);
     const normalizedResponse: EmojiSuggestionResponse = {
       suggestions: sanitizeEmojiSuggestions(response.suggestions ?? []),
-      provider: response.provider ?? 'gemini',
+      provider: response.provider ?? 'openai',
       cached: false,
     };
 

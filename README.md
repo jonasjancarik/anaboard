@@ -124,16 +124,18 @@ Required function secrets:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
 
 Optional function secrets:
 
-- `GEMINI_TEXT_MODEL`
-- `GEMINI_IMAGE_MODEL`
+- `OPENAI_TEXT_MODEL`
+- `OPENAI_IMAGE_MODEL`
 
 Suggested rollout:
 
 - keep all `EXPO_PUBLIC_AI_*` flags at `0` until functions are deployed and tested
+- local function env example: `/Users/janca/projects/anaboard/supabase/functions/.env.example`
+- local/static function check: `npm run functions:check`
 
 ## Supabase schema
 
