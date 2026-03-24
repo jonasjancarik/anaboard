@@ -1,0 +1,11 @@
+[functions.ai-emoji-suggest]
+verify_jwt = true
+
+[functions.ai-autocomplete-rerank]
+verify_jwt = true
+
+[functions.ai-image-draft-generate]
+verify_jwt = true
+
+[functions.ai-image-draft-promote]
+verify_jwt = true

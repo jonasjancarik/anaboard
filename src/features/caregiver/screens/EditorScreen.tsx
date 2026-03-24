@@ -4,12 +4,15 @@ import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmojiKeyboardModal } from "../components/EmojiKeyboardModal";
+import { EmojiSuggestionSection } from "../components/EmojiSuggestionSection";
 import { TileAppearanceSection } from "../components/TileAppearanceSection";
 import { TileVisualOptionsModal } from "../components/TileVisualOptionsModal";
+import { useEmojiSuggestions } from "../hooks/useEmojiSuggestions";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { useTileImageDraft } from "../hooks/useTileImageDraft";
 import { styles } from "./EditorScreen.styles";
 import { buildSpeechSegments, speechEngine } from "../../speech/speechEngine";
+import { AI_FEATURE_FLAGS } from "../../ai/featureFlags";
 import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
@@ -35,6 +38,9 @@ const speechModes: SpeechMode[] = [
 ];
 
 export const EditorScreen = ({ onBack }: EditorScreenProps) => {
+  const authStatus = useAppStore((state) => state.authStatus);
+  const remoteContext = useAppStore((state) => state.remoteContext);
+  const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
@@ -129,6 +135,23 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     visualType === "image" && hasPreviewImage ? "image" : "emoji";
   const visualSelectionIncomplete =
     visualType === "image" && !hasPreviewImage;
+  const aiEmojiSuggestionsEnabled =
+    AI_FEATURE_FLAGS.emojiSuggestions &&
+    authStatus === "signed_in" &&
+    Boolean(remoteContext);
+  const {
+    clearSuggestions: clearEmojiSuggestions,
+    error: emojiSuggestionError,
+    isLoading: isEmojiSuggestionsLoading,
+    requestSuggestions: requestEmojiSuggestions,
+    suggestions: emojiSuggestions,
+  } = useEmojiSuggestions({
+    enabled: aiEmojiSuggestionsEnabled,
+    label: effectiveLabel,
+    locale: board?.locale ?? "cs-CZ",
+    category,
+    existingEmoji: previewEmoji,
+  });
 
   const buildTileUpdatePayload = (): TileUpdateInput | null => {
     if (!selectedTile) {
@@ -453,6 +476,22 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                   highContrast={highContrast}
                   previewBackgroundColor={previewColors.background}
                   onEditVisual={handleEditVisual}
+                />
+
+                <EmojiSuggestionSection
+                  visible={aiEmojiSuggestionsEnabled}
+                  hasLabel={Boolean(effectiveLabel.trim())}
+                  isLoading={isEmojiSuggestionsLoading}
+                  error={emojiSuggestionError}
+                  suggestions={emojiSuggestions}
+                  onRequest={() => {
+                    void requestEmojiSuggestions();
+                  }}
+                  onSelect={(suggestedEmoji) => {
+                    setEmoji(suggestedEmoji);
+                    clearEmojiSuggestions();
+                    setTileActionError(null);
+                  }}
                 />
 
                 <View style={styles.divider} />

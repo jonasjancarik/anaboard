@@ -104,12 +104,36 @@ Env vars:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_SENTRY_DSN`
+- `EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS`
+- `EXPO_PUBLIC_AI_AUTOCOMPLETE_RERANK`
+- `EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES`
 
 For magic-link auth:
 
 - add `anaboard://**` to Supabase Auth redirect URLs
 - add your web preview URL too if you want magic links on web
 - rebuild native app after changing the Expo `scheme`
+
+## Supabase functions for AI
+
+LLM features use Supabase Edge Functions in `/Users/janca/projects/anaboard/supabase/functions`.
+
+Required function secrets:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY`
+
+Optional function secrets:
+
+- `GEMINI_TEXT_MODEL`
+- `GEMINI_IMAGE_MODEL`
+
+Suggested rollout:
+
+- keep all `EXPO_PUBLIC_AI_*` flags at `0` until functions are deployed and tested
 
 ## Supabase schema
 
