@@ -251,9 +251,19 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return tiles;
     }
 
-    return reorderTileIds
+    const nextOrderedTiles = reorderTileIds
       .map((id) => tilesById[id])
       .filter((tile): tile is Tile => Boolean(tile));
+
+    if (nextOrderedTiles.length === tiles.length) {
+      return nextOrderedTiles;
+    }
+
+    const orderedTileIds = new Set(nextOrderedTiles.map((tile) => tile.id));
+    return [
+      ...nextOrderedTiles,
+      ...tiles.filter((tile) => !orderedTileIds.has(tile.id)),
+    ];
   }, [caregiverUnlocked, reorderTileIds, tiles, tilesById]);
 
   const pageCount = Math.max(1, Math.ceil(orderedTiles.length / pageSize));
