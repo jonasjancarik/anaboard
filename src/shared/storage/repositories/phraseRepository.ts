@@ -31,6 +31,7 @@ type PhraseEventRow = {
 };
 
 const RECENT_PHRASE_FETCH_LIMIT = 24;
+const SUGGESTION_PHRASE_FETCH_LIMIT = 500;
 
 const normalizeWhitespace = (value: string): string => value.trim().replace(/\s+/g, ' ');
 
@@ -138,7 +139,9 @@ const mapPhraseEventRow = (row: PhraseEventRow): PhraseEventRecord | null => {
   }
 
   const source: PhraseSource =
-    row.mode === 'saved' || row.mode === 'recent' ? row.mode : 'manual';
+    row.mode === 'saved' || row.mode === 'recent' || row.mode === 'composed'
+      ? row.mode
+      : 'manual';
 
   return {
     id: row.id,
@@ -152,29 +155,48 @@ const mapPhraseEventRow = (row: PhraseEventRow): PhraseEventRecord | null => {
 
 export const getSavedPhrases = async (
   profileId: string,
-  limit = 8
+  limit?: number
 ): Promise<SavedPhrase[]> => {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<SavedPhraseRow>(
-    `
-      SELECT
-        id,
-        profile_id,
-        phrase_key,
-        label,
-        spoken_text,
-        tokens_json,
-        created_at,
-        updated_at,
-        usage_count
-      FROM saved_phrases
-      WHERE profile_id = ?
-      ORDER BY updated_at DESC, created_at DESC
-      LIMIT ?
-    `,
-    profileId,
-    limit
-  );
+  const rows = limit === undefined
+    ? await db.getAllAsync<SavedPhraseRow>(
+        `
+          SELECT
+            id,
+            profile_id,
+            phrase_key,
+            label,
+            spoken_text,
+            tokens_json,
+            created_at,
+            updated_at,
+            usage_count
+          FROM saved_phrases
+          WHERE profile_id = ?
+          ORDER BY updated_at DESC, created_at DESC
+        `,
+        profileId
+      )
+    : await db.getAllAsync<SavedPhraseRow>(
+        `
+          SELECT
+            id,
+            profile_id,
+            phrase_key,
+            label,
+            spoken_text,
+            tokens_json,
+            created_at,
+            updated_at,
+            usage_count
+          FROM saved_phrases
+          WHERE profile_id = ?
+          ORDER BY updated_at DESC, created_at DESC
+          LIMIT ?
+        `,
+        profileId,
+        limit
+      );
 
   return rows
     .map(mapSavedPhraseRow)
@@ -191,6 +213,7 @@ export const getRecentPhraseEvents = async (
       SELECT id, profile_id, tile_sequence, spoken_text, mode, spoken_at
       FROM phrase_events
       WHERE profile_id = ?
+        AND mode != 'composed'
       ORDER BY spoken_at DESC
       LIMIT ?
     `,
@@ -221,6 +244,29 @@ export const getRecentPhraseEvents = async (
   }
 
   return results;
+};
+
+export const getSuggestionPhraseEvents = async (
+  profileId: string,
+  limit = SUGGESTION_PHRASE_FETCH_LIMIT
+): Promise<PhraseEventRecord[]> => {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<PhraseEventRow>(
+    `
+      SELECT id, profile_id, tile_sequence, spoken_text, mode, spoken_at
+      FROM phrase_events
+      WHERE profile_id = ?
+      ORDER BY spoken_at DESC
+      LIMIT ?
+    `,
+    profileId,
+    Math.min(limit, SUGGESTION_PHRASE_FETCH_LIMIT)
+  );
+
+  return rows
+    .map(mapPhraseEventRow)
+    .filter((phrase): phrase is PhraseEventRecord => Boolean(phrase))
+    .slice(0, limit);
 };
 
 export const savePhrase = async (

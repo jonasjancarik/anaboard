@@ -40,6 +40,14 @@ const PITCH_OPTIONS: SettingStepperOption[] = [
   { value: 1.3, label: 'Vyšší' },
 ];
 
+const SUGGESTION_COUNT_OPTIONS = [
+  { value: '1', label: '1 tip', detail: 'Jen nejsilnější nápověda.' },
+  { value: '2', label: '2 tipy', detail: 'Méně rušivé.' },
+  { value: '3', label: '3 tipy', detail: 'Vyvážené.' },
+  { value: '4', label: '4 tipy', detail: 'Širší výběr.' },
+  { value: '5', label: '5 tipů', detail: 'Nejvíc možností.' },
+] as const;
+
 const VOICE_PREVIEW_TEXT = 'Tohle je ukázka hlasu.';
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -62,6 +70,7 @@ export const SettingsScreen = ({
   const [highContrast, setHighContrast] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [phraseBarEnabled, setPhraseBarEnabled] = useState(true);
+  const [suggestionCount, setSuggestionCount] = useState('3');
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
   const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
@@ -80,6 +89,7 @@ export const SettingsScreen = ({
     setHighContrast(settings.highContrast);
     setShowLabels(settings.showLabels);
     setPhraseBarEnabled(settings.phraseBarEnabled);
+    setSuggestionCount(String(settings.suggestionCount));
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
     setSelectedVoiceValue(settings.preferredVoice ?? DEFAULT_VOICE_VALUE);
@@ -372,6 +382,25 @@ export const SettingsScreen = ({
                 );
               }}
             />
+            {phraseBarEnabled ? (
+              <>
+                <View style={styles.divider} />
+                <SettingChoiceStepper
+                  title="Počet tipů"
+                  value={suggestionCount}
+                  options={[...SUGGESTION_COUNT_OPTIONS]}
+                  onChange={(nextValue) => {
+                    void updateSetting(
+                      suggestionCount,
+                      nextValue,
+                      setSuggestionCount,
+                      { suggestionCount: Number(nextValue) },
+                      'Počet tipů nešel uložit'
+                    );
+                  }}
+                />
+              </>
+            ) : null}
             <View style={styles.divider} />
             <SettingToggleRow
               title="Chránit nastavení"

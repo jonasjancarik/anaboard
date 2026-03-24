@@ -19,6 +19,7 @@ type SettingsRow = {
   high_contrast: number;
   show_labels: number;
   phrase_bar_enabled: number;
+  suggestion_count: number;
   updated_at: string;
   revision: number;
 };
@@ -34,6 +35,7 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
   highContrast: row.high_contrast === 1,
   showLabels: row.show_labels === 1,
   phraseBarEnabled: row.phrase_bar_enabled === 1,
+  suggestionCount: row.suggestion_count,
   updatedAt: row.updated_at,
   revision: row.revision,
 });
@@ -56,8 +58,8 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     `
       INSERT INTO profile_settings (
         profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
-        high_contrast, show_labels, phrase_bar_enabled, updated_at, revision, dirty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision, dirty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
     defaults.profileId,
     defaults.pinHash,
@@ -69,6 +71,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     defaults.highContrast ? 1 : 0,
     defaults.showLabels ? 1 : 0,
     defaults.phraseBarEnabled ? 1 : 0,
+    defaults.suggestionCount,
     defaults.updatedAt,
     defaults.revision
   );
@@ -84,6 +87,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     high_contrast: defaults.highContrast ? 1 : 0,
     show_labels: defaults.showLabels ? 1 : 0,
     phrase_bar_enabled: defaults.phraseBarEnabled ? 1 : 0,
+    suggestion_count: defaults.suggestionCount,
     updated_at: defaults.updatedAt,
     revision: defaults.revision,
   });
@@ -94,7 +98,7 @@ export const getProfileSettings = async (): Promise<ProfileSettings> => {
   const row = await db.getFirstAsync<SettingsRow>(
     `
       SELECT profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
-           , show_labels, phrase_bar_enabled
+           , show_labels, phrase_bar_enabled, suggestion_count
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
@@ -119,6 +123,7 @@ type SettingsUpdate = {
   highContrast?: boolean;
   showLabels?: boolean;
   phraseBarEnabled?: boolean;
+  suggestionCount?: number;
   pinHash?: string;
 };
 
@@ -138,6 +143,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     highContrast: update.highContrast ?? current.highContrast,
     showLabels: update.showLabels ?? current.showLabels,
     phraseBarEnabled: update.phraseBarEnabled ?? current.phraseBarEnabled,
+    suggestionCount: update.suggestionCount ?? current.suggestionCount,
     pinHash: update.pinHash ?? current.pinHash,
   };
 
@@ -154,6 +160,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
         high_contrast = ?,
         show_labels = ?,
         phrase_bar_enabled = ?,
+        suggestion_count = ?,
         updated_at = ?,
         revision = ?,
         dirty = 1
@@ -168,6 +175,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     next.highContrast ? 1 : 0,
     next.showLabels ? 1 : 0,
     next.phraseBarEnabled ? 1 : 0,
+    next.suggestionCount,
     updatedAt,
     revision,
     current.profileId
@@ -184,6 +192,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     high_contrast: next.highContrast ? 1 : 0,
     show_labels: next.showLabels ? 1 : 0,
     phrase_bar_enabled: next.phraseBarEnabled ? 1 : 0,
+    suggestion_count: next.suggestionCount,
     updated_at: updatedAt,
     revision,
   });

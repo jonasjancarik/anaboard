@@ -24,6 +24,7 @@ import {
 import {
   deleteSavedPhrase as deleteSavedPhraseInRepository,
   getRecentPhraseEvents,
+  getSuggestionPhraseEvents,
   getSavedPhrases,
   noteSavedPhrasePlayed,
   recordPhraseEvent,
@@ -92,6 +93,7 @@ type AppStore = {
   sentence: SentenceToken[];
   savedPhrases: SavedPhrase[];
   recentPhrases: PhraseEventRecord[];
+  suggestionPhrases: PhraseEventRecord[];
   isBoardLoading: boolean;
   settings: ProfileSettings | null;
   isSettingsLoading: boolean;
@@ -126,6 +128,7 @@ type AppStore = {
   setSpeaking: (value: boolean) => void;
   saveCurrentSentenceAsPhrase: () => Promise<void>;
   deleteSavedPhrase: (phraseId: string) => Promise<void>;
+  recordPhraseComposition: (tokens: PhraseTokenSnapshot[]) => Promise<void>;
   recordPhrasePlayback: (params: {
     tokens: PhraseTokenSnapshot[];
     source: PhraseSource;
@@ -152,6 +155,7 @@ type AppStore = {
     highContrast?: boolean;
     showLabels?: boolean;
     phraseBarEnabled?: boolean;
+    suggestionCount?: number;
     pinHash?: string;
   }) => Promise<void>;
 
@@ -182,6 +186,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sentence: [],
   savedPhrases: [],
   recentPhrases: [],
+  suggestionPhrases: [],
   isBoardLoading: true,
   settings: null,
   isSettingsLoading: true,
@@ -236,9 +241,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         throw new Error('Board snapshot missing');
       }
 
-      const [savedPhrases, recentPhrases] = await Promise.all([
+      const [savedPhrases, recentPhrases, suggestionPhrases] = await Promise.all([
         getSavedPhrases(snapshot.board.profileId),
         getRecentPhraseEvents(snapshot.board.profileId),
+        getSuggestionPhraseEvents(snapshot.board.profileId),
       ]);
 
       set({
@@ -248,6 +254,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         settings,
         savedPhrases,
         recentPhrases,
+        suggestionPhrases,
         pendingSyncEvents,
       });
     } catch (error) {
@@ -277,14 +284,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   refreshPhrases: async () => {
     const profileId = getActiveProfileId(get());
-    const [savedPhrases, recentPhrases] = await Promise.all([
+    const [savedPhrases, recentPhrases, suggestionPhrases] = await Promise.all([
       getSavedPhrases(profileId),
       getRecentPhraseEvents(profileId),
+      getSuggestionPhraseEvents(profileId),
     ]);
 
     set({
       savedPhrases,
       recentPhrases,
+      suggestionPhrases,
     });
   },
 
@@ -354,6 +363,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   deleteSavedPhrase: async (phraseId) => {
     await deleteSavedPhraseInRepository(phraseId);
+    await get().refreshPhrases();
+  },
+
+  recordPhraseComposition: async (tokens) => {
+    if (tokens.length < 2) {
+      return;
+    }
+
+    const profileId = getActiveProfileId(get());
+    await recordPhraseEvent({
+      profileId,
+      tokens,
+      source: 'composed',
+    });
     await get().refreshPhrases();
   },
 

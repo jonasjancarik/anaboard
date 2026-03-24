@@ -38,6 +38,7 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - TTS rate/pitch
   - high contrast
   - quick phrases / suggestions toggle
+  - suggestion count
   - PIN change
 - Sync service scaffold with pending event queue and optional Supabase push
 - Supabase auth flow:

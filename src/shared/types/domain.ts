@@ -91,6 +91,7 @@ export interface ProfileSettings {
   highContrast: boolean;
   showLabels: boolean;
   phraseBarEnabled: boolean;
+  suggestionCount: number;
   updatedAt: string;
   revision: number;
 }
@@ -125,7 +126,7 @@ export interface PhraseTokenSnapshot {
   imageRemotePath?: string;
 }
 
-export type PhraseSource = 'manual' | 'saved' | 'recent';
+export type PhraseSource = 'manual' | 'saved' | 'recent' | 'composed';
 
 export interface SavedPhrase {
   id: string;

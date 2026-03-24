@@ -83,6 +83,7 @@ create table if not exists profile_settings (
   high_contrast boolean not null default false,
   show_labels boolean not null default false,
   phrase_bar_enabled boolean not null default true,
+  suggestion_count int not null default 3,
   updated_at timestamptz not null,
   revision int not null default 1,
   created_at timestamptz not null default now()
@@ -93,6 +94,9 @@ add column if not exists show_labels boolean not null default false;
 
 alter table profile_settings
 add column if not exists phrase_bar_enabled boolean not null default true;
+
+alter table profile_settings
+add column if not exists suggestion_count int not null default 3;
 
 create table if not exists phrase_events (
   id uuid primary key default gen_random_uuid(),

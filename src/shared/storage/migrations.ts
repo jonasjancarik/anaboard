@@ -112,6 +112,7 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
       high_contrast INTEGER NOT NULL DEFAULT 0,
       show_labels INTEGER NOT NULL DEFAULT 0,
       phrase_bar_enabled INTEGER NOT NULL DEFAULT 1,
+      suggestion_count INTEGER NOT NULL DEFAULT 3,
       updated_at TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 1,
       dirty INTEGER NOT NULL DEFAULT 0
@@ -325,6 +326,14 @@ const ensurePhraseBarSetting = async (db: MigrationDatabase): Promise<void> => {
   }
 };
 
+const ensureSuggestionCountSetting = async (db: MigrationDatabase): Promise<void> => {
+  if (!(await hasColumn(db, 'profile_settings', 'suggestion_count'))) {
+    await db.runAsync(
+      'ALTER TABLE profile_settings ADD COLUMN suggestion_count INTEGER NOT NULL DEFAULT 3'
+    );
+  }
+};
+
 const migrationSteps: MigrationStep[] = [
   {
     version: 1,
@@ -419,6 +428,11 @@ const migrationSteps: MigrationStep[] = [
     version: 8,
     label: 'profile-settings-phrase-bar',
     run: ensurePhraseBarSetting,
+  },
+  {
+    version: 9,
+    label: 'profile-settings-suggestion-count',
+    run: ensureSuggestionCountSetting,
   },
 ];
 

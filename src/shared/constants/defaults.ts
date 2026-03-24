@@ -80,6 +80,7 @@ export const DEFAULT_PROFILE_SETTINGS = (
   highContrast: false,
   showLabels: true,
   phraseBarEnabled: true,
+  suggestionCount: 3,
   updatedAt,
   revision: 1,
 });

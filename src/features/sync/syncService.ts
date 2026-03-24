@@ -109,12 +109,14 @@ class SyncService {
             event.entityType === 'profile_settings' &&
             (
               Object.prototype.hasOwnProperty.call(enrichedPayload, 'show_labels') ||
-              Object.prototype.hasOwnProperty.call(enrichedPayload, 'phrase_bar_enabled')
+              Object.prototype.hasOwnProperty.call(enrichedPayload, 'phrase_bar_enabled') ||
+              Object.prototype.hasOwnProperty.call(enrichedPayload, 'suggestion_count')
             )
           ) {
             const fallbackPayload = { ...enrichedPayload };
             delete fallbackPayload.show_labels;
             delete fallbackPayload.phrase_bar_enabled;
+            delete fallbackPayload.suggestion_count;
             const fallbackResult = await supabaseClient
               .from(event.entityType)
               .upsert(fallbackPayload);

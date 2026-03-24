@@ -94,14 +94,29 @@ const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): strin
   return next;
 };
 
-const toPhraseTokenSnapshot = (tile: Tile): PhraseTokenSnapshot => ({
-  tileId: tile.id,
-  label: tile.labelCs,
-  emoji: tile.emoji,
-  visualType: tile.visualType,
-  imageLocalUri: tile.imageLocalUri,
-  imageRemotePath: tile.imageRemotePath,
-});
+const toPhraseTokenSnapshot = (
+  token: Tile | SentenceToken | PhraseTokenSnapshot
+): PhraseTokenSnapshot => {
+  if ('id' in token) {
+    return {
+      tileId: token.id,
+      label: token.labelCs,
+      emoji: token.emoji,
+      visualType: token.visualType,
+      imageLocalUri: token.imageLocalUri,
+      imageRemotePath: token.imageRemotePath,
+    };
+  }
+
+  return {
+    tileId: token.tileId,
+    label: token.label,
+    emoji: token.emoji,
+    visualType: token.visualType,
+    imageLocalUri: token.imageLocalUri,
+    imageRemotePath: token.imageRemotePath,
+  };
+};
 
 const resolvePhraseTokens = (
   tokens: PhraseTokenSnapshot[],
@@ -139,6 +154,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const sentence = useAppStore((state) => state.sentence);
   const savedPhrases = useAppStore((state) => state.savedPhrases);
   const recentPhrases = useAppStore((state) => state.recentPhrases);
+  const suggestionPhrases = useAppStore((state) => state.suggestionPhrases);
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
@@ -152,6 +168,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const setSpeaking = useAppStore((state) => state.setSpeaking);
   const saveCurrentSentenceAsPhrase = useAppStore((state) => state.saveCurrentSentenceAsPhrase);
   const deleteSavedPhrase = useAppStore((state) => state.deleteSavedPhrase);
+  const recordPhraseComposition = useAppStore((state) => state.recordPhraseComposition);
   const recordPhrasePlayback = useAppStore((state) => state.recordPhrasePlayback);
   const createTileAfter = useAppStore((state) => state.createTileAfter);
   const moveTile = useAppStore((state) => state.moveTile);
@@ -164,6 +181,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   const showLabels = settings?.showLabels ?? false;
   const phraseBarEnabled = settings?.phraseBarEnabled ?? true;
+  const suggestionCount = settings?.suggestionCount ?? 3;
   const gridColumns = board?.columns ?? GRID_COLUMNS;
   const gridRows = board?.rows ?? GRID_ROWS;
   const pageSize = gridColumns * gridRows;
@@ -188,10 +206,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     return buildPhrasePredictions({
       sentence,
       savedPhrases,
-      recentPhrases,
+      recentPhrases: suggestionPhrases,
       tilesById,
+      limit: suggestionCount,
     });
-  }, [recentPhrases, savedPhrases, sentence, tilesById]);
+  }, [savedPhrases, sentence, suggestionCount, suggestionPhrases, tilesById]);
   const idlePhraseItems = useMemo<PhraseBarItem[]>(() => {
     const items: PhraseBarItem[] = [];
     const seenPhraseKeys = new Set<string>();
@@ -598,9 +617,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    addTileToSentence(tileId);
+    const phraseToken = toPhraseTokenSnapshot(tile);
+    const nextSentenceTokens = [...sentence, phraseToken].map((token) =>
+      'tokenId' in token ? toPhraseTokenSnapshot(token) : token
+    );
 
-    void playTokens([toPhraseTokenSnapshot(tile)]);
+    addTileToSentence(tileId);
+    void recordPhraseComposition(nextSentenceTokens).catch(() => {
+      // Suggestions should still work even if composition history fails to persist.
+    });
+
+    void playTokens([phraseToken]);
   };
 
   const onSpeakSentence = () => {
@@ -677,7 +704,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           return;
         }
 
+        const nextSentenceTokens = [...sentence.map(toPhraseTokenSnapshot), nextToken];
         appendPhraseTokens([nextToken]);
+        void recordPhraseComposition(nextSentenceTokens).catch(() => {
+          // Suggestions should still work even if composition history fails to persist.
+        });
         void playTokens([nextToken]);
         return;
       }
@@ -701,6 +732,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       appendPhraseTokens,
       playTokens,
       recentPhrases,
+      recordPhraseComposition,
+      sentence,
       replaceSentenceWithTokens,
       savedPhrases,
     ]

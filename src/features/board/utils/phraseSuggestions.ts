@@ -1,4 +1,5 @@
 import type {
+  PhraseSource,
   PhraseEventRecord,
   PhraseTokenSnapshot,
   SavedPhrase,
@@ -8,7 +9,7 @@ import type {
 
 type SequenceInput = {
   tokens: PhraseTokenSnapshot[];
-  weight: number;
+  baseWeight: number;
 };
 
 export type PhrasePrediction = {
@@ -18,6 +19,14 @@ export type PhrasePrediction = {
 };
 
 const MAX_MATCH_DEPTH = 3;
+const DEFAULT_SUGGESTION_LIMIT = 3;
+
+type CandidateAggregate = {
+  id: string;
+  token: PhraseTokenSnapshot;
+  score: number;
+  hits: number;
+};
 
 const toTokenSnapshot = (token: SentenceToken | PhraseTokenSnapshot): PhraseTokenSnapshot => ({
   tileId: token.tileId,
@@ -69,6 +78,85 @@ const matchesSuffix = (
   return true;
 };
 
+const getMatchWeight = (depth: number): number => {
+  if (depth >= 3) {
+    return 4.8;
+  }
+
+  if (depth === 2) {
+    return 2.5;
+  }
+
+  return 1;
+};
+
+const getSavedPhraseWeight = (
+  phrase: SavedPhrase,
+  index: number,
+  newestSavedAt: number
+): number => {
+  const updatedAtMs = Date.parse(phrase.updatedAt);
+  const ageDays =
+    Number.isFinite(updatedAtMs) && newestSavedAt > 0
+      ? Math.max(0, (newestSavedAt - updatedAtMs) / 86_400_000)
+      : index * 2;
+  const recencyFactor = Math.exp(-ageDays / 45);
+  const usageBoost = 1 + Math.min(phrase.usageCount, 12) * 0.08;
+
+  return 1.45 * usageBoost * Math.max(0.35, recencyFactor);
+};
+
+const getHistorySourceWeight = (source: PhraseSource): number => {
+  if (source === 'manual') {
+    return 1.15;
+  }
+
+  if (source === 'saved' || source === 'recent') {
+    return 1.08;
+  }
+
+  return 0.92;
+};
+
+const getHistoryPhraseWeight = (
+  phrase: PhraseEventRecord,
+  index: number,
+  newestSpokenAt: number
+): number => {
+  const spokenAtMs = Date.parse(phrase.spokenAt);
+  const ageDays =
+    Number.isFinite(spokenAtMs) && newestSpokenAt > 0
+      ? Math.max(0, (newestSpokenAt - spokenAtMs) / 86_400_000)
+      : index;
+  const recencyFactor = Math.exp(-ageDays / 14);
+
+  return getHistorySourceWeight(phrase.source) * Math.max(0.2, recencyFactor);
+};
+
+const buildSavedSequences = (savedPhrases: SavedPhrase[]): SequenceInput[] => {
+  const newestSavedAt = savedPhrases.reduce((latest, phrase) => {
+    const timestamp = Date.parse(phrase.updatedAt);
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, 0);
+
+  return savedPhrases.map((phrase, index) => ({
+    tokens: phrase.tokens,
+    baseWeight: getSavedPhraseWeight(phrase, index, newestSavedAt),
+  }));
+};
+
+const buildHistorySequences = (historyPhrases: PhraseEventRecord[]): SequenceInput[] => {
+  const newestSpokenAt = historyPhrases.reduce((latest, phrase) => {
+    const timestamp = Date.parse(phrase.spokenAt);
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, 0);
+
+  return historyPhrases.map((phrase, index) => ({
+    tokens: phrase.tokens,
+    baseWeight: getHistoryPhraseWeight(phrase, index, newestSpokenAt),
+  }));
+};
+
 export const buildPhrasePredictions = (params: {
   sentence: SentenceToken[];
   savedPhrases: SavedPhrase[];
@@ -76,24 +164,18 @@ export const buildPhrasePredictions = (params: {
   tilesById: Record<string, Tile>;
   limit?: number;
 }): PhrasePrediction[] => {
-  const { sentence, savedPhrases, recentPhrases, tilesById, limit = 5 } = params;
+  const { sentence, savedPhrases, recentPhrases, tilesById, limit = DEFAULT_SUGGESTION_LIMIT } = params;
   if (sentence.length === 0) {
     return [];
   }
 
   const sentenceIds = sentence.map((token) => token.tileId);
   const sequences: SequenceInput[] = [
-    ...savedPhrases.map((phrase, index) => ({
-      tokens: phrase.tokens,
-      weight: Math.max(6, 10 - index),
-    })),
-    ...recentPhrases.map((phrase, index) => ({
-      tokens: phrase.tokens,
-      weight: Math.max(3, 7 - index),
-    })),
+    ...buildSavedSequences(savedPhrases),
+    ...buildHistorySequences(recentPhrases),
   ];
 
-  const candidates = new Map<string, PhrasePrediction>();
+  const candidates = new Map<string, CandidateAggregate>();
 
   for (const sequence of sequences) {
     const sequenceIds = sequence.tokens.map((token) => token.tileId);
@@ -108,17 +190,19 @@ export const buildPhrasePredictions = (params: {
 
         const nextToken = resolveTokenSnapshot(sequence.tokens[index], tilesById);
         const candidateId = nextToken.tileId || `${nextToken.label}:${nextToken.emoji}`;
-        const nextScore = sequence.weight * depth;
+        const nextScore = sequence.baseWeight * getMatchWeight(depth);
         const existing = candidates.get(candidateId);
 
-        if (!existing || nextScore > existing.score) {
+        if (!existing) {
           candidates.set(candidateId, {
             id: candidateId,
             token: nextToken,
             score: nextScore,
+            hits: 1,
           });
-        } else if (existing) {
-          existing.score += nextScore * 0.35;
+        } else {
+          existing.score += nextScore;
+          existing.hits += 1;
           candidates.set(candidateId, existing);
         }
 
@@ -128,6 +212,14 @@ export const buildPhrasePredictions = (params: {
   }
 
   return [...candidates.values()]
+    .map((candidate) => {
+      const frequencyBoost = 1 + Math.min(candidate.hits - 1, 6) * 0.14;
+
+      return {
+        ...candidate,
+        score: candidate.score * frequencyBoost,
+      };
+    })
     .sort((left, right) => {
       if (right.score !== left.score) {
         return right.score - left.score;
