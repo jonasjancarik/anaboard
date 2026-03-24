@@ -50,7 +50,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
   if (length <= 2 && !hasWhitespace) {
     return {
       fontSize: baseSize,
-      width: size * 0.78,
+      width: size,
       numberOfLines: 1 as const,
     };
   }
@@ -59,7 +59,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
     const nextSize = Math.max(16, Math.round(size * 0.46));
     return {
       fontSize: nextSize,
-      width: size * 0.88,
+      width: size,
       numberOfLines: 1 as const,
     };
   }
@@ -69,7 +69,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
     return {
       fontSize: nextSize,
       lineHeight: nextSize + 2,
-      width: size * 0.88,
+      width: size * 0.94,
       numberOfLines: 2 as const,
     };
   }
@@ -78,7 +78,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
   return {
     fontSize: nextSize,
     lineHeight: nextSize + 2,
-    width: size * 0.9,
+    width: size * 0.96,
     numberOfLines: 2 as const,
   };
 };

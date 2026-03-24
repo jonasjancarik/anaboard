@@ -61,6 +61,7 @@ export const SettingsScreen = ({
   const [ttsPitch, setTtsPitch] = useState(1);
   const [highContrast, setHighContrast] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
+  const [phraseBarEnabled, setPhraseBarEnabled] = useState(true);
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
   const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
@@ -78,6 +79,7 @@ export const SettingsScreen = ({
     setTtsPitch(settings.ttsPitch);
     setHighContrast(settings.highContrast);
     setShowLabels(settings.showLabels);
+    setPhraseBarEnabled(settings.phraseBarEnabled);
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
     setSelectedVoiceValue(settings.preferredVoice ?? DEFAULT_VOICE_VALUE);
@@ -352,6 +354,21 @@ export const SettingsScreen = ({
                   setShowLabels,
                   { showLabels: nextValue },
                   'Zobrazení názvů nešlo uložit'
+                );
+              }}
+            />
+            <View style={styles.divider} />
+            <SettingToggleRow
+              title="Rychlé věty a tipy"
+              detail="Na tabuli ukáže uložené věty, poslední věty a návrhy."
+              value={phraseBarEnabled}
+              onValueChange={(nextValue) => {
+                void updateSetting(
+                  phraseBarEnabled,
+                  nextValue,
+                  setPhraseBarEnabled,
+                  { phraseBarEnabled: nextValue },
+                  'Rychlé věty a tipy nešly uložit'
                 );
               }}
             />

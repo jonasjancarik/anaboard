@@ -296,8 +296,10 @@ try {
   assert.equal(await getDatabaseSchemaVersion(adapter), LATEST_SCHEMA_VERSION);
   assert.equal(hasColumn(database, 'profile_settings', 'show_labels'), true);
   assert.equal(hasColumn(database, 'profile_settings', 'backup_pin_enabled'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'phrase_bar_enabled'), true);
   assert.equal(hasColumn(database, 'tiles', 'visual_type'), true);
   assert.equal(hasColumn(database, 'tile_archive', 'image_remote_path'), true);
+  assert.equal(hasColumn(database, 'saved_phrases', 'tokens_json'), true);
 
   const tile = database
     .prepare('SELECT speech_mode FROM tiles WHERE id = ?')
@@ -320,6 +322,15 @@ try {
     .get('default-profile');
   assert.equal(settingsRow.show_labels, 0);
   assert.equal(settingsRow.backup_pin_enabled, 0);
+
+  const phraseEventsIndex = database
+    .prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'index' AND name = 'idx_phrase_events_profile_spoken'
+    `)
+    .get();
+  assert.equal(phraseEventsIndex.name, 'idx_phrase_events_profile_spoken');
 
   await migrateDatabaseSchema(adapter);
   assert.equal(await getDatabaseSchemaVersion(adapter), LATEST_SCHEMA_VERSION);

@@ -79,6 +79,7 @@ export const DEFAULT_PROFILE_SETTINGS = (
   preferredVoice: undefined,
   highContrast: false,
   showLabels: true,
+  phraseBarEnabled: true,
   updatedAt,
   revision: 1,
 });

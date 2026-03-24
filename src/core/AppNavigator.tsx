@@ -23,6 +23,7 @@ export const AppNavigator = () => {
   const navigate = useAppStore((state) => state.navigate);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
   const usesAppPin = isWebPlatform || Boolean(settings?.backupPinEnabled);
 
   const goBack = useCallback((): boolean => {
@@ -37,13 +38,14 @@ export const AppNavigator = () => {
     }
 
     if (currentScreen === 'caregiverGate') {
+      clearPendingCaregiverAction();
       setEditorTargetTileId(null);
       navigate('board');
       return true;
     }
 
     return false;
-  }, [currentScreen, navigate, setEditorTargetTileId]);
+  }, [clearPendingCaregiverAction, currentScreen, navigate, setEditorTargetTileId]);
 
   useEffect(() => {
     if (
@@ -67,20 +69,20 @@ export const AppNavigator = () => {
     };
   }, [goBack]);
 
-  const openCaregiver = async () => {
+  const openCaregiver = async (): Promise<boolean> => {
     if (!settings) {
-      return;
+      return false;
     }
 
     if (!settings.lockEnabled) {
       unlockCaregiver();
       navigate('board');
-      return;
+      return true;
     }
 
     if (usesAppPin) {
       navigate('caregiverGate');
-      return;
+      return true;
     }
 
     const nativeAvailable = await canUseNativeCaregiverAuth();
@@ -89,14 +91,17 @@ export const AppNavigator = () => {
         'Ověření není dostupné',
         'Telefon nemá dostupné systémové ověření. Zapni v nastavení volbu „Vlastní PIN v aplikaci“.'
       );
-      return;
+      return false;
     }
 
     const result = await authenticateWithDeviceForCaregiver();
     if (result.success) {
       unlockCaregiver();
       navigate('board');
+      return true;
     }
+
+    return false;
   };
 
   if (authStatus === 'signed_out') {
@@ -140,5 +145,5 @@ export const AppNavigator = () => {
     return <TileArchiveScreen onBack={() => navigate('settings')} />;
   }
 
-  return <BoardScreen onOpenCaregiver={() => { void openCaregiver(); }} onOpenSettings={() => navigate('settings')} />;
+  return <BoardScreen onOpenCaregiver={openCaregiver} onOpenSettings={() => navigate('settings')} />;
 };

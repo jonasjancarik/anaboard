@@ -99,6 +99,10 @@ export const styles = StyleSheet.create({
     backgroundColor: APP_THEME.successSoft,
     borderColor: APP_THEME.success,
   },
+  savePhraseButton: {
+    backgroundColor: APP_THEME.warningSoft,
+    borderColor: APP_THEME.warning,
+  },
   clearButton: {
     backgroundColor: APP_THEME.dangerSoft,
     borderColor: APP_THEME.danger,
@@ -114,6 +118,9 @@ export const styles = StyleSheet.create({
   },
   speakText: {
     color: APP_THEME.successBorder,
+  },
+  savePhraseText: {
+    color: APP_THEME.warningBorder,
   },
   clearText: {
     color: APP_THEME.dangerBorder,
@@ -138,6 +145,15 @@ export const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
     color: APP_THEME.dangerBorder,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  editorHintSuccess: {
+    paddingHorizontal: LAYOUT_PADDING,
+    paddingBottom: 6,
+    marginTop: 4,
+    textAlign: 'center',
+    color: APP_THEME.successBorder,
     fontSize: 12,
     fontWeight: '700',
   },

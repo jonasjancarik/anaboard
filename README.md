@@ -29,10 +29,15 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - caregiver unlocked + `PŘESUN`: long-press + drag reorders tiles
   - caregiver locked: long-press does not trigger editor
   - caregiver mode can be locked/unlocked from board action button
+  - adaptive phrase bar:
+    - empty sentence: saved phrases + recent replays
+    - while composing: next-word suggestions from phrase history
+  - caregiver unlocked: current sentence can be saved as a reusable phrase
 - Settings screen:
   - preferred voice
   - TTS rate/pitch
   - high contrast
+  - quick phrases / suggestions toggle
   - PIN change
 - Sync service scaffold with pending event queue and optional Supabase push
 - Supabase auth flow:
@@ -109,6 +114,7 @@ See `/Users/janca/projects/anaboard/supabase/schema.sql` for baseline tables and
 - Default caregiver PIN is `1234` until changed in Settings.
 - Default board ships as a 2-page preschool starter set: page 1 home/core words, page 2 child fringe/routines/favorites.
 - Tile labels are shown by default for easier symbol learning and partner interpretation.
+- Saved phrases and recent phrase history stay local for now; no Supabase sync yet.
 - Caregiver settings act as the central hub for archive, reset-to-defaults, appearance, speech, PIN, and account actions.
 - On physical iPhone/iPad devices, Expo TTS can still stay silent while the device is in silent mode.
 - App currently keeps web support for preview/testing.

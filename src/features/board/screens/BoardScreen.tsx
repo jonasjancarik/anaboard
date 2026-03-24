@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   LayoutAnimation,
@@ -15,6 +16,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { speechEngine, buildSpeechSegments } from '../../speech/speechEngine';
+import { PhraseBar, type PhraseBarItem } from '../components/PhraseBar';
+import { buildPhrasePredictions } from '../utils/phraseSuggestions';
 import {
   GRID_COLUMNS,
   GRID_GAP,
@@ -29,12 +32,12 @@ import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
-import type { SentenceToken, Tile } from '../../../shared/types/domain';
+import type { PhraseSource, PhraseTokenSnapshot, SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
 
 type BoardScreenProps = {
-  onOpenCaregiver: () => void;
+  onOpenCaregiver: () => Promise<boolean>;
   onOpenSettings: () => void;
 };
 
@@ -91,6 +94,25 @@ const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): strin
   return next;
 };
 
+const toPhraseTokenSnapshot = (tile: Tile): PhraseTokenSnapshot => ({
+  tileId: tile.id,
+  label: tile.labelCs,
+  emoji: tile.emoji,
+  visualType: tile.visualType,
+  imageLocalUri: tile.imageLocalUri,
+  imageRemotePath: tile.imageRemotePath,
+});
+
+const resolvePhraseTokens = (
+  tokens: PhraseTokenSnapshot[],
+  tilesById: Record<string, Tile>
+): PhraseTokenSnapshot[] => {
+  return tokens.map((token) => {
+    const tile = tilesById[token.tileId];
+    return tile ? toPhraseTokenSnapshot(tile) : token;
+  });
+};
+
 export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProps) => {
   const boardPagerRef = useRef<ScrollView>(null);
   const boardViewportRef = useRef<View>(null);
@@ -115,22 +137,33 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
   const sentence = useAppStore((state) => state.sentence);
+  const savedPhrases = useAppStore((state) => state.savedPhrases);
+  const recentPhrases = useAppStore((state) => state.recentPhrases);
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const boardPageIndex = useAppStore((state) => state.boardPageIndex);
+  const pendingCaregiverAction = useAppStore((state) => state.pendingCaregiverAction);
   const addTileToSentence = useAppStore((state) => state.addTileToSentence);
+  const appendPhraseTokens = useAppStore((state) => state.appendPhraseTokens);
+  const replaceSentenceWithTokens = useAppStore((state) => state.replaceSentenceWithTokens);
   const removeSentenceToken = useAppStore((state) => state.removeSentenceToken);
   const clearSentence = useAppStore((state) => state.clearSentence);
   const setSpeaking = useAppStore((state) => state.setSpeaking);
+  const saveCurrentSentenceAsPhrase = useAppStore((state) => state.saveCurrentSentenceAsPhrase);
+  const deleteSavedPhrase = useAppStore((state) => state.deleteSavedPhrase);
+  const recordPhrasePlayback = useAppStore((state) => state.recordPhrasePlayback);
   const createTileAfter = useAppStore((state) => state.createTileAfter);
   const moveTile = useAppStore((state) => state.moveTile);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
   const setBoardPageIndex = useAppStore((state) => state.setBoardPageIndex);
+  const setPendingCaregiverAction = useAppStore((state) => state.setPendingCaregiverAction);
+  const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
   const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const navigate = useAppStore((state) => state.navigate);
 
   const showLabels = settings?.showLabels ?? false;
+  const phraseBarEnabled = settings?.phraseBarEnabled ?? true;
   const gridColumns = board?.columns ?? GRID_COLUMNS;
   const gridRows = board?.rows ?? GRID_ROWS;
   const pageSize = gridColumns * gridRows;
@@ -143,10 +176,69 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const [boardViewportWidth, setBoardViewportWidth] = useState(0);
   const [boardViewportHeight, setBoardViewportHeight] = useState(0);
   const [currentPage, setCurrentPage] = useState(boardPageIndex);
+  const [phraseFeedback, setPhraseFeedback] = useState<{
+    kind: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const currentPageRef = useRef(0);
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
+  const phrasePredictions = useMemo(() => {
+    return buildPhrasePredictions({
+      sentence,
+      savedPhrases,
+      recentPhrases,
+      tilesById,
+    });
+  }, [recentPhrases, savedPhrases, sentence, tilesById]);
+  const idlePhraseItems = useMemo<PhraseBarItem[]>(() => {
+    const items: PhraseBarItem[] = [];
+    const seenPhraseKeys = new Set<string>();
+
+    for (const phrase of savedPhrases) {
+      if (phrase.tokens.length === 0 || seenPhraseKeys.has(phrase.phraseKey)) {
+        continue;
+      }
+
+      seenPhraseKeys.add(phrase.phraseKey);
+      items.push({
+        id: `saved:${phrase.id}`,
+        kind: 'saved',
+        label: phrase.spokenText,
+        tokens: resolvePhraseTokens(phrase.tokens, tilesById),
+      });
+    }
+
+    for (const phrase of recentPhrases) {
+      const phraseKey = phrase.tokens.map((token) => token.tileId).join('|');
+      if (phrase.tokens.length === 0 || seenPhraseKeys.has(phraseKey)) {
+        continue;
+      }
+
+      seenPhraseKeys.add(phraseKey);
+      items.push({
+        id: `recent:${phrase.id}`,
+        kind: 'recent',
+        label: phrase.spokenText,
+        tokens: resolvePhraseTokens(phrase.tokens, tilesById),
+      });
+    }
+
+    return items.slice(0, 8);
+  }, [recentPhrases, savedPhrases, tilesById]);
+  const phraseBarItems = useMemo<PhraseBarItem[]>(() => {
+    if (sentence.length === 0) {
+      return idlePhraseItems;
+    }
+
+    return phrasePredictions.map((prediction) => ({
+      id: `prediction:${prediction.id}`,
+      kind: 'prediction',
+      label: prediction.token.label,
+      tokens: [prediction.token],
+    }));
+  }, [idlePhraseItems, phrasePredictions, sentence.length]);
 
   useEffect(() => {
     currentPageRef.current = currentPage;
@@ -426,19 +518,51 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setActiveDrag(null);
   }, []);
 
-  const playTokens = async (tokens: SentenceToken[]) => {
+  const playTokens = async (
+    tokens: Array<SentenceToken | PhraseTokenSnapshot>,
+    options?: {
+      recordSource?: PhraseSource;
+      savedPhraseId?: string;
+    }
+  ) => {
     if (tokens.length === 0 || !settings) {
       return;
     }
 
+    const playbackTokens = tokens.map((token) =>
+      'tokenId' in token
+        ? token
+        : {
+            tokenId: createId('phrase-token'),
+            tileId: token.tileId,
+            label: token.label,
+            emoji: token.emoji,
+            visualType: token.visualType,
+            imageLocalUri: token.imageLocalUri,
+            imageRemotePath: token.imageRemotePath,
+          }
+    );
+
     const segments = await buildSpeechSegments({
-      tokens,
+      tokens: playbackTokens,
       tilesById,
       clipsById,
     });
 
     if (segments.length === 0) {
       return;
+    }
+
+    if (options?.recordSource) {
+      try {
+        await recordPhrasePlayback({
+          tokens: playbackTokens,
+          source: options.recordSource,
+          savedPhraseId: options.savedPhraseId,
+        });
+      } catch {
+        // Phrase playback should continue even if history persistence fails.
+      }
     }
 
     speechEngine.setSettings({
@@ -461,6 +585,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
+    setPhraseFeedback(null);
+
     if (caregiverUnlocked) {
       setEditorTargetTileId(tileId);
       navigate('editor');
@@ -474,25 +600,159 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     addTileToSentence(tileId);
 
-    void playTokens([
-      {
-        tokenId: createId('tap'),
-        tileId,
-        label: tile.labelCs,
-        emoji: tile.emoji,
-        visualType: tile.visualType,
-        imageLocalUri: tile.imageLocalUri,
-        imageRemotePath: tile.imageRemotePath,
-      },
-    ]);
+    void playTokens([toPhraseTokenSnapshot(tile)]);
   };
 
   const onSpeakSentence = () => {
-    void playTokens(sentence);
+    setPhraseFeedback(null);
+    void playTokens(sentence, {
+      recordSource: 'manual',
+    });
   };
+
+  const onSavePhrase = useCallback(async () => {
+    if (sentence.length === 0) {
+      return;
+    }
+
+    if (!caregiverUnlocked) {
+      setPendingCaregiverAction('savePhrase');
+      const didStartUnlock = await onOpenCaregiver();
+      if (!didStartUnlock) {
+        clearPendingCaregiverAction();
+      }
+      return;
+    }
+
+    setPhraseFeedback(null);
+
+    try {
+      await saveCurrentSentenceAsPhrase();
+      setPhraseFeedback({
+        kind: 'success',
+        text: 'Věta uložená',
+      });
+    } catch (error) {
+      setPhraseFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Větu nešlo uložit',
+      });
+    }
+  }, [
+    caregiverUnlocked,
+    onOpenCaregiver,
+    saveCurrentSentenceAsPhrase,
+    sentence.length,
+    clearPendingCaregiverAction,
+    setPendingCaregiverAction,
+  ]);
+
+  useEffect(() => {
+    if (pendingCaregiverAction !== 'savePhrase' || !caregiverUnlocked) {
+      return;
+    }
+
+    clearPendingCaregiverAction();
+
+    if (sentence.length === 0) {
+      return;
+    }
+
+    void onSavePhrase();
+  }, [
+    caregiverUnlocked,
+    clearPendingCaregiverAction,
+    onSavePhrase,
+    pendingCaregiverAction,
+    sentence.length,
+  ]);
+
+  const onPhraseBarItemPress = useCallback(
+    (item: PhraseBarItem) => {
+      setPhraseFeedback(null);
+
+      if (item.kind === 'prediction') {
+        const nextToken = item.tokens[0];
+        if (!nextToken) {
+          return;
+        }
+
+        appendPhraseTokens([nextToken]);
+        void playTokens([nextToken]);
+        return;
+      }
+
+      const phrase =
+        item.kind === 'saved'
+          ? savedPhrases.find((candidate) => `saved:${candidate.id}` === item.id)
+          : recentPhrases.find((candidate) => `recent:${candidate.id}` === item.id);
+
+      if (!phrase) {
+        return;
+      }
+
+      replaceSentenceWithTokens(phrase.tokens);
+      void playTokens(phrase.tokens, {
+        recordSource: item.kind,
+        savedPhraseId: item.kind === 'saved' ? phrase.id : undefined,
+      });
+    },
+    [
+      appendPhraseTokens,
+      playTokens,
+      recentPhrases,
+      replaceSentenceWithTokens,
+      savedPhrases,
+    ]
+  );
+
+  const onPhraseBarItemLongPress = useCallback(
+    (item: PhraseBarItem) => {
+      if (!caregiverUnlocked || item.kind !== 'saved') {
+        return;
+      }
+
+      const phrase = savedPhrases.find((candidate) => `saved:${candidate.id}` === item.id);
+      if (!phrase) {
+        return;
+      }
+
+      Alert.alert('Smazat uloženou větu?', phrase.spokenText, [
+        {
+          text: 'Nechat',
+          style: 'cancel',
+        },
+        {
+          text: 'Smazat',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await deleteSavedPhrase(phrase.id);
+                setPhraseFeedback({
+                  kind: 'success',
+                  text: 'Uložená věta smazaná',
+                });
+              } catch (error) {
+                setPhraseFeedback({
+                  kind: 'error',
+                  text:
+                    error instanceof Error
+                      ? error.message
+                      : 'Uloženou větu nešlo smazat',
+                });
+              }
+            })();
+          },
+        },
+      ]);
+    },
+    [caregiverUnlocked, deleteSavedPhrase, savedPhrases]
+  );
 
   const onClearSentence = () => {
     clearSentence();
+    setPhraseFeedback(null);
     setSpeaking(false);
     void speechEngine.cancel().catch(() => {
       // Clear should still work even if the speech engine fails to stop cleanly.
@@ -999,6 +1259,28 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Uložit větu"
+            onPress={() => {
+              void onSavePhrase();
+            }}
+            disabled={sentence.length === 0}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.savePhraseButton,
+              sentence.length === 0 && styles.actionButtonDisabled,
+              pressed && styles.actionButtonPressed,
+            ]}
+          >
+            <Text style={styles.actionIcon} allowFontScaling={false}>
+              ⭐
+            </Text>
+            <Text style={[styles.actionText, styles.savePhraseText]} {...ACTION_TEXT_PROPS}>
+              Uložit
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Smazat větu"
             onPress={onClearSentence}
             disabled={sentence.length === 0}
@@ -1017,9 +1299,28 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             </Text>
           </Pressable>
         </View>
+
+        {phraseBarEnabled ? (
+          <PhraseBar
+            items={phraseBarItems}
+            onPressItem={onPhraseBarItemPress}
+            onLongPressItem={caregiverUnlocked ? onPhraseBarItemLongPress : undefined}
+          />
+        ) : null}
       </View>
 
       {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
+      {phraseFeedback ? (
+        <Text
+          style={
+            phraseFeedback.kind === 'error'
+              ? styles.editorHintError
+              : styles.editorHintSuccess
+          }
+        >
+          {phraseFeedback.text}
+        </Text>
+      ) : null}
 
       <View style={styles.boardArea}>
         <View

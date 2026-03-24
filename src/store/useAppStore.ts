@@ -21,13 +21,35 @@ import {
   getProfileSettings,
   updateProfileSettings,
 } from '../shared/storage/repositories/settingsRepository';
+import {
+  deleteSavedPhrase as deleteSavedPhraseInRepository,
+  getRecentPhraseEvents,
+  getSavedPhrases,
+  noteSavedPhrasePlayed,
+  recordPhraseEvent,
+  savePhrase,
+  toPhraseTokenSnapshot,
+} from '../shared/storage/repositories/phraseRepository';
 import { countPendingSyncEvents } from '../shared/storage/repositories/syncRepository';
 import { logError } from '../shared/telemetry/logger';
 import type { AuthStatus, RemoteContext } from '../features/auth/types';
-import type { AudioClip, Board, ProfileSettings, SentenceToken, SyncStatus, Tile } from '../shared/types/domain';
+import type {
+  AudioClip,
+  Board,
+  PhraseEventRecord,
+  PhraseSource,
+  PhraseTokenSnapshot,
+  ProfileSettings,
+  SavedPhrase,
+  SentenceToken,
+  SyncStatus,
+  Tile,
+} from '../shared/types/domain';
+import { DEFAULT_PROFILE_ID } from '../shared/constants/defaults';
 import { createId } from '../shared/utils/id';
 
 export type ScreenName = 'board' | 'caregiverGate' | 'editor' | 'settings' | 'pinSettings' | 'tileArchive';
+export type PendingCaregiverAction = 'savePhrase' | null;
 
 type ClipMap = Record<string, AudioClip>;
 
@@ -36,6 +58,24 @@ const toClipMap = (clips: AudioClip[]): ClipMap => {
     map[clip.id] = clip;
     return map;
   }, {});
+};
+
+const toSentenceToken = (token: PhraseTokenSnapshot): SentenceToken => ({
+  tokenId: createId('token'),
+  tileId: token.tileId,
+  label: token.label,
+  emoji: token.emoji,
+  visualType: token.visualType,
+  imageLocalUri: token.imageLocalUri,
+  imageRemotePath: token.imageRemotePath,
+});
+
+const toSentenceTokens = (tokens: PhraseTokenSnapshot[]): SentenceToken[] => {
+  return tokens.map(toSentenceToken);
+};
+
+const getActiveProfileId = (state: Pick<AppStore, 'board' | 'settings'>): string => {
+  return state.board?.profileId ?? state.settings?.profileId ?? DEFAULT_PROFILE_ID;
 };
 
 type AppStore = {
@@ -50,6 +90,8 @@ type AppStore = {
   tiles: Tile[];
   clipsById: ClipMap;
   sentence: SentenceToken[];
+  savedPhrases: SavedPhrase[];
+  recentPhrases: PhraseEventRecord[];
   isBoardLoading: boolean;
   settings: ProfileSettings | null;
   isSettingsLoading: boolean;
@@ -61,6 +103,7 @@ type AppStore = {
   isSpeaking: boolean;
   editorTargetTileId: string | null;
   boardPageIndex: number;
+  pendingCaregiverAction: PendingCaregiverAction;
 
   navigate: (screen: ScreenName) => void;
   setAuthState: (params: {
@@ -74,10 +117,20 @@ type AppStore = {
   initializeApp: () => Promise<void>;
   refreshBoard: () => Promise<void>;
   refreshSettings: () => Promise<void>;
+  refreshPhrases: () => Promise<void>;
   addTileToSentence: (tileId: string) => void;
+  appendPhraseTokens: (tokens: PhraseTokenSnapshot[]) => void;
+  replaceSentenceWithTokens: (tokens: PhraseTokenSnapshot[]) => void;
   removeSentenceToken: (tokenId: string) => void;
   clearSentence: () => void;
   setSpeaking: (value: boolean) => void;
+  saveCurrentSentenceAsPhrase: () => Promise<void>;
+  deleteSavedPhrase: (phraseId: string) => Promise<void>;
+  recordPhrasePlayback: (params: {
+    tokens: PhraseTokenSnapshot[];
+    source: PhraseSource;
+    savedPhraseId?: string;
+  }) => Promise<void>;
 
   updateTileDraft: (tileId: string, update: TileUpdateInput) => Promise<void>;
   createTileAfter: (tileId: string) => Promise<string>;
@@ -98,6 +151,7 @@ type AppStore = {
     preferredVoice?: string | null;
     highContrast?: boolean;
     showLabels?: boolean;
+    phraseBarEnabled?: boolean;
     pinHash?: string;
   }) => Promise<void>;
 
@@ -107,6 +161,8 @@ type AppStore = {
   clearPinFailures: () => void;
   setEditorTargetTileId: (tileId: string | null) => void;
   setBoardPageIndex: (pageIndex: number) => void;
+  setPendingCaregiverAction: (action: PendingCaregiverAction) => void;
+  clearPendingCaregiverAction: () => void;
 
   setSyncStatus: (status: SyncStatus) => void;
   refreshPendingSyncEvents: () => Promise<void>;
@@ -124,6 +180,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   tiles: [],
   clipsById: {},
   sentence: [],
+  savedPhrases: [],
+  recentPhrases: [],
   isBoardLoading: true,
   settings: null,
   isSettingsLoading: true,
@@ -135,6 +193,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   isSpeaking: false,
   editorTargetTileId: null,
   boardPageIndex: 0,
+  pendingCaregiverAction: null,
 
   navigate: (screen) => {
     set({ currentScreen: screen });
@@ -177,11 +236,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
         throw new Error('Board snapshot missing');
       }
 
+      const [savedPhrases, recentPhrases] = await Promise.all([
+        getSavedPhrases(snapshot.board.profileId),
+        getRecentPhraseEvents(snapshot.board.profileId),
+      ]);
+
       set({
         board: snapshot.board,
         tiles: snapshot.tiles,
         clipsById: toClipMap(snapshot.audioClips),
         settings,
+        savedPhrases,
+        recentPhrases,
         pendingSyncEvents,
       });
     } catch (error) {
@@ -209,6 +275,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ settings });
   },
 
+  refreshPhrases: async () => {
+    const profileId = getActiveProfileId(get());
+    const [savedPhrases, recentPhrases] = await Promise.all([
+      getSavedPhrases(profileId),
+      getRecentPhraseEvents(profileId),
+    ]);
+
+    set({
+      savedPhrases,
+      recentPhrases,
+    });
+  },
+
   addTileToSentence: (tileId) => {
     const tile = get().tiles.find((candidate) => candidate.id === tileId);
     if (!tile) {
@@ -230,6 +309,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }));
   },
 
+  appendPhraseTokens: (tokens) => {
+    const nextTokens = tokens.map(toPhraseTokenSnapshot).filter((token) => token.label.length > 0);
+    if (nextTokens.length === 0) {
+      return;
+    }
+
+    set((state) => ({
+      sentence: [...state.sentence, ...toSentenceTokens(nextTokens)],
+    }));
+  },
+
+  replaceSentenceWithTokens: (tokens) => {
+    const nextTokens = tokens.map(toPhraseTokenSnapshot).filter((token) => token.label.length > 0);
+    set({
+      sentence: toSentenceTokens(nextTokens),
+    });
+  },
+
   removeSentenceToken: (tokenId) => {
     set((state) => ({
       sentence: state.sentence.filter((token) => token.tokenId !== tokenId),
@@ -242,6 +339,37 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setSpeaking: (value) => {
     set({ isSpeaking: value });
+  },
+
+  saveCurrentSentenceAsPhrase: async () => {
+    const profileId = getActiveProfileId(get());
+    const tokens = get().sentence.map(toPhraseTokenSnapshot);
+    if (tokens.length === 0) {
+      return;
+    }
+
+    await savePhrase(profileId, tokens);
+    await get().refreshPhrases();
+  },
+
+  deleteSavedPhrase: async (phraseId) => {
+    await deleteSavedPhraseInRepository(phraseId);
+    await get().refreshPhrases();
+  },
+
+  recordPhrasePlayback: async ({ tokens, source, savedPhraseId }) => {
+    const profileId = getActiveProfileId(get());
+    await recordPhraseEvent({
+      profileId,
+      tokens,
+      source,
+    });
+
+    if (savedPhraseId) {
+      await noteSavedPhrasePlayed(savedPhraseId);
+    }
+
+    await get().refreshPhrases();
   },
 
   updateTileDraft: async (tileId, update) => {
@@ -333,6 +461,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     set({ boardPageIndex: nextPageIndex });
+  },
+
+  setPendingCaregiverAction: (action) => {
+    set({ pendingCaregiverAction: action });
+  },
+
+  clearPendingCaregiverAction: () => {
+    set({ pendingCaregiverAction: null });
   },
 
   setSyncStatus: (status) => {

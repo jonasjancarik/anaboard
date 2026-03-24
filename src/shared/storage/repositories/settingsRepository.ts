@@ -18,6 +18,7 @@ type SettingsRow = {
   preferred_voice?: string | null;
   high_contrast: number;
   show_labels: number;
+  phrase_bar_enabled: number;
   updated_at: string;
   revision: number;
 };
@@ -32,6 +33,7 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
   preferredVoice: row.preferred_voice ?? undefined,
   highContrast: row.high_contrast === 1,
   showLabels: row.show_labels === 1,
+  phraseBarEnabled: row.phrase_bar_enabled === 1,
   updatedAt: row.updated_at,
   revision: row.revision,
 });
@@ -54,8 +56,8 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     `
       INSERT INTO profile_settings (
         profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
-        high_contrast, show_labels, updated_at, revision, dirty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        high_contrast, show_labels, phrase_bar_enabled, updated_at, revision, dirty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
     defaults.profileId,
     defaults.pinHash,
@@ -66,6 +68,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     defaults.preferredVoice ?? null,
     defaults.highContrast ? 1 : 0,
     defaults.showLabels ? 1 : 0,
+    defaults.phraseBarEnabled ? 1 : 0,
     defaults.updatedAt,
     defaults.revision
   );
@@ -80,6 +83,7 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     preferred_voice: defaults.preferredVoice ?? null,
     high_contrast: defaults.highContrast ? 1 : 0,
     show_labels: defaults.showLabels ? 1 : 0,
+    phrase_bar_enabled: defaults.phraseBarEnabled ? 1 : 0,
     updated_at: defaults.updatedAt,
     revision: defaults.revision,
   });
@@ -90,7 +94,7 @@ export const getProfileSettings = async (): Promise<ProfileSettings> => {
   const row = await db.getFirstAsync<SettingsRow>(
     `
       SELECT profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
-           , show_labels
+           , show_labels, phrase_bar_enabled
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
@@ -114,6 +118,7 @@ type SettingsUpdate = {
   preferredVoice?: string | null;
   highContrast?: boolean;
   showLabels?: boolean;
+  phraseBarEnabled?: boolean;
   pinHash?: string;
 };
 
@@ -132,6 +137,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
       update.preferredVoice === undefined ? current.preferredVoice ?? null : update.preferredVoice,
     highContrast: update.highContrast ?? current.highContrast,
     showLabels: update.showLabels ?? current.showLabels,
+    phraseBarEnabled: update.phraseBarEnabled ?? current.phraseBarEnabled,
     pinHash: update.pinHash ?? current.pinHash,
   };
 
@@ -147,6 +153,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
         preferred_voice = ?,
         high_contrast = ?,
         show_labels = ?,
+        phrase_bar_enabled = ?,
         updated_at = ?,
         revision = ?,
         dirty = 1
@@ -160,6 +167,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     next.preferredVoice,
     next.highContrast ? 1 : 0,
     next.showLabels ? 1 : 0,
+    next.phraseBarEnabled ? 1 : 0,
     updatedAt,
     revision,
     current.profileId
@@ -175,6 +183,7 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     preferred_voice: next.preferredVoice,
     high_contrast: next.highContrast ? 1 : 0,
     show_labels: next.showLabels ? 1 : 0,
+    phrase_bar_enabled: next.phraseBarEnabled ? 1 : 0,
     updated_at: updatedAt,
     revision,
   });
