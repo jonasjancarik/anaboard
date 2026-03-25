@@ -103,6 +103,7 @@ cp .env.example .env.local
 Env vars:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_SENTRY_DSN`
 - `EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS`
@@ -122,8 +123,8 @@ LLM features use Supabase Edge Functions in `/Users/janca/projects/anaboard/supa
 Required function secrets:
 
 - `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SB_PUBLISHABLE_KEY`
+- `SB_SECRET_KEY`
 - `OPENAI_API_KEY`
 
 Optional function secrets:
@@ -136,6 +137,7 @@ Suggested rollout:
 - keep all `EXPO_PUBLIC_AI_*` flags at `0` until functions are deployed and tested
 - local function env example: `/Users/janca/projects/anaboard/supabase/functions/.env.example`
 - local/static function check: `npm run functions:check`
+- app should prefer `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; `EXPO_PUBLIC_SUPABASE_ANON_KEY` remains fallback during migration
 
 ## Supabase schema
 

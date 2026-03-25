@@ -7,14 +7,16 @@ AnaBoard AI endpoints live here.
 Set before deploy:
 
 - `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SB_PUBLISHABLE_KEY`
+- `SB_SECRET_KEY`
 - `OPENAI_API_KEY`
 
 Optional:
 
 - `OPENAI_TEXT_MODEL`
 - `OPENAI_IMAGE_MODEL`
+- `SUPABASE_ANON_KEY` fallback during migration only
+- `SUPABASE_SERVICE_ROLE_KEY` fallback during migration only
 
 ## Check locally
 
@@ -22,6 +24,12 @@ Optional:
 npm run functions:check
 npm run functions:env
 ```
+
+Current code path:
+
+- prefers `SB_PUBLISHABLE_KEY` for JWT claim verification
+- prefers `SB_SECRET_KEY` for admin database/storage access
+- falls back to legacy `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` only if the new keys are missing
 
 ## Deploy
 
@@ -60,3 +68,4 @@ npm run functions:serve
 - Image drafts use the existing private `tile-images` bucket under `ai-drafts/`.
 - Generated drafts are promoted into the final tile path on acceptance.
 - Image generation uses OpenAI `gpt-image-1.5` with transparent PNG output.
+- `verify_jwt` is disabled; functions verify Supabase JWTs manually from the `Authorization` header.

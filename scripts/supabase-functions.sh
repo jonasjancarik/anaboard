@@ -58,10 +58,8 @@ get_env_value() {
 check_env() {
   require_env_file
 
-  local required_local=(
+  local always_required=(
     "SUPABASE_URL"
-    "SUPABASE_ANON_KEY"
-    "SUPABASE_SERVICE_ROLE_KEY"
     "OPENAI_API_KEY"
   )
 
@@ -69,12 +67,27 @@ check_env() {
   local key=""
   local value=""
 
-  for key in "${required_local[@]}"; do
+  for key in "${always_required[@]}"; do
     value="$(get_env_value "${key}" || true)"
     if [[ -z "${value}" ]]; then
       missing+=("${key}")
     fi
   done
+
+  local user_key=""
+  local admin_key=""
+  user_key="$(get_env_value "SB_PUBLISHABLE_KEY" || true)"
+  [[ -z "${user_key}" ]] && user_key="$(get_env_value "SUPABASE_ANON_KEY" || true)"
+  admin_key="$(get_env_value "SB_SECRET_KEY" || true)"
+  [[ -z "${admin_key}" ]] && admin_key="$(get_env_value "SUPABASE_SERVICE_ROLE_KEY" || true)"
+
+  if [[ -z "${user_key}" ]]; then
+    missing+=("SB_PUBLISHABLE_KEY|SUPABASE_ANON_KEY")
+  fi
+
+  if [[ -z "${admin_key}" ]]; then
+    missing+=("SB_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY")
+  fi
 
   if [[ ${#missing[@]} -gt 0 ]]; then
     printf 'Missing env keys: %s\n' "${missing[*]}" >&2
@@ -100,10 +113,14 @@ set_hosted_secrets() {
   local openai_api_key=""
   local openai_text_model=""
   local openai_image_model=""
+  local sb_publishable_key=""
+  local sb_secret_key=""
 
   openai_api_key="$(get_env_value "OPENAI_API_KEY" || true)"
   openai_text_model="$(get_env_value "OPENAI_TEXT_MODEL" || true)"
   openai_image_model="$(get_env_value "OPENAI_IMAGE_MODEL" || true)"
+  sb_publishable_key="$(get_env_value "SB_PUBLISHABLE_KEY" || true)"
+  sb_secret_key="$(get_env_value "SB_SECRET_KEY" || true)"
 
   if [[ -z "${openai_api_key}" ]]; then
     echo "OPENAI_API_KEY missing from ${ENV_FILE}" >&2
@@ -119,6 +136,18 @@ set_hosted_secrets() {
 
   if [[ -n "${openai_image_model}" ]]; then
     supabase secrets set OPENAI_IMAGE_MODEL="${openai_image_model}"
+  fi
+
+  if [[ -n "${sb_publishable_key}" ]]; then
+    supabase secrets set SB_PUBLISHABLE_KEY="${sb_publishable_key}"
+  else
+    echo "SB_PUBLISHABLE_KEY not set locally; hosted functions will fall back to legacy SUPABASE_ANON_KEY." >&2
+  fi
+
+  if [[ -n "${sb_secret_key}" ]]; then
+    supabase secrets set SB_SECRET_KEY="${sb_secret_key}"
+  else
+    echo "SB_SECRET_KEY not set locally; hosted functions will fall back to legacy SUPABASE_SERVICE_ROLE_KEY." >&2
   fi
 }
 
