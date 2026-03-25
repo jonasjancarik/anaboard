@@ -20,6 +20,7 @@ Optional:
 
 ```bash
 npm run functions:check
+npm run functions:env
 ```
 
 ## Deploy
@@ -38,6 +39,19 @@ supabase functions deploy ai-emoji-suggest
 supabase functions deploy ai-autocomplete-rerank
 supabase functions deploy ai-image-draft-generate
 supabase functions deploy ai-image-draft-promote
+```
+
+Repo helper:
+
+```bash
+npm run functions:secrets
+npm run functions:deploy
+```
+
+## Local serve
+
+```bash
+npm run functions:serve
 ```
 
 ## Notes
