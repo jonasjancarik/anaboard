@@ -27,13 +27,13 @@ const getExtension = (mimeType: string): string => {
 
 const buildPrompt = (body: Required<Pick<RequestBody, 'label' | 'locale'>> & RequestBody) => {
   return [
-    `Create one square AAC tile illustration for the label "${body.label}".`,
+    `Create one square Augmentative and Alternative Communication app tile illustration for the label "${body.label}".`,
     `Locale: ${body.locale}.`,
     body.category ? `Category: ${body.category}.` : 'Category: unknown.',
-    'Style: warm, calm, child-friendly flat pictogram.',
-    'Single clear object. Centered composition. Soft edges. Soft color palette.',
-    'No text. No letters. No watermark. No frame. No busy background.',
-    'White or transparent-looking plain background.',
+    'Style: warm, calm, child-friendly flat emoji or pictogram.',
+    'Single clear object preferred, if appropriate.',
+    'Centered composition. Soft edges. Soft color palette.',
+    'No text, unless appropriate. No watermark. No frame. No background.',
     'Make the object instantly recognizable for a preschool child.',
   ].join(' ');
 };
