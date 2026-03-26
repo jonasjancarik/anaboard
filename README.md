@@ -139,6 +139,25 @@ Suggested rollout:
 - local/static function check: `npm run functions:check`
 - app should prefer `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; `EXPO_PUBLIC_SUPABASE_ANON_KEY` remains fallback during migration
 
+Admin helper for anonymous AI image trial quota:
+
+```bash
+npm run admin:ai-trial -- list
+npm run admin:ai-trial -- show --user-id <auth-user-uuid>
+npm run admin:ai-trial -- reset --user-id <auth-user-uuid>
+npm run admin:ai-trial -- set-used --user-id <auth-user-uuid> --count 3
+node ./scripts/admin-ai-trial.mjs list --json | jq -r '.[] | select(.isAnonymous) | .userId' | xargs -n1 node ./scripts/admin-ai-trial.mjs reset --user-id
+```
+
+Notes:
+
+- defaults to `supabase/functions/.env.local`
+- requires `SUPABASE_URL` + `SB_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`)
+- `list --all` walks all auth users; default page size `50`
+- `--email <caregiver@email>` resolves registered caregivers via `caregivers.email`
+- anonymous users usually need `--user-id`
+- use `node ./scripts/admin-ai-trial.mjs ... --json` for pipelines; `npm run` adds banner text ahead of JSON
+
 ## Supabase schema
 
 See `/Users/janca/projects/anaboard/supabase/schema.sql` for baseline tables and RLS policy template.
