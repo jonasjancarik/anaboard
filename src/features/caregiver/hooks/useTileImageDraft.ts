@@ -200,11 +200,9 @@ export const useTileImageDraft = ({
     setVisualType,
     imageLocalUri,
     imageRemotePath,
-    previewImageLocalUri: generatedDraft ? null : imageLocalUri,
-    previewImageRemotePath:
-      generatedDraft && !generatedDraft.localUri
-        ? generatedDraft.previewUrl
-        : imageRemotePath,
+    previewImageLocalUri:
+      generatedDraft?.localUri ?? (generatedDraft ? null : imageLocalUri),
+    previewImageRemotePath: generatedDraft?.previewUrl ?? imageRemotePath,
     generatedDraft,
     hasPreviewImage: Boolean(imageLocalUri || generatedDraft?.previewUrl || imageRemotePath),
     setGeneratedDraftPreview,
