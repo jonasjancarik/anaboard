@@ -146,7 +146,7 @@ const TileVisualFrame = ({
           width: size,
           height: size,
           borderRadius: cornerRadius,
-          backgroundColor: showImage ? APP_THEME.surfaceTint : 'transparent',
+          backgroundColor: 'transparent',
         },
         style,
       ]}
