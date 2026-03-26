@@ -287,7 +287,6 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         label: normalizedLabel,
         locale: board?.locale ?? "cs-CZ",
         category,
-        stylePreset: "warm-flat-pictogram-v1",
       });
 
       logEvent("ai_image_generate_success", {

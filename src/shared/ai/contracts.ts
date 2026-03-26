@@ -52,7 +52,6 @@ export type GenerateTileImageDraftRequest = {
   label: string;
   locale: string;
   category?: Category;
-  stylePreset: 'warm-flat-pictogram-v1';
 };
 
 export type GenerateTileImageDraftResponse = {

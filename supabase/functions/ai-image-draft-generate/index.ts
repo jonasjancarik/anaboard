@@ -15,7 +15,6 @@ type RequestBody = {
   label?: string;
   locale?: string;
   category?: string;
-  stylePreset?: string;
 };
 
 const getExtension = (mimeType: string): string => {
@@ -27,13 +26,10 @@ const getExtension = (mimeType: string): string => {
 };
 
 const buildPrompt = (body: Required<Pick<RequestBody, 'label' | 'locale'>> & RequestBody) => {
-  const stylePreset = body.stylePreset?.trim() || 'warm-flat-pictogram-v1';
-
   return [
     `Create one square AAC tile illustration for the label "${body.label}".`,
     `Locale: ${body.locale}.`,
     body.category ? `Category: ${body.category}.` : 'Category: unknown.',
-    `Style preset: ${stylePreset}.`,
     'Style: warm, calm, child-friendly flat pictogram.',
     'Single clear object. Centered composition. Soft edges. Soft color palette.',
     'No text. No letters. No watermark. No frame. No busy background.',
@@ -79,7 +75,6 @@ Deno.serve(async (request: Request) => {
         label,
         locale,
         category: body.category,
-        stylePreset: body.stylePreset,
       })
     );
 
