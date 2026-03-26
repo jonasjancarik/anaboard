@@ -11,7 +11,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "migrations:test": "node --experimental-strip-types scripts/test-db-migrations.mjs",
-    "functions:check": "deno check --config supabase/functions/deno.json supabase/functions/ai-emoji-suggest/index.ts supabase/functions/ai-autocomplete-rerank/index.ts supabase/functions/ai-image-draft-generate/index.ts supabase/functions/ai-image-draft-promote/index.ts",
+    "functions:check": "deno check --no-lock --config supabase/functions/deno.json supabase/functions/ai-emoji-suggest/index.ts supabase/functions/ai-autocomplete-rerank/index.ts supabase/functions/ai-image-draft-generate/index.ts supabase/functions/ai-image-draft-promote/index.ts",
     "functions:env": "bash ./scripts/supabase-functions.sh check-env",
     "functions:serve": "bash ./scripts/supabase-functions.sh serve",
     "functions:secrets": "bash ./scripts/supabase-functions.sh set-secrets",

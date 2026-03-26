@@ -55,6 +55,26 @@ get_env_value() {
   printf '%s\n' "${line#*=}"
 }
 
+resolve_project_ref() {
+  local explicit_ref=""
+  local url=""
+
+  explicit_ref="$(get_env_value "SUPABASE_PROJECT_REF" || true)"
+  if [[ -n "${explicit_ref}" ]]; then
+    printf '%s\n' "${explicit_ref}"
+    return 0
+  fi
+
+  url="$(get_env_value "SUPABASE_URL" || true)"
+  if [[ "${url}" =~ ^https://([^.]+)\.supabase\.co/?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  echo "Could not determine project ref from SUPABASE_URL. Set SUPABASE_PROJECT_REF in ${ENV_FILE}." >&2
+  exit 1
+}
+
 check_env() {
   require_env_file
 
@@ -115,12 +135,14 @@ set_hosted_secrets() {
   local openai_image_model=""
   local sb_publishable_key=""
   local sb_secret_key=""
+  local project_ref=""
 
   openai_api_key="$(get_env_value "OPENAI_API_KEY" || true)"
   openai_text_model="$(get_env_value "OPENAI_TEXT_MODEL" || true)"
   openai_image_model="$(get_env_value "OPENAI_IMAGE_MODEL" || true)"
   sb_publishable_key="$(get_env_value "SB_PUBLISHABLE_KEY" || true)"
   sb_secret_key="$(get_env_value "SB_SECRET_KEY" || true)"
+  project_ref="$(resolve_project_ref)"
 
   if [[ -z "${openai_api_key}" ]]; then
     echo "OPENAI_API_KEY missing from ${ENV_FILE}" >&2
@@ -128,24 +150,24 @@ set_hosted_secrets() {
   fi
 
   cd "${PROJECT_ROOT}"
-  supabase secrets set OPENAI_API_KEY="${openai_api_key}"
+  supabase secrets set --project-ref "${project_ref}" OPENAI_API_KEY="${openai_api_key}"
 
   if [[ -n "${openai_text_model}" ]]; then
-    supabase secrets set OPENAI_TEXT_MODEL="${openai_text_model}"
+    supabase secrets set --project-ref "${project_ref}" OPENAI_TEXT_MODEL="${openai_text_model}"
   fi
 
   if [[ -n "${openai_image_model}" ]]; then
-    supabase secrets set OPENAI_IMAGE_MODEL="${openai_image_model}"
+    supabase secrets set --project-ref "${project_ref}" OPENAI_IMAGE_MODEL="${openai_image_model}"
   fi
 
   if [[ -n "${sb_publishable_key}" ]]; then
-    supabase secrets set SB_PUBLISHABLE_KEY="${sb_publishable_key}"
+    supabase secrets set --project-ref "${project_ref}" SB_PUBLISHABLE_KEY="${sb_publishable_key}"
   else
     echo "SB_PUBLISHABLE_KEY not set locally; hosted functions will fall back to legacy SUPABASE_ANON_KEY." >&2
   fi
 
   if [[ -n "${sb_secret_key}" ]]; then
-    supabase secrets set SB_SECRET_KEY="${sb_secret_key}"
+    supabase secrets set --project-ref "${project_ref}" SB_SECRET_KEY="${sb_secret_key}"
   else
     echo "SB_SECRET_KEY not set locally; hosted functions will fall back to legacy SUPABASE_SERVICE_ROLE_KEY." >&2
   fi
@@ -155,10 +177,14 @@ deploy_functions() {
   require_cli
   set_hosted_secrets
   cd "${PROJECT_ROOT}"
+  local project_ref=""
+  project_ref="$(resolve_project_ref)"
+
+  rm -f "${PROJECT_ROOT}/supabase/functions/deno.lock"
 
   local function_name=""
   for function_name in "${FUNCTIONS[@]}"; do
-    supabase functions deploy "${function_name}"
+    supabase functions deploy --project-ref "${project_ref}" "${function_name}"
   done
 }
 

@@ -7,6 +7,7 @@ AnaBoard AI endpoints live here.
 Set before deploy:
 
 - `SUPABASE_URL`
+- `SUPABASE_PROJECT_REF` optional override
 - `SB_PUBLISHABLE_KEY`
 - `SB_SECRET_KEY`
 - `OPENAI_API_KEY`
