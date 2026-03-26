@@ -70,6 +70,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [isTestingSpeech, setIsTestingSpeech] = useState(false);
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
   const [isApplyingAiImage, setIsApplyingAiImage] = useState(false);
+  const [hasExplicitCategoryChoice, setHasExplicitCategoryChoice] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [tileActionError, setTileActionError] = useState<string | null>(null);
 
@@ -132,6 +133,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setIsVisualMenuOpen(false);
     setIsGeneratingAiImage(false);
     setIsApplyingAiImage(false);
+    setHasExplicitCategoryChoice(false);
     setRecordingError(null);
     setTileActionError(null);
   }, [selectedTileId]);
@@ -140,6 +142,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     ? clipsById[selectedTile.audioClipId]
     : undefined;
   const previewColors = CATEGORY_COLORS[category];
+  const promptCategory = hasExplicitCategoryChoice ? category : undefined;
   const highContrast = settings?.highContrast ?? false;
   const trimmedLabel = labelCs.trim();
   const effectiveLabel = selectedTile ? trimmedLabel || selectedTile.labelCs : "";
@@ -286,14 +289,14 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         tileId: selectedTile.id,
         label: normalizedLabel,
         locale: board?.locale ?? "cs-CZ",
-        category,
+        category: promptCategory,
       });
 
       logEvent("ai_image_generate_success", {
         duration_ms: Date.now() - startedAtMs,
         anonymous: authIsAnonymous,
         locale: board?.locale ?? "cs-CZ",
-        category,
+        category: promptCategory ?? null,
         label_length: normalizedLabel.length,
         trial_remaining:
           typeof draft.trialRemaining === "number" ? draft.trialRemaining : null,
@@ -310,7 +313,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         duration_ms: Date.now() - startedAtMs,
         anonymous: authIsAnonymous,
         locale: board?.locale ?? "cs-CZ",
-        category,
+        category: promptCategory ?? null,
         label_length: normalizedLabel.length,
       });
       setTileActionError(
@@ -686,7 +689,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                     return (
                       <Pressable
                         key={item}
-                        onPress={() => setCategory(item)}
+                        onPress={() => {
+                          setCategory(item);
+                          setHasExplicitCategoryChoice(true);
+                        }}
                         style={[
                           styles.chip,
                           styles.categoryChip,
