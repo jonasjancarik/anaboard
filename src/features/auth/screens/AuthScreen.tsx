@@ -56,6 +56,10 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
       <TextInput
         style={styles.input}
         autoCapitalize="none"
+        autoCorrect={false}
+        spellCheck={false}
+        autoComplete="email"
+        textContentType="emailAddress"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
