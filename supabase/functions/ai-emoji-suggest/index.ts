@@ -16,6 +16,13 @@ type ProviderSuggestion = {
 };
 
 const MAX_SUGGESTIONS = 5;
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: 'grapheme',
+});
+
+const countGraphemes = (value: string): number => {
+  return [...graphemeSegmenter.segment(value)].length;
+};
 
 const clampConfidence = (value: number | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -35,7 +42,12 @@ const sanitizeSuggestions = (suggestions: ProviderSuggestion[]) => {
       reason: suggestion.reason?.trim() || undefined,
     }))
     .filter((suggestion) => {
-      if (!suggestion.value || /\s/.test(suggestion.value) || seen.has(suggestion.value)) {
+      if (
+        !suggestion.value ||
+        /\s/.test(suggestion.value) ||
+        countGraphemes(suggestion.value) > 2 ||
+        seen.has(suggestion.value)
+      ) {
         return false;
       }
 
@@ -56,7 +68,9 @@ const buildPrompt = ({ label, locale, category, existingEmoji }: Required<Pick<R
     '{"suggestions":[{"value":"🍌","confidence":0.95,"reason":"short reason"}]}',
     'Rules:',
     '- Suggest at most 5 emoji.',
-    '- Prefer standard single emoji or short emoji sequences.',
+    '- Prefer exactly 1 emoji whenever possible.',
+    '- Allow 2 emoji only when 1 emoji would be too ambiguous.',
+    '- Never return more than 2 emoji.',
     '- No words, no markdown, no prose.',
     '- Confidence must be between 0 and 1.',
     '- Optimize for preschool AAC clarity.',

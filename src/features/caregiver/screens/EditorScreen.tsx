@@ -28,6 +28,7 @@ import type {
 import { useAppStore } from "../../../store/useAppStore";
 import { recordingService } from "../../speech/recordingService";
 import type { TileUpdateInput } from "../../../shared/storage/repositories/tileRepository";
+import { logError, logEvent } from "../../../shared/telemetry/logger";
 
 type EditorScreenProps = {
   onBack: () => void;
@@ -238,6 +239,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     setIsGeneratingAiImage(true);
     setTileActionError(null);
+    const startedAtMs = Date.now();
 
     try {
       const draft = await imageDraftService.generateDraft({
@@ -249,6 +251,15 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         stylePreset: "warm-flat-pictogram-v1",
       });
 
+      logEvent("ai_image_generate_success", {
+        duration_ms: Date.now() - startedAtMs,
+        anonymous: authIsAnonymous,
+        locale: board?.locale ?? "cs-CZ",
+        category,
+        label_length: normalizedLabel.length,
+        trial_remaining:
+          typeof draft.trialRemaining === "number" ? draft.trialRemaining : null,
+      });
       setGeneratedDraftPreview({
         draftId: draft.draftId,
         storagePath: draft.storagePath,
@@ -256,6 +267,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       });
       setVisualType("image");
     } catch (error) {
+      logError("ai_image_generate_error", error, {
+        duration_ms: Date.now() - startedAtMs,
+        anonymous: authIsAnonymous,
+        locale: board?.locale ?? "cs-CZ",
+        category,
+        label_length: normalizedLabel.length,
+      });
       setTileActionError(
         error instanceof Error ? error.message : "AI obrázek nešel vytvořit",
       );

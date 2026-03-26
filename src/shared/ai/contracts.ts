@@ -64,6 +64,7 @@ export type GenerateTileImageDraftResponse = {
   height?: number;
   provider: AiProvider;
   promptVersion: string;
+  trialRemaining?: number | null;
 };
 
 export type PromoteTileImageDraftRequest = {
