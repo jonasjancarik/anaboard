@@ -9,6 +9,7 @@
     "android:prebuild": "bash ./scripts/android-local-build.sh prebuild",
     "android:apk": "bash ./scripts/android-local-build.sh apk",
     "admin:ai-trial": "node ./scripts/admin-ai-trial.mjs",
+    "email:test": "node --experimental-strip-types ./scripts/test-email-normalization.mjs",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "migrations:test": "node --experimental-strip-types scripts/test-db-migrations.mjs",

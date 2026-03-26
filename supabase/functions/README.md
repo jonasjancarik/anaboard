@@ -71,7 +71,7 @@ Supports:
 - `list --all` for full auth-user dump
 - `set-used --count <number>` for manual overrides
 - `--env-file <path>` if you do not use `supabase/functions/.env.local`
-- `--email <caregiver@email>` to resolve registered caregiver ids via `caregivers.email`
+- `--email <caregiver@email>` to resolve registered caregiver ids via `caregivers.email_canonical`
 - direct `node` invocation is better for JSON pipelines; `npm run` prepends banner output
 
 ## Local serve

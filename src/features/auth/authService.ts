@@ -5,6 +5,7 @@ import { logError } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
 import type { RemoteContext } from './types';
 import { clearRemoteContext, loadRemoteContext, saveRemoteContext } from '../sync/remoteContextStorage';
+import { getOriginalEmailAddress } from './emailAddress';
 
 export type BootstrapInput = {
   familyName: string;
@@ -181,8 +182,14 @@ export const authService = {
 
   async sendMagicLink(email: string, emailRedirectTo: string): Promise<void> {
     const client = getClient();
+    const sanitizedEmail = getOriginalEmailAddress(email);
+
+    if (!sanitizedEmail) {
+      throw new Error('E-mail chybí');
+    }
+
     const { error } = await client.auth.signInWithOtp({
-      email,
+      email: sanitizedEmail,
       options: {
         emailRedirectTo,
       },

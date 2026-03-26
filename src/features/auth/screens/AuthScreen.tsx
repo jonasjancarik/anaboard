@@ -8,8 +8,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as Linking from 'expo-linking';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../authService';
+import { getOriginalEmailAddress } from '../emailAddress';
 import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
@@ -28,8 +30,8 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
+    const originalEmail = getOriginalEmailAddress(email);
+    if (!originalEmail) {
       setError('Zadej e-mail');
       return;
     }
@@ -41,8 +43,8 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
     try {
       const emailRedirectTo = isWebPlatform
         ? window.location.origin
-        : 'anaboard://auth';
-      await authService.sendMagicLink(normalizedEmail, emailRedirectTo);
+        : Linking.createURL('auth');
+      await authService.sendMagicLink(originalEmail, emailRedirectTo);
       setMessage('Odkaz jsme poslali do e-mailu. Otevři ho na tomto zařízení.');
     } catch (submitError) {
       const nextError = submitError instanceof Error ? submitError.message : 'Odeslání odkazu selhalo';

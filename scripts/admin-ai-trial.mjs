@@ -207,18 +207,59 @@ const updateUser = async (config, userId, body) => {
   );
 };
 
+const canonicalizeEmail = (value) => {
+  const original = value.trim();
+  const lowered = original.toLowerCase();
+  const atIndex = lowered.lastIndexOf('@');
+
+  if (atIndex <= 0 || atIndex === lowered.length - 1) {
+    return lowered;
+  }
+
+  const localPart = lowered.slice(0, atIndex);
+  const domain = lowered.slice(atIndex + 1);
+
+  if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+    return `${localPart}@${domain}`;
+  }
+
+  return `${localPart.split('+', 1)[0].replace(/\./g, '')}@gmail.com`;
+};
+
 const resolveUserIdByCaregiverEmail = async (config, email) => {
+  const canonicalEmail = canonicalizeEmail(email);
   const query = new URLSearchParams({
-    select: 'id,email',
-    email: `eq.${email}`,
+    select: 'id,email,email_canonical',
+    email_canonical: `eq.${canonicalEmail}`,
   });
-  const rows = await requestJson(
-    `${config.supabaseUrl}/rest/v1/caregivers?${query.toString()}`,
-    {
-      method: 'GET',
-      headers: createHeaders(config.serviceRoleKey),
+  let rows;
+
+  try {
+    rows = await requestJson(
+      `${config.supabaseUrl}/rest/v1/caregivers?${query.toString()}`,
+      {
+        method: 'GET',
+        headers: createHeaders(config.serviceRoleKey),
+      }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('email_canonical')) {
+      throw error;
     }
-  );
+
+    const legacyQuery = new URLSearchParams({
+      select: 'id,email',
+      email: `eq.${email.trim()}`,
+    });
+    rows = await requestJson(
+      `${config.supabaseUrl}/rest/v1/caregivers?${legacyQuery.toString()}`,
+      {
+        method: 'GET',
+        headers: createHeaders(config.serviceRoleKey),
+      }
+    );
+  }
 
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error(`Caregiver not found for email ${email}`);

@@ -154,13 +154,15 @@ Notes:
 - defaults to `supabase/functions/.env.local`
 - requires `SUPABASE_URL` + `SB_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`)
 - `list --all` walks all auth users; default page size `50`
-- `--email <caregiver@email>` resolves registered caregivers via `caregivers.email`
+- `--email <caregiver@email>` resolves registered caregivers via `caregivers.email_canonical`
 - anonymous users usually need `--user-id`
 - use `node ./scripts/admin-ai-trial.mjs ... --json` for pipelines; `npm run` adds banner text ahead of JSON
 
 ## Supabase schema
 
 See `/Users/janca/projects/anaboard/supabase/schema.sql` for baseline tables and RLS policy template.
+
+Caregiver emails keep the original `email` for UI/outgoing auth, with generated `email_canonical` for Gmail-aware lookup and dedup.
 
 ## Notes
 
