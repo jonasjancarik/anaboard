@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../authService';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
@@ -42,54 +51,68 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Pressable style={styles.backButton} onPress={onBack}>
-        <Text style={styles.backText}>Zpět</Text>
-      </Pressable>
-      <Text style={styles.title}>Cloud sync</Text>
-      <Text style={styles.subtitle}>
-        {authIsAnonymous
-          ? 'Zadej e-mail. Pošleme jednorázový odkaz a po návratu se vrátíš k rozpracované dlaždici.'
-          : 'Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.'}
-      </Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={24}
+      >
+        <Pressable style={styles.backButton} onPress={onBack}>
+          <Text style={styles.backText}>Zpět</Text>
+        </Pressable>
 
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
-        autoComplete="email"
-        textContentType="emailAddress"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        placeholder="email@example.com"
-        placeholderTextColor="#7C8DA7"
-      />
+        <View style={styles.form}>
+          <Text style={styles.title}>Cloud sync</Text>
+          <Text style={styles.subtitle}>
+            {authIsAnonymous
+              ? 'Zadej e-mail. Pošleme jednorázový odkaz a po návratu se vrátíš k rozpracované dlaždici.'
+              : 'Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.'}
+          </Text>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+          <TextInput
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="email"
+            textContentType="emailAddress"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="email@example.com"
+            placeholderTextColor="#7C8DA7"
+          />
 
-      <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
-        <Text style={styles.submitText}>{isSubmitting ? 'Posílám...' : 'Poslat odkaz do e-mailu'}</Text>
-      </Pressable>
-    </View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+
+          <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
+            <Text style={styles.submitText}>{isSubmitting ? 'Posílám...' : 'Poslat odkaz do e-mailu'}</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: APP_THEME.background,
+  },
   container: {
     flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: 24,
-    backgroundColor: APP_THEME.background,
   },
   backButton: {
     position: 'absolute',
-    top: 64,
+    top: 12,
     left: 24,
     paddingVertical: 8,
     paddingHorizontal: 4,
+  },
+  form: {
+    paddingTop: 112,
   },
   backText: {
     color: APP_THEME.primaryBorder,
