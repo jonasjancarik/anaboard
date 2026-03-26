@@ -4,8 +4,7 @@ import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmojiKeyboardModal } from "../components/EmojiKeyboardModal";
-import { GeneratedImageDraftSection } from "../components/GeneratedImageDraftSection";
-import { EmojiSuggestionSection } from "../components/EmojiSuggestionSection";
+import { SmartIconSuggestionsModal } from "../components/SmartIconSuggestionsModal";
 import { TileAppearanceSection } from "../components/TileAppearanceSection";
 import { TileVisualOptionsModal } from "../components/TileVisualOptionsModal";
 import { useEmojiSuggestions } from "../hooks/useEmojiSuggestions";
@@ -67,6 +66,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [isEmojiKeyboardModalOpen, setIsEmojiKeyboardModalOpen] =
     useState(false);
   const [isVisualMenuOpen, setIsVisualMenuOpen] = useState(false);
+  const [isSmartSuggestionsOpen, setIsSmartSuggestionsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTestingSpeech, setIsTestingSpeech] = useState(false);
@@ -133,6 +133,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setIsEmojiPickerOpen(false);
     setIsEmojiKeyboardModalOpen(false);
     setIsVisualMenuOpen(false);
+    setIsSmartSuggestionsOpen(false);
     setIsGeneratingAiImage(false);
     setIsApplyingAiImage(false);
     setHasExplicitCategoryChoice(false);
@@ -226,7 +227,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           }
         | undefined;
 
-      if (generatedDraft) {
+      if (generatedDraft && previewVisualType === "image") {
         const promoted = await imageDraftService.promoteDraft({
           profileId: remoteContext?.profileId,
           tileId: selectedTile.id,
@@ -268,6 +269,23 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const handleEditVisual = () => {
     setIsVisualMenuOpen(true);
+  };
+
+  const openSmartSuggestions = () => {
+    setIsVisualMenuOpen(false);
+    setIsEmojiPickerOpen(false);
+    setIsEmojiKeyboardModalOpen(false);
+    setIsSmartSuggestionsOpen(true);
+
+    if (effectiveLabel.trim()) {
+      if (!isEmojiSuggestionsLoading && emojiSuggestions.length === 0) {
+        void requestEmojiSuggestions();
+      }
+
+      if (!generatedDraft && !isGeneratingAiImage) {
+        void handleGenerateAiImage();
+      }
+    }
   };
 
   const handleGenerateAiImage = async () => {
@@ -616,15 +634,48 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           void takePhoto();
         }}
         onGenerateImage={() => {
-          setIsVisualMenuOpen(false);
-          setIsEmojiPickerOpen(false);
-          setIsEmojiKeyboardModalOpen(false);
-          void handleGenerateAiImage();
+          openSmartSuggestions();
         }}
         onRemoveImage={() => {
           setIsVisualMenuOpen(false);
           clearGeneratedDraft();
           void removeImage();
+        }}
+      />
+
+      <SmartIconSuggestionsModal
+        visible={isSmartSuggestionsOpen}
+        label={effectiveLabel}
+        previewEmoji={previewEmoji}
+        previewVisualType={previewVisualType}
+        previewImageLocalUri={previewImageLocalUri}
+        previewImageRemotePath={previewImageRemotePath}
+        generatedImageLocalUri={generatedDraft?.localUri}
+        generatedImageRemotePath={generatedDraft?.previewUrl}
+        emojiSuggestions={emojiSuggestions}
+        isEmojiLoading={isEmojiSuggestionsLoading}
+        isImageLoading={isGeneratingAiImage}
+        hasGeneratedImage={Boolean(generatedDraft)}
+        error={tileActionError}
+        showAuthCta={showAuthCtaForTileError}
+        onClose={() => {
+          setIsSmartSuggestionsOpen(false);
+        }}
+        onSelectEmoji={(suggestedEmoji) => {
+          setEmoji(suggestedEmoji);
+          setVisualType("emoji");
+          setTileActionError(null);
+        }}
+        onUseGeneratedImage={() => {
+          setVisualType("image");
+          setTileActionError(null);
+        }}
+        onRegenerateImage={() => {
+          void handleGenerateAiImage();
+        }}
+        onAuth={() => {
+          setAuthReturnScreen("editor");
+          navigate("auth");
         }}
       />
 
@@ -648,41 +699,6 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                   highContrast={highContrast}
                   previewBackgroundColor={previewColors.background}
                   onEditVisual={handleEditVisual}
-                />
-
-                <GeneratedImageDraftSection
-                  visible={
-                    aiGeneratedTileImagesEnabled &&
-                    (isGeneratingAiImage || Boolean(generatedDraft))
-                  }
-                  isGenerating={isGeneratingAiImage}
-                  isApplying={isApplyingAiImage}
-                  onApply={() => {
-                    void handleApplyAiImage();
-                  }}
-                  onRetry={() => {
-                    void handleGenerateAiImage();
-                  }}
-                  onDiscard={() => {
-                    clearGeneratedDraft();
-                    setTileActionError(null);
-                  }}
-                />
-
-                <EmojiSuggestionSection
-                  visible={aiEmojiSuggestionsEnabled}
-                  hasLabel={Boolean(effectiveLabel.trim())}
-                  isLoading={isEmojiSuggestionsLoading}
-                  error={emojiSuggestionError}
-                  suggestions={emojiSuggestions}
-                  onRequest={() => {
-                    void requestEmojiSuggestions();
-                  }}
-                  onSelect={(suggestedEmoji) => {
-                    setEmoji(suggestedEmoji);
-                    clearEmojiSuggestions();
-                    setTileActionError(null);
-                  }}
                 />
 
                 <View style={styles.divider} />
