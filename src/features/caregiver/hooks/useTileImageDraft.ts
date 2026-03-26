@@ -26,6 +26,7 @@ export type GeneratedTileImageDraft = {
   draftId: string;
   storagePath: string;
   previewUrl: string;
+  localUri?: string | null;
 };
 
 export const useTileImageDraft = ({
@@ -154,6 +155,9 @@ export const useTileImageDraft = ({
   };
 
   const setGeneratedDraftPreview = (draft: GeneratedTileImageDraft) => {
+    if (draft.localUri) {
+      draftImageUrisRef.current.add(draft.localUri);
+    }
     setGeneratedDraft(draft);
     setVisualType("image");
   };
@@ -197,7 +201,10 @@ export const useTileImageDraft = ({
     imageLocalUri,
     imageRemotePath,
     previewImageLocalUri: generatedDraft ? null : imageLocalUri,
-    previewImageRemotePath: generatedDraft?.previewUrl ?? imageRemotePath,
+    previewImageRemotePath:
+      generatedDraft && !generatedDraft.localUri
+        ? generatedDraft.previewUrl
+        : imageRemotePath,
     generatedDraft,
     hasPreviewImage: Boolean(imageLocalUri || generatedDraft?.previewUrl || imageRemotePath),
     setGeneratedDraftPreview,

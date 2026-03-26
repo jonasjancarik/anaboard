@@ -105,7 +105,7 @@ export const generateTransparentImage = async (
     background: 'transparent',
     output_format: 'png',
     quality: 'medium',
-    size: '1024x1024',
+    size: '512x512',
   });
 
   const imageBase64 = payload.data?.[0]?.b64_json;
@@ -116,7 +116,7 @@ export const generateTransparentImage = async (
   return {
     bytes: decodeBase64(imageBase64),
     mimeType: 'image/png',
-    width: 1024,
-    height: 1024,
+    width: 512,
+    height: 512,
   };
 };

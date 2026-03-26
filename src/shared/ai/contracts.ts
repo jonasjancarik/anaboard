@@ -72,6 +72,7 @@ export type PromoteTileImageDraftRequest = {
   tileId: string;
   draftId: string;
   draftStoragePath: string;
+  localUri?: string | null;
 };
 
 export type PromoteTileImageDraftResponse = {

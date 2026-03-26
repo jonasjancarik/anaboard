@@ -227,6 +227,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           tileId: selectedTile.id,
           draftId: generatedDraft.draftId,
           draftStoragePath: generatedDraft.storagePath,
+          localUri: generatedDraft.localUri,
         });
 
         await applyGeneratedDraft({
@@ -302,6 +303,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         draftId: draft.draftId,
         storagePath: draft.storagePath,
         previewUrl: draft.signedUrl,
+        localUri: draft.localUri,
       });
       setVisualType("image");
     } catch (error) {
@@ -334,6 +336,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         tileId: selectedTile.id,
         draftId: generatedDraft.draftId,
         draftStoragePath: generatedDraft.storagePath,
+        localUri: generatedDraft.localUri,
       });
 
       await applyGeneratedDraft({

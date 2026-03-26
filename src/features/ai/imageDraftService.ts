@@ -15,20 +15,33 @@ const getExtension = (value: string, fallback: string): string => {
 export const imageDraftService = {
   async generateDraft(
     request: GenerateTileImageDraftRequest
-  ): Promise<GenerateTileImageDraftResponse> {
-    return aiClient.generateTileImageDraft(request);
+  ): Promise<GenerateTileImageDraftResponse & { localUri: string }> {
+    const draft = await aiClient.generateTileImageDraft(request);
+    const localUri = await persistManagedMediaFromRemoteUrl(
+      'image',
+      `${request.tileId}-draft`,
+      draft.signedUrl,
+      getExtension(draft.storagePath, 'png')
+    );
+
+    return {
+      ...draft,
+      localUri,
+    };
   },
 
   async promoteDraft(
-    request: PromoteTileImageDraftRequest
+    request: PromoteTileImageDraftRequest & { localUri?: string | null }
   ): Promise<PromoteTileImageDraftResponse & { localUri: string }> {
     const promoted = await aiClient.promoteTileImageDraft(request);
-    const localUri = await persistManagedMediaFromRemoteUrl(
-      'image',
-      request.tileId,
-      promoted.signedUrl,
-      getExtension(promoted.storagePath, 'png')
-    );
+    const localUri =
+      request.localUri ??
+      (await persistManagedMediaFromRemoteUrl(
+        'image',
+        request.tileId,
+        promoted.signedUrl,
+        getExtension(promoted.storagePath, 'png')
+      ));
 
     return {
       ...promoted,
