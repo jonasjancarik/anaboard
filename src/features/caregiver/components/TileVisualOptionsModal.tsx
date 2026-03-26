@@ -123,11 +123,7 @@ const modalStyles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: APP_THEME.surface,
     padding: 18,
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    elevation: 10,
+    boxShadow: '0px 14px 24px rgba(31, 26, 20, 0.16)',
   },
   title: {
     fontSize: 20,

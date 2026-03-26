@@ -53,6 +53,7 @@ export const PhraseBar = ({
         >
           {items.map((item) => {
             const palette = KIND_STYLES[item.kind];
+            const tokenOccurrences = new Map<string, number>();
 
             return (
               <Pressable
@@ -71,21 +72,34 @@ export const PhraseBar = ({
                 ]}
               >
                 <View style={styles.sequenceWrap}>
-                  {item.tokens.map((token, index) => (
-                    <View
-                      key={`${item.id}-${token.tileId}-${index}`}
-                      style={index > 0 ? styles.sequenceItemAfter : undefined}
-                    >
-                      <TileVisual
-                        emoji={token.emoji}
-                        visualType={token.visualType}
-                        imageLocalUri={token.imageLocalUri}
-                        imageRemotePath={token.imageRemotePath}
-                        size={22}
-                        cornerRadius={8}
-                      />
-                    </View>
-                  ))}
+                  {item.tokens.map((token, position) => {
+                    const tokenBaseKey = [
+                      token.tileId,
+                      token.label,
+                      token.emoji,
+                      token.visualType,
+                      token.imageRemotePath ?? '',
+                      token.imageLocalUri ?? '',
+                    ].join(':');
+                    const occurrence = (tokenOccurrences.get(tokenBaseKey) ?? 0) + 1;
+                    tokenOccurrences.set(tokenBaseKey, occurrence);
+
+                    return (
+                      <View
+                        key={`${item.id}-${tokenBaseKey}-${occurrence}`}
+                        style={position > 0 ? styles.sequenceItemAfter : undefined}
+                      >
+                        <TileVisual
+                          emoji={token.emoji}
+                          visualType={token.visualType}
+                          imageLocalUri={token.imageLocalUri}
+                          imageRemotePath={token.imageRemotePath}
+                          size={22}
+                          cornerRadius={8}
+                        />
+                      </View>
+                    );
+                  })}
                 </View>
               </Pressable>
             );

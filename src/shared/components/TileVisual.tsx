@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -93,17 +93,48 @@ export const TileVisual = ({
   style,
   emojiStyle,
 }: TileVisualProps) => {
-  const [didImageFail, setDidImageFail] = useState(false);
   const resolvedImageLocalUri = useResolvedMediaUri(imageLocalUri);
   const imageUri = useMemo(
     () => getImageUri(resolvedImageLocalUri, imageRemotePath),
     [imageRemotePath, resolvedImageLocalUri]
   );
+  const contentKey =
+    visualType === 'image' && imageUri ? `image:${imageUri}` : `emoji:${emoji}:${size}`;
 
-  useEffect(() => {
-    setDidImageFail(false);
-  }, [imageUri]);
+  return (
+    <TileVisualFrame
+      key={contentKey}
+      emoji={emoji}
+      visualType={visualType}
+      imageUri={imageUri}
+      size={size}
+      cornerRadius={cornerRadius}
+      style={style}
+      emojiStyle={emojiStyle}
+    />
+  );
+};
 
+type TileVisualFrameProps = {
+  emoji: string;
+  visualType: TileVisualType;
+  imageUri: string | null;
+  size: number;
+  cornerRadius: number;
+  style?: StyleProp<ViewStyle>;
+  emojiStyle?: StyleProp<TextStyle>;
+};
+
+const TileVisualFrame = ({
+  emoji,
+  visualType,
+  imageUri,
+  size,
+  cornerRadius,
+  style,
+  emojiStyle,
+}: TileVisualFrameProps) => {
+  const [didImageFail, setDidImageFail] = useState(false);
   const showImage = visualType === 'image' && Boolean(imageUri) && !didImageFail;
   const textMetrics = getVisualTextMetrics(emoji || '⬜️', size);
 

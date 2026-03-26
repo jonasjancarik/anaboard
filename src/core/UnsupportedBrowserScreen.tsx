@@ -39,11 +39,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 28,
     gap: 12,
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 4,
+    boxShadow: '0px 12px 18px rgba(31, 26, 20, 0.08)',
   },
   kicker: {
     color: APP_THEME.primaryBorder,
