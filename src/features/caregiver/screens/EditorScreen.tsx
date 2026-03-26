@@ -169,12 +169,26 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     existingEmoji: previewEmoji,
   });
 
-  const buildTileUpdatePayload = (): TileUpdateInput | null => {
+  const buildTileUpdatePayload = (overrides?: {
+    visualType?: TileVisualType;
+    imageLocalUri?: string | null;
+    imageRemotePath?: string | null;
+  }): TileUpdateInput | null => {
     if (!selectedTile) {
       return null;
     }
 
-    if (visualSelectionIncomplete) {
+    const nextVisualType = overrides?.visualType ?? previewVisualType;
+    const nextImageLocalUri =
+      overrides?.imageLocalUri === undefined ? imageLocalUri : overrides.imageLocalUri;
+    const nextImageRemotePath =
+      overrides?.imageRemotePath === undefined ? imageRemotePath : overrides.imageRemotePath;
+    const nextVisualSelectionIncomplete =
+      nextVisualType === "image" &&
+      !nextImageLocalUri &&
+      !nextImageRemotePath;
+
+    if (nextVisualSelectionIncomplete) {
       setTileActionError("Nejdřív přidej fotku z foťáku nebo knihovny.");
       return null;
     }
@@ -182,9 +196,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     return {
       labelCs: trimmedLabel || selectedTile.labelCs,
       emoji: trimmedEmoji || selectedTile.emoji,
-      visualType: previewVisualType,
-      imageLocalUri: previewVisualType === "image" ? imageLocalUri : null,
-      imageRemotePath: previewVisualType === "image" ? imageRemotePath : null,
+      visualType: nextVisualType,
+      imageLocalUri: nextVisualType === "image" ? nextImageLocalUri : null,
+      imageRemotePath: nextVisualType === "image" ? nextImageRemotePath : null,
       category,
       speechMode,
     };
@@ -199,6 +213,14 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setTileActionError(null);
 
     try {
+      let payloadOverrides:
+        | {
+            visualType: TileVisualType;
+            imageLocalUri: string | null;
+            imageRemotePath: string | null;
+          }
+        | undefined;
+
       if (generatedDraft) {
         const promoted = await imageDraftService.promoteDraft({
           profileId: remoteContext?.profileId,
@@ -212,9 +234,14 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           remotePath: promoted.storagePath,
         });
         setVisualType("image");
+        payloadOverrides = {
+          visualType: "image",
+          imageLocalUri: promoted.localUri,
+          imageRemotePath: promoted.storagePath,
+        };
       }
 
-      const payload = buildTileUpdatePayload();
+      const payload = buildTileUpdatePayload(payloadOverrides);
       if (!payload) {
         return;
       }
