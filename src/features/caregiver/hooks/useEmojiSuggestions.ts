@@ -4,7 +4,7 @@ import { aiClient } from "../../ai/aiClient";
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
 import type { Category } from "../../../shared/types/domain";
 
-const REQUEST_TIMEOUT_MS = 4000;
+const REQUEST_TIMEOUT_MS = 8000;
 
 const createTimeoutError = () => new Error("AI návrh teď trvá moc dlouho.");
 

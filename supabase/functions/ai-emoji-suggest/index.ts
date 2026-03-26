@@ -104,7 +104,6 @@ Deno.serve(async (request: Request) => {
               properties: {
                 value: { type: 'string' },
                 confidence: { type: 'number' },
-                reason: { type: 'string' },
               },
               required: ['value', 'confidence'],
             },

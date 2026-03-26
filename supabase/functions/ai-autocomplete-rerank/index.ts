@@ -98,7 +98,6 @@ Deno.serve(async (request: Request) => {
               properties: {
                 tileId: { type: 'string' },
                 confidence: { type: 'number' },
-                reason: { type: 'string' },
               },
               required: ['tileId', 'confidence'],
             },
