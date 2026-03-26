@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../../shared/components/BackButton';
 import {
   authenticateWithDeviceForCaregiver,
   canUseNativeCaregiverAuth,
@@ -106,79 +107,79 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Režim pečovatele</Text>
-        <Text style={styles.subtitle}>
-          {isWebPlatform
-            ? 'V prohlížeči se pro úpravy vždy používá PIN.'
-            : 'Zadej vlastní PIN pro úpravy tabule'}
-        </Text>
-
-        <Text style={styles.pinTitle}>Vlastní PIN v aplikaci</Text>
-
-        <TextInput
-          ref={pinInputRef}
-          value={pin}
-          onChangeText={(value) => {
-            const nextPin = value.replace(/[^0-9]/g, '').slice(0, 4);
-            setPin(nextPin);
-            setError(null);
-
-            if (nextPin.length === 4) {
-              void (async () => {
-                const incomingHash = await hashPin(nextPin);
-                if (!settings) {
-                  setError('Nastavení není načtené');
-                  return;
-                }
-
-                if (incomingHash === settings.pinHash) {
-                  unlockCaregiver();
-                  setPin('');
-                  setError(null);
-                  onPassed();
-                  return;
-                }
-
-                setPin('');
-                setError('Špatný PIN');
-                pinInputRef.current?.focus();
-              })();
-            }
-          }}
-          keyboardType="number-pad"
-          secureTextEntry
-          placeholder="••••"
-          style={styles.input}
-          maxLength={4}
-          autoFocus
-        />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        {canRecoverWithDeviceAuth ? (
-          <Pressable
-            style={[styles.recoveryButton, isRecovering && styles.recoveryButtonDisabled]}
-            onPress={() => {
-              void recoverWithDeviceAuth();
-            }}
-            disabled={isRecovering}
-          >
-            {isRecovering ? (
-              <ActivityIndicator color={APP_THEME.primary} />
-            ) : (
-              <Text style={styles.recoveryButtonText}>Zapomněl(a) jsem PIN</Text>
-            )}
-          </Pressable>
-        ) : null}
-
-        <View style={styles.row}>
-          <Pressable style={[styles.button, styles.cancelButton]} onPress={onCancel}>
-            <Text style={[styles.buttonText, styles.cancelText]}>Zpět</Text>
-          </Pressable>
+      <View style={styles.content}>
+        <View style={styles.headerRow}>
+          <BackButton onPress={onCancel} />
         </View>
 
-        <Text style={styles.note}>Výchozí PIN: 1234</Text>
+        <View style={styles.card}>
+          <Text style={styles.title}>Režim pečovatele</Text>
+          <Text style={styles.subtitle}>
+            {isWebPlatform
+              ? 'V prohlížeči se pro úpravy vždy používá PIN.'
+              : 'Zadej vlastní PIN pro úpravy tabule'}
+          </Text>
+
+          <Text style={styles.pinTitle}>Vlastní PIN v aplikaci</Text>
+
+          <TextInput
+            ref={pinInputRef}
+            value={pin}
+            onChangeText={(value) => {
+              const nextPin = value.replace(/[^0-9]/g, '').slice(0, 4);
+              setPin(nextPin);
+              setError(null);
+
+              if (nextPin.length === 4) {
+                void (async () => {
+                  const incomingHash = await hashPin(nextPin);
+                  if (!settings) {
+                    setError('Nastavení není načtené');
+                    return;
+                  }
+
+                  if (incomingHash === settings.pinHash) {
+                    unlockCaregiver();
+                    setPin('');
+                    setError(null);
+                    onPassed();
+                    return;
+                  }
+
+                  setPin('');
+                  setError('Špatný PIN');
+                  pinInputRef.current?.focus();
+                })();
+              }
+            }}
+            keyboardType="number-pad"
+            secureTextEntry
+            placeholder="••••"
+            style={styles.input}
+            maxLength={4}
+            autoFocus
+          />
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          {canRecoverWithDeviceAuth ? (
+            <Pressable
+              style={[styles.recoveryButton, isRecovering && styles.recoveryButtonDisabled]}
+              onPress={() => {
+                void recoverWithDeviceAuth();
+              }}
+              disabled={isRecovering}
+            >
+              {isRecovering ? (
+                <ActivityIndicator color={APP_THEME.primary} />
+              ) : (
+                <Text style={styles.recoveryButtonText}>Zapomněl(a) jsem PIN</Text>
+              )}
+            </Pressable>
+          ) : null}
+
+          <Text style={styles.note}>Výchozí PIN: 1234</Text>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -192,9 +193,18 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: APP_THEME.background,
   },
-  card: {
+  content: {
     width: '100%',
     maxWidth: 360,
+  },
+  headerRow: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  card: {
+    width: '100%',
     alignItems: 'center',
     borderRadius: 28,
     borderWidth: 1,
@@ -260,30 +270,6 @@ const styles = StyleSheet.create({
   recoveryButtonText: {
     color: APP_THEME.primaryBorder,
     fontWeight: '800',
-  },
-  row: {
-    marginTop: 24,
-    flexDirection: 'row',
-  },
-  button: {
-    width: 132,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  cancelButton: {
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surfaceAlt,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  cancelText: {
-    color: APP_THEME.text,
   },
   note: {
     marginTop: 16,

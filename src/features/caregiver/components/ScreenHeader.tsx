@@ -1,6 +1,7 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
+import { BackButton } from '../../../shared/components/BackButton';
 
 type ScreenHeaderProps = {
   title: string;
@@ -13,25 +14,10 @@ export const ScreenHeader = ({
   onBack,
   backLabel = 'Zpět',
 }: ScreenHeaderProps) => {
-  const showBackButton = Platform.OS === 'ios';
-
   return (
     <View style={styles.container}>
       <View style={styles.side}>
-        {showBackButton ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={backLabel}
-            hitSlop={8}
-            onPress={onBack}
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          >
-            <Text style={styles.chevron} allowFontScaling={false}>
-              ‹
-            </Text>
-            <Text style={styles.backLabel}>{backLabel}</Text>
-          </Pressable>
-        ) : null}
+        <BackButton onPress={onBack} label={backLabel} />
       </View>
 
       <Text style={styles.title} numberOfLines={1}>
@@ -55,29 +41,6 @@ const styles = StyleSheet.create({
   side: {
     width: 96,
     justifyContent: 'center',
-  },
-  backButton: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 2,
-    paddingVertical: 4,
-    paddingRight: 6,
-  },
-  backButtonPressed: {
-    opacity: 0.55,
-  },
-  chevron: {
-    marginTop: -1,
-    fontSize: 28,
-    lineHeight: 28,
-    color: APP_THEME.primaryBorder,
-  },
-  backLabel: {
-    fontSize: 17,
-    fontWeight: '500',
-    color: APP_THEME.primaryBorder,
   },
   title: {
     flex: 1,
