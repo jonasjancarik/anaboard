@@ -159,7 +159,6 @@ export const useTileImageDraft = ({
       draftImageUrisRef.current.add(draft.localUri);
     }
     setGeneratedDraft(draft);
-    setVisualType("image");
   };
 
   const clearGeneratedDraft = () => {

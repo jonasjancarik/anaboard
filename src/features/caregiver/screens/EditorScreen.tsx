@@ -327,7 +327,6 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         previewUrl: draft.signedUrl,
         localUri: draft.localUri,
       });
-      setVisualType("image");
     } catch (error) {
       logError("ai_image_generate_error", error, {
         duration_ms: Date.now() - startedAtMs,
