@@ -1,8 +1,13 @@
 import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
 import { getAuthorizedStorageContext } from '../_shared/context.ts';
 import { generateTransparentImage } from '../_shared/openai.ts';
-import { buildTileImageDraftPath, TILE_IMAGES_BUCKET } from '../_shared/storage.ts';
-import { requireUser } from '../_shared/supabase.ts';
+import {
+  buildAnonymousTileImageDraftPath,
+  buildTileImageDraftPath,
+  TILE_IMAGES_BUCKET,
+} from '../_shared/storage.ts';
+import { createAdminClient, requireUser } from '../_shared/supabase.ts';
+import { consumeAnonymousImageGenerationQuota } from '../_shared/trialQuota.ts';
 
 type RequestBody = {
   profileId?: string;
@@ -55,12 +60,20 @@ Deno.serve(async (request: Request) => {
     const label = body.label?.trim();
     const locale = body.locale?.trim() || 'cs-CZ';
 
-    if (!profileId || !tileId || !label) {
-      return errorResponse('profileId, tileId, and label are required');
+    if (!tileId || !label) {
+      return errorResponse('tileId and label are required');
     }
 
-    const { admin, familyId } = await getAuthorizedStorageContext(user.id, profileId);
+    const storageContext =
+      profileId && !user.isAnonymous
+        ? await getAuthorizedStorageContext(user.id, profileId)
+        : {
+            admin: createAdminClient(),
+            familyId: null,
+          };
+    const admin = storageContext.admin;
     const draftId = crypto.randomUUID();
+    const trialQuota = await consumeAnonymousImageGenerationQuota(admin, user.id, user.isAnonymous);
     const image = await generateTransparentImage(
       buildPrompt({
         label,
@@ -71,7 +84,10 @@ Deno.serve(async (request: Request) => {
     );
 
     const extension = getExtension(image.mimeType);
-    const storagePath = buildTileImageDraftPath(familyId, profileId, draftId, extension);
+    const storagePath =
+      profileId && !user.isAnonymous
+        ? buildTileImageDraftPath(storageContext.familyId as string, profileId, draftId, extension)
+        : buildAnonymousTileImageDraftPath(user.id, draftId, extension);
     const { error: uploadError } = await admin.storage.from(TILE_IMAGES_BUCKET).upload(
       storagePath,
       image.bytes,
@@ -102,6 +118,7 @@ Deno.serve(async (request: Request) => {
       height: image.height,
       provider: 'openai',
       promptVersion: 'tile-image-v1-openai',
+      trialRemaining: trialQuota.remaining,
     });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Image draft generation failed', 500);

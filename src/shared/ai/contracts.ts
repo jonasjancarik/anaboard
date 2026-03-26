@@ -47,7 +47,7 @@ export type AutocompleteRerankResponse = {
 };
 
 export type GenerateTileImageDraftRequest = {
-  profileId: string;
+  profileId?: string;
   tileId: string;
   label: string;
   locale: string;
@@ -67,7 +67,7 @@ export type GenerateTileImageDraftResponse = {
 };
 
 export type PromoteTileImageDraftRequest = {
-  profileId: string;
+  profileId?: string;
   tileId: string;
   draftId: string;
   draftStoragePath: string;

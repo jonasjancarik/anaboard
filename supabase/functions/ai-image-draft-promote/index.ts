@@ -1,7 +1,11 @@
 import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
 import { getAuthorizedStorageContext } from '../_shared/context.ts';
-import { buildTileImagePath, TILE_IMAGES_BUCKET } from '../_shared/storage.ts';
-import { requireUser } from '../_shared/supabase.ts';
+import {
+  buildAnonymousTileImagePath,
+  buildTileImagePath,
+  TILE_IMAGES_BUCKET,
+} from '../_shared/storage.ts';
+import { createAdminClient, requireUser } from '../_shared/supabase.ts';
 
 type RequestBody = {
   profileId?: string;
@@ -33,22 +37,30 @@ Deno.serve(async (request: Request) => {
     const draftId = body.draftId?.trim();
     const draftStoragePath = body.draftStoragePath?.trim();
 
-    if (!profileId || !tileId || !draftId || !draftStoragePath) {
-      return errorResponse('profileId, tileId, draftId, and draftStoragePath are required');
+    if (!tileId || !draftId || !draftStoragePath) {
+      return errorResponse('tileId, draftId, and draftStoragePath are required');
     }
 
-    const { admin, familyId } = await getAuthorizedStorageContext(user.id, profileId);
-    const expectedPrefix = `${familyId}/${profileId}/ai-drafts/`;
+    const isAnonymous = user.isAnonymous || !profileId;
+    const { admin, familyId } =
+      !isAnonymous && profileId
+        ? await getAuthorizedStorageContext(user.id, profileId)
+        : { admin: createAdminClient(), familyId: null };
+    const expectedPrefix = isAnonymous
+      ? `trials/${user.id}/ai-drafts/`
+      : `${familyId}/${profileId}/ai-drafts/`;
     if (!draftStoragePath.startsWith(expectedPrefix)) {
       return errorResponse('Draft path outside authorized prefix', 403);
     }
 
-    const finalPath = buildTileImagePath(
-      familyId,
-      profileId,
-      tileId,
-      getExtension(draftStoragePath)
-    );
+    const finalPath = isAnonymous
+      ? buildAnonymousTileImagePath(user.id, tileId, getExtension(draftStoragePath))
+      : buildTileImagePath(
+          familyId as string,
+          profileId as string,
+          tileId,
+          getExtension(draftStoragePath)
+        );
 
     await admin.storage.from(TILE_IMAGES_BUCKET).remove([finalPath]);
 

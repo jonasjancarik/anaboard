@@ -61,6 +61,7 @@ export const requireUser = async (request: Request) => {
   const token = getBearerToken(request);
   const { data, error } = await client.auth.getClaims(token);
   const userId = typeof data?.claims?.sub === 'string' ? data.claims.sub : null;
+  const isAnonymous = data?.claims?.is_anonymous === true;
 
   if (error || !userId) {
     throw new Error('Unauthorized');
@@ -68,5 +69,6 @@ export const requireUser = async (request: Request) => {
 
   return {
     id: userId,
+    isAnonymous,
   };
 };

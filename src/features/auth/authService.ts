@@ -23,6 +23,20 @@ type ProfileRow = {
   name: string;
 };
 
+const isAnonymousUser = (user: User): boolean => {
+  const maybeAnonymousUser = user as User & { is_anonymous?: boolean };
+  if (maybeAnonymousUser.is_anonymous === true) {
+    return true;
+  }
+
+  const providers = user.app_metadata?.providers;
+  if (Array.isArray(providers) && providers.includes('anonymous')) {
+    return true;
+  }
+
+  return user.app_metadata?.provider === 'anonymous';
+};
+
 const getClient = () => {
   if (!hasSupabaseConfig || !supabaseClient) {
     throw new Error('Supabase config missing');
@@ -94,6 +108,10 @@ const ensureProfileForFamily = async (
 };
 
 const buildRemoteContext = async (user: User): Promise<RemoteContext | null> => {
+  if (isAnonymousUser(user)) {
+    return null;
+  }
+
   const client = getClient();
 
   const { data: caregiver, error: caregiverError } = await client
@@ -175,6 +193,16 @@ export const authService = {
     }
   },
 
+  async signInAnonymously(): Promise<Session | null> {
+    const client = getClient();
+    const { data, error } = await client.auth.signInAnonymously();
+    if (error) {
+      throw error;
+    }
+
+    return data.session;
+  },
+
   async consumeMagicLinkUrl(url: string): Promise<boolean> {
     const client = getClient();
     const params = parseAuthCallbackParams(url);
@@ -232,6 +260,13 @@ export const authService = {
 
   async resolveBootstrapState(user: User): Promise<{ requiresBootstrap: boolean; context: RemoteContext | null }> {
     try {
+      if (isAnonymousUser(user)) {
+        return {
+          requiresBootstrap: false,
+          context: null,
+        };
+      }
+
       const remoteContext = await buildRemoteContext(user);
       return {
         requiresBootstrap: !remoteContext,
@@ -316,4 +351,6 @@ export const authService = {
   async clearCachedRemoteContext(): Promise<void> {
     await clearRemoteContext();
   },
+
+  isAnonymousUser,
 };

@@ -89,6 +89,7 @@ const getActiveProfileId = (state: Pick<AppStore, 'board' | 'settings'>): string
 type AppStore = {
   currentScreen: ScreenName;
   authStatus: AuthStatus;
+  authIsAnonymous: boolean;
   authUserId: string | null;
   authEmail: string | null;
   isAuthLoading: boolean;
@@ -121,6 +122,7 @@ type AppStore = {
   navigate: (screen: ScreenName) => void;
   setAuthState: (params: {
     status: AuthStatus;
+    isAnonymous: boolean;
     userId: string | null;
     email: string | null;
   }) => void;
@@ -186,6 +188,7 @@ type AppStore = {
 export const useAppStore = create<AppStore>((set, get) => ({
   currentScreen: 'board',
   authStatus: 'loading',
+  authIsAnonymous: false,
   authUserId: null,
   authEmail: null,
   isAuthLoading: true,
@@ -219,9 +222,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ currentScreen: screen });
   },
 
-  setAuthState: ({ status, userId, email }) => {
+  setAuthState: ({ status, isAnonymous, userId, email }) => {
     set({
       authStatus: status,
+      authIsAnonymous: isAnonymous,
       authUserId: userId,
       authEmail: email,
     });

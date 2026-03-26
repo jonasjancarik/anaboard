@@ -41,6 +41,7 @@ const speechModes: SpeechMode[] = [
 
 export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const authStatus = useAppStore((state) => state.authStatus);
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const remoteContext = useAppStore((state) => state.remoteContext);
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
@@ -149,12 +150,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     visualType === "image" && !hasPreviewImage;
   const aiEmojiSuggestionsEnabled =
     AI_FEATURE_FLAGS.emojiSuggestions &&
-    authStatus === "signed_in" &&
-    Boolean(remoteContext);
+    authStatus === "signed_in";
   const aiGeneratedTileImagesEnabled =
     AI_FEATURE_FLAGS.generatedTileImages &&
-    authStatus === "signed_in" &&
-    Boolean(remoteContext);
+    authStatus === "signed_in";
   const {
     clearSuggestions: clearEmojiSuggestions,
     error: emojiSuggestionError,
@@ -227,7 +226,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   };
 
   const handleGenerateAiImage = async () => {
-    if (!selectedTile || !remoteContext) {
+    if (!selectedTile) {
       return;
     }
 
@@ -242,7 +241,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     try {
       const draft = await imageDraftService.generateDraft({
-        profileId: remoteContext.profileId,
+        profileId: remoteContext?.profileId,
         tileId: selectedTile.id,
         label: normalizedLabel,
         locale: board?.locale ?? "cs-CZ",
@@ -266,7 +265,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   };
 
   const handleApplyAiImage = async () => {
-    if (!selectedTile || !remoteContext || !generatedDraft) {
+    if (!selectedTile || !generatedDraft) {
       return;
     }
 
@@ -275,7 +274,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     try {
       const promoted = await imageDraftService.promoteDraft({
-        profileId: remoteContext.profileId,
+        profileId: remoteContext?.profileId,
         tileId: selectedTile.id,
         draftId: generatedDraft.draftId,
         draftStoragePath: generatedDraft.storagePath,

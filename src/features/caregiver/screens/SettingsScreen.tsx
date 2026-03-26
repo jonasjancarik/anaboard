@@ -83,6 +83,7 @@ export const SettingsScreen = ({
 }: SettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
   const authStatus = useAppStore((state) => state.authStatus);
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const remoteContext = useAppStore((state) => state.remoteContext);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
@@ -320,10 +321,13 @@ export const SettingsScreen = ({
   const lastPullLabel = formatTimestamp(lastSyncPullAt);
   const syncUnavailable = !hasSupabaseConfig || authStatus === 'disabled';
   const syncSignedOut = !syncUnavailable && authStatus === 'signed_out';
+  const syncAnonymous = !syncUnavailable && authStatus === 'signed_in' && authIsAnonymous;
   const syncStatusTitle = syncUnavailable
     ? 'Cloud sync není nastavený'
     : syncSignedOut
       ? 'Cloud sync je připravený'
+      : syncAnonymous
+      ? 'Zkušební režim bez účtu'
       : syncStatus === 'offline'
       ? 'Zařízení je offline'
       : syncStatus === 'syncing'
@@ -350,6 +354,12 @@ export const SettingsScreen = ({
             : 'Místní změny čekají: 0',
           'Přihlas se, až budeš chtít zapnout cloud sync mezi zařízeními.',
         ]
+    : syncAnonymous
+      ? [
+          'Teď běžíš bez účtu v rychlém zkušebním režimu.',
+          'AI můžeš vyzkoušet hned, ale cloud sync a trvalé propojení zařízení zatím neběží.',
+          'Přihlas se, až budeš chtít trial převést na běžný účet.',
+        ]
     : [
         remoteContext?.caregiverEmail ? `Účet: ${remoteContext.caregiverEmail}` : null,
         pendingSyncEvents > 0 ? `Ve frontě: ${pendingSyncEvents}` : 'Ve frontě: 0',
@@ -370,17 +380,17 @@ export const SettingsScreen = ({
               <Text style={styles.statusTitle}>{syncStatusTitle}</Text>
               <Text style={styles.statusDetail}>{syncStatusDetail}</Text>
             </View>
-            {syncSignedOut ? (
+            {syncSignedOut || syncAnonymous ? (
               <>
                 <View style={styles.divider} />
                 <SettingRowButton
-                  title="Přihlásit ke cloud syncu"
+                  title={syncAnonymous ? 'Zaregistrovat / přihlásit' : 'Přihlásit ke cloud syncu'}
                   detail="Otevře přihlášení a pak propojí tuto tabuli s cloudem."
                   onPress={onOpenAuth}
                 />
               </>
             ) : null}
-            {hasSupabaseConfig && authStatus === 'signed_in' ? (
+            {hasSupabaseConfig && authStatus === 'signed_in' && !authIsAnonymous ? (
               <>
                 <View style={styles.divider} />
                 <SettingRowButton
@@ -614,7 +624,7 @@ export const SettingsScreen = ({
             />
           </View>
         </View>
-        {authStatus === 'signed_in' ? (
+        {authStatus === 'signed_in' && !authIsAnonymous ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Účet</Text>
             <SettingRowButton
@@ -650,11 +660,7 @@ const styles = StyleSheet.create({
     borderColor: APP_THEME.border,
     padding: 16,
     gap: 12,
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
+    boxShadow: '0px 8px 16px rgba(31, 26, 20, 0.08)',
   },
   sectionTitle: {
     fontSize: 17,
