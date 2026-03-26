@@ -4,9 +4,9 @@ import { aiClient } from "../../ai/aiClient";
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
 import type { Category } from "../../../shared/types/domain";
 
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 60000;
 
-const createTimeoutError = () => new Error("AI návrh teď trvá moc dlouho.");
+const createTimeoutError = () => new Error("AI návrh se zatím nevrátil ani po minutě.");
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
