@@ -28,6 +28,17 @@ import {
   MIN_TILE_SIZE,
   styles,
 } from './BoardScreen.styles';
+import {
+  BOARD_SPREAD_GAP,
+  getLogicalPageWidth,
+  getPageIndexForContentX,
+  getPageLeft,
+  getSpreadCount,
+  getSpreadIndexForPage,
+  getSpreadOffset,
+  normalizeBoardPageIndex,
+  WIDE_BOARD_BREAKPOINT,
+} from './boardPagerLayout';
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
@@ -66,6 +77,11 @@ type PagerScrollEvent = {
       x: number;
     };
   };
+};
+
+type LogicalBoardPage = {
+  pageIndex: number;
+  tiles: Tile[];
 };
 
 const REORDER_LONG_PRESS_MS = 180;
@@ -141,7 +157,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boardViewportLeftRef = useRef(0);
-  const lastAppliedPageWidthRef = useRef(0);
+  const lastAppliedSpreadWidthRef = useRef(0);
   const pageSwitchArmedRef = useRef(true);
   const wiggleValue = useRef(new Animated.Value(0)).current;
   const newTileFlashValue = useRef(new Animated.Value(0)).current;
@@ -263,8 +279,19 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  const pageWidth = boardViewportWidth > 0 ? boardViewportWidth : width;
-  const availableGridWidth = Math.min(pageWidth - LAYOUT_PADDING * 2, MAX_GRID_WIDTH);
+  const spreadWidth = boardViewportWidth > 0 ? boardViewportWidth : width;
+  const isSpreadMode = spreadWidth >= WIDE_BOARD_BREAKPOINT;
+  const visiblePagesPerSpread = isSpreadMode ? 2 : 1;
+  const spreadGap = isSpreadMode ? BOARD_SPREAD_GAP : 0;
+  const logicalPageWidth = getLogicalPageWidth(
+    spreadWidth,
+    visiblePagesPerSpread,
+    spreadGap
+  );
+  const availableGridWidth = Math.min(
+    Math.max(0, logicalPageWidth - LAYOUT_PADDING * 2),
+    MAX_GRID_WIDTH
+  );
   const tileSize = useMemo(() => {
     const widthBound = (availableGridWidth - GRID_GAP * (gridColumns - 1)) / gridColumns;
     const heightBound =
@@ -280,7 +307,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const pageGridWidth = tileSize * gridColumns + GRID_GAP * (gridColumns - 1);
   const pageGridHeight = tileSize * gridRows + GRID_GAP * (gridRows - 1);
   const effectivePageHeight = boardViewportHeight > 0 ? boardViewportHeight : pageGridHeight;
-  const horizontalGridOffset = Math.max(LAYOUT_PADDING, (pageWidth - pageGridWidth) / 2);
+  const horizontalGridOffset = Math.max(
+    LAYOUT_PADDING,
+    (logicalPageWidth - pageGridWidth) / 2
+  );
   const verticalGridOffset = Math.max(0, (effectivePageHeight - pageGridHeight) / 2);
   const tileVisualSize = showLabels
     ? Math.max(42, Math.min(tileSize - 26, 60))
@@ -378,27 +408,47 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   }, [caregiverUnlocked, reorderTileIds, tiles, tilesById]);
 
   const pageCount = Math.max(1, Math.ceil(orderedTiles.length / pageSize));
-  const pagedTiles = useMemo(() => {
-    const pages: Tile[][] = [];
+  const logicalPages = useMemo<LogicalBoardPage[]>(() => {
+    const pages: LogicalBoardPage[] = [];
 
     for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
       const startIndex = pageIndex * pageSize;
-      pages.push(orderedTiles.slice(startIndex, startIndex + pageSize));
+      pages.push({
+        pageIndex,
+        tiles: orderedTiles.slice(startIndex, startIndex + pageSize),
+      });
     }
 
     return pages;
   }, [orderedTiles, pageCount, pageSize]);
+  const spreadCount = getSpreadCount(pageCount, visiblePagesPerSpread);
+  const pagedSpreads = useMemo(() => {
+    const spreads: Array<Array<LogicalBoardPage | null>> = [];
+
+    for (let spreadIndex = 0; spreadIndex < spreadCount; spreadIndex += 1) {
+      const startPageIndex = spreadIndex * visiblePagesPerSpread;
+      const spreadPages = Array.from({ length: visiblePagesPerSpread }, (_, pageOffset) => {
+        return logicalPages[startPageIndex + pageOffset] ?? null;
+      });
+
+      spreads.push(spreadPages);
+    }
+
+    return spreads;
+  }, [logicalPages, spreadCount, visiblePagesPerSpread]);
 
   const draggedTile = activeDrag ? tilesById[activeDrag.tileId] : undefined;
+  const currentSpreadIndex = getSpreadIndexForPage(currentPage, visiblePagesPerSpread);
 
-  const clampPageIndex = useCallback(
-    (nextPage: number) => Math.max(0, Math.min(pageCount - 1, nextPage)),
-    [pageCount]
+  const normalizeVisiblePageIndex = useCallback(
+    (nextPage: number) =>
+      normalizeBoardPageIndex(nextPage, pageCount, visiblePagesPerSpread),
+    [pageCount, visiblePagesPerSpread]
   );
 
   const setVisiblePage = useCallback(
     (nextPage: number) => {
-      const clampedPage = clampPageIndex(nextPage);
+      const clampedPage = normalizeVisiblePageIndex(nextPage);
       if (clampedPage !== currentPageRef.current) {
         currentPageRef.current = clampedPage;
         setCurrentPage((page) => (page === clampedPage ? page : clampedPage));
@@ -406,7 +456,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
       return clampedPage;
     },
-    [clampPageIndex]
+    [normalizeVisiblePageIndex]
   );
 
   const commitVisiblePage = useCallback(
@@ -426,34 +476,38 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
 
       const clampedPage = commitVisiblePage(nextPage);
+      const spreadIndex = getSpreadIndexForPage(clampedPage, visiblePagesPerSpread);
 
-      if (pageWidth <= 0) {
+      if (spreadWidth <= 0) {
         return;
       }
 
       boardPagerRef.current?.scrollTo({
-        x: clampedPage * pageWidth,
+        x: getSpreadOffset(spreadIndex, spreadWidth),
         animated,
       });
     },
-    [commitVisiblePage, pageWidth]
+    [commitVisiblePage, spreadWidth, visiblePagesPerSpread]
   );
 
   useEffect(() => {
-    const nextPage = clampPageIndex(boardPageIndex);
+    const nextPage = normalizeVisiblePageIndex(boardPageIndex);
     if (nextPage !== boardPageIndex) {
       setBoardPageIndex(nextPage);
     }
 
     const pageChanged = nextPage !== currentPageRef.current;
-    const pageWidthChanged =
-      pageWidth > 0 && Math.abs(lastAppliedPageWidthRef.current - pageWidth) > 1;
+    const spreadWidthChanged =
+      spreadWidth > 0 && Math.abs(lastAppliedSpreadWidthRef.current - spreadWidth) > 1;
     setVisiblePage(nextPage);
 
-    if (pageWidth > 0 && (pageChanged || pageWidthChanged)) {
+    if (spreadWidth > 0 && (pageChanged || spreadWidthChanged)) {
       const shouldAnimate = pendingAnimatedPageRef.current === nextPage;
       boardPagerRef.current?.scrollTo({
-        x: nextPage * pageWidth,
+        x: getSpreadOffset(
+          getSpreadIndexForPage(nextPage, visiblePagesPerSpread),
+          spreadWidth
+        ),
         animated: shouldAnimate,
       });
       if (shouldAnimate) {
@@ -461,15 +515,22 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
     }
 
-    lastAppliedPageWidthRef.current = pageWidth;
-  }, [boardPageIndex, clampPageIndex, pageWidth, setBoardPageIndex, setVisiblePage]);
+    lastAppliedSpreadWidthRef.current = spreadWidth;
+  }, [
+    boardPageIndex,
+    normalizeVisiblePageIndex,
+    setBoardPageIndex,
+    setVisiblePage,
+    spreadWidth,
+    visiblePagesPerSpread,
+  ]);
 
   useEffect(() => {
     if (pageCount === 0) {
       return;
     }
 
-    const nextPage = clampPageIndex(currentPageRef.current);
+    const nextPage = normalizeVisiblePageIndex(currentPageRef.current);
     if (nextPage === currentPageRef.current) {
       return;
     }
@@ -477,13 +538,23 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setVisiblePage(nextPage);
     setBoardPageIndex(nextPage);
 
-    if (pageWidth > 0) {
+    if (spreadWidth > 0) {
       boardPagerRef.current?.scrollTo({
-        x: nextPage * pageWidth,
+        x: getSpreadOffset(
+          getSpreadIndexForPage(nextPage, visiblePagesPerSpread),
+          spreadWidth
+        ),
         animated: false,
       });
     }
-  }, [clampPageIndex, pageCount, pageWidth, setBoardPageIndex]);
+  }, [
+    normalizeVisiblePageIndex,
+    pageCount,
+    setBoardPageIndex,
+    setVisiblePage,
+    spreadWidth,
+    visiblePagesPerSpread,
+  ]);
 
   const getSlotPosition = useCallback(
     (index: number) => {
@@ -493,11 +564,30 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       const column = localIndex % gridColumns;
 
       return {
-        left: pageIndex * pageWidth + horizontalGridOffset + column * tileStep,
+        left:
+          getPageLeft(
+            pageIndex,
+            visiblePagesPerSpread,
+            spreadWidth,
+            logicalPageWidth,
+            spreadGap
+          ) +
+          horizontalGridOffset +
+          column * tileStep,
         top: verticalGridOffset + row * tileStep,
       };
     },
-    [gridColumns, horizontalGridOffset, pageSize, pageWidth, tileStep, verticalGridOffset]
+    [
+      gridColumns,
+      horizontalGridOffset,
+      logicalPageWidth,
+      pageSize,
+      spreadGap,
+      spreadWidth,
+      tileStep,
+      verticalGridOffset,
+      visiblePagesPerSpread,
+    ]
   );
 
   const getTargetIndexFromPosition = useCallback(
@@ -507,8 +597,24 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
 
       const tileCenterLeft = left + tileSize / 2;
-      const pageIndex = clampPageIndex(Math.floor(tileCenterLeft / pageWidth));
-      const normalizedLeft = left - pageIndex * pageWidth - horizontalGridOffset;
+      const pageIndex = getPageIndexForContentX(
+        tileCenterLeft,
+        pageCount,
+        visiblePagesPerSpread,
+        spreadWidth,
+        logicalPageWidth,
+        spreadGap
+      );
+      const normalizedLeft =
+        left -
+        getPageLeft(
+          pageIndex,
+          visiblePagesPerSpread,
+          spreadWidth,
+          logicalPageWidth,
+          spreadGap
+        ) -
+        horizontalGridOffset;
       const normalizedTop = top - verticalGridOffset;
       const column = Math.max(0, Math.min(gridColumns - 1, Math.round(normalizedLeft / tileStep)));
       const row = Math.max(0, Math.min(gridRows - 1, Math.round(normalizedTop / tileStep)));
@@ -519,15 +625,18 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return Math.max(0, Math.min(totalTiles - 1, pageIndex * pageSize + localIndex));
     },
     [
-      clampPageIndex,
       gridColumns,
       gridRows,
       horizontalGridOffset,
+      logicalPageWidth,
+      pageCount,
       pageSize,
-      pageWidth,
+      spreadGap,
+      spreadWidth,
       tileSize,
       tileStep,
       verticalGridOffset,
+      visiblePagesPerSpread,
     ]
   );
 
@@ -808,9 +917,11 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         pageX !== null ? pageX - boardViewportLeftRef.current : viewportLeft + tileSize / 2;
       let targetPage = currentPageRef.current;
 
-      if (localFingerX >= pageWidth - PAGE_SWITCH_EDGE_THRESHOLD) {
+      if (localFingerX >= spreadWidth - PAGE_SWITCH_EDGE_THRESHOLD) {
         if (pageSwitchArmedRef.current) {
-          const nextPage = clampPageIndex(currentPageRef.current + 1);
+          const nextPage = normalizeVisiblePageIndex(
+            currentPageRef.current + visiblePagesPerSpread
+          );
           if (nextPage !== currentPageRef.current) {
             targetPage = nextPage;
             pageSwitchArmedRef.current = false;
@@ -818,7 +929,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         }
       } else if (localFingerX <= PAGE_SWITCH_EDGE_THRESHOLD) {
         if (pageSwitchArmedRef.current) {
-          const nextPage = clampPageIndex(currentPageRef.current - 1);
+          const nextPage = normalizeVisiblePageIndex(
+            currentPageRef.current - visiblePagesPerSpread
+          );
           if (nextPage !== currentPageRef.current) {
             targetPage = nextPage;
             pageSwitchArmedRef.current = false;
@@ -838,7 +951,14 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           return currentIds;
         }
 
-        const contentLeft = targetPage * pageWidth + viewportLeft;
+        const contentLeft =
+          getPageLeft(
+            targetPage,
+            visiblePagesPerSpread,
+            spreadWidth,
+            logicalPageWidth,
+            spreadGap
+          ) + viewportLeft;
         const targetIndex = getTargetIndexFromPosition(
           contentLeft,
           drag.startTop + dy,
@@ -854,7 +974,16 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         return nextIds;
       });
     },
-    [clampPageIndex, getTargetIndexFromPosition, pageWidth, scrollToPage, tileSize]
+    [
+      getTargetIndexFromPosition,
+      logicalPageWidth,
+      normalizeVisiblePageIndex,
+      scrollToPage,
+      spreadGap,
+      spreadWidth,
+      tileSize,
+      visiblePagesPerSpread,
+    ]
   );
 
   const commitDrag = useCallback(async () => {
@@ -911,7 +1040,15 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         startIndex: pendingTouch.startIndex,
         startLeft: left,
         startTop: top,
-        startViewportLeft: left - currentPageRef.current * pageWidth,
+        startViewportLeft:
+          left -
+          getPageLeft(
+            currentPageRef.current,
+            visiblePagesPerSpread,
+            spreadWidth,
+            logicalPageWidth,
+            spreadGap
+          ),
         startPageX: pendingTouch.startPageX,
         startPageY: pendingTouch.startPageY,
         dx: 0,
@@ -925,7 +1062,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       dragStateRef.current = nextDrag;
       setActiveDrag(nextDrag);
     },
-    [getSlotPosition, pageWidth]
+    [getSlotPosition, logicalPageWidth, spreadGap, spreadWidth, visiblePagesPerSpread]
   );
 
   const beginReorderTouch = useCallback(
@@ -1048,8 +1185,14 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       const newTileId = await createTileAfter(anchorTile.id);
-      const nextPage = Math.floor((useAppStore.getState().tiles.length - 1) / pageSize);
-      const resolvedPage = Math.max(0, nextPage);
+      const nextTileCount = useAppStore.getState().tiles.length;
+      const nextPageCount = Math.max(1, Math.ceil(nextTileCount / pageSize));
+      const nextPage = Math.max(0, Math.floor((nextTileCount - 1) / pageSize));
+      const resolvedPage = normalizeBoardPageIndex(
+        nextPage,
+        nextPageCount,
+        visiblePagesPerSpread
+      );
       const shouldAnimatePageChange = resolvedPage !== currentPageRef.current;
 
       // Let the boardPageIndex effect drive the visible-page update so it still performs scrollTo.
@@ -1111,6 +1254,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     orderedTiles,
     pageSize,
     setBoardPageIndex,
+    visiblePagesPerSpread,
   ]);
 
   const getTileWiggleStyle = useCallback(
@@ -1150,23 +1294,25 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   const settlePagerFromOffset = useCallback(
     (offsetX: number) => {
-      if (pageWidth <= 0) {
+      if (spreadWidth <= 0) {
         return;
       }
 
-      commitVisiblePage(Math.round(offsetX / pageWidth));
+      const spreadIndex = Math.round(offsetX / spreadWidth);
+      commitVisiblePage(spreadIndex * visiblePagesPerSpread);
     },
-    [commitVisiblePage, pageWidth]
+    [commitVisiblePage, spreadWidth, visiblePagesPerSpread]
   );
 
   const onPagerScroll = useCallback(
     (event: PagerScrollEvent) => {
       const offsetX = event.nativeEvent.contentOffset.x;
-      if (pageWidth <= 0) {
+      if (spreadWidth <= 0) {
         return;
       }
 
-      setVisiblePage(Math.round(offsetX / pageWidth));
+      const spreadIndex = Math.round(offsetX / spreadWidth);
+      setVisiblePage(spreadIndex * visiblePagesPerSpread);
 
       if (!isWebPlatform) {
         return;
@@ -1181,7 +1327,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         pagerScrollIdleTimerRef.current = null;
       }, 120);
     },
-    [pageWidth, setVisiblePage, settlePagerFromOffset]
+    [setVisiblePage, settlePagerFromOffset, spreadWidth, visiblePagesPerSpread]
   );
 
   const onPagerMomentumScrollEnd = useCallback((event: PagerScrollEvent) => {
@@ -1190,12 +1336,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       pagerScrollIdleTimerRef.current = null;
     }
 
-    if (pageWidth <= 0) {
+    if (spreadWidth <= 0) {
       return;
     }
 
     settlePagerFromOffset(event.nativeEvent.contentOffset.x);
-  }, [pageWidth, settlePagerFromOffset]);
+  }, [settlePagerFromOffset, spreadWidth]);
 
   const getTileLabelStyle = useCallback(
     (label: string) => {
@@ -1366,7 +1512,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             ref={boardPagerRef}
             horizontal
             pagingEnabled
-            scrollEnabled={pageCount > 1}
+            scrollEnabled={spreadCount > 1}
             style={styles.boardPagerScroll}
             showsHorizontalScrollIndicator={false}
             onScroll={onPagerScroll}
@@ -1378,120 +1524,168 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               style={[
                 styles.pagesStrip,
                 {
-                  width: pageWidth * pageCount,
+                  width: spreadWidth * spreadCount,
                   minHeight: effectivePageHeight,
                 },
               ]}
             >
-              {pagedTiles.map((pageTiles, pageIndex) => (
+              {pagedSpreads.map((spreadPages, spreadIndex) => (
                 <View
-                  key={`page-${pageIndex}`}
+                  key={`spread-${spreadIndex}`}
                   style={[
-                    styles.page,
+                    styles.spread,
                     {
-                      width: pageWidth,
+                      width: spreadWidth,
                       height: effectivePageHeight,
                     },
                   ]}
                 >
                   <View
                     style={[
-                      styles.pageGrid,
+                      styles.spreadPagesRow,
                       {
-                        width: pageGridWidth,
-                        minHeight: pageGridHeight,
+                        width: spreadWidth,
+                        minHeight: effectivePageHeight,
+                        gap: spreadGap,
                       },
                     ]}
                   >
-                    {pageTiles.map((tile, localIndex) => {
-                      const colors = CATEGORY_COLORS[tile.category];
-                      const highContrast = settings?.highContrast ?? false;
-                      const globalIndex = pageIndex * pageSize + localIndex;
-                      const isDraggedTile = activeDrag?.tileId === tile.id;
+                    {spreadPages.map((page, pageOffset) => {
+                      if (!page) {
+                        return (
+                          <View
+                            key={`spread-${spreadIndex}-spacer-${pageOffset}`}
+                            style={[
+                              styles.page,
+                              styles.pageSpacer,
+                              {
+                                width: logicalPageWidth,
+                                height: effectivePageHeight,
+                              },
+                            ]}
+                          />
+                        );
+                      }
 
                       return (
-                        <Animated.View
-                          key={tile.id}
-                          style={
-                            caregiverUnlocked && wiggleActive && !isDraggedTile
-                              ? getTileWiggleStyle(globalIndex)
-                              : undefined
-                          }
+                        <View
+                          key={`page-${page.pageIndex}`}
+                          style={[
+                            styles.page,
+                            {
+                              width: logicalPageWidth,
+                              height: effectivePageHeight,
+                            },
+                          ]}
                         >
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={
-                              caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`
-                            }
-                            onPress={() => onTilePress(tile.id)}
-                            onLongPress={
-                              caregiverUnlocked
-                                ? (event) => {
-                                    beginReorderTouch(
-                                      tile.id,
-                                      globalIndex,
-                                      event.nativeEvent.pageX,
-                                      event.nativeEvent.pageY
-                                    );
-                                  }
-                                : undefined
-                            }
-                            delayLongPress={caregiverUnlocked ? REORDER_LONG_PRESS_MS : undefined}
-                            onTouchEnd={
-                              caregiverUnlocked
-                                ? () => {
-                                    endReorderTouch();
-                                  }
-                                : undefined
-                            }
-                            onTouchCancel={
-                              caregiverUnlocked
-                                ? () => {
-                                    endReorderTouch();
-                                  }
-                                : undefined
-                            }
-                            style={({ pressed }) => [
-                              styles.tile,
-                              highContrast && styles.tileHighContrast,
+                          <View
+                            style={[
+                              styles.pageGrid,
                               {
-                                width: tileSize,
-                                height: tileSize,
-                                backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                                borderColor: highContrast ? '#111827' : 'transparent',
+                                width: pageGridWidth,
+                                minHeight: pageGridHeight,
                               },
-                              isDraggedTile && styles.tilePlaceholder,
-                              pressed && styles.tilePressed,
                             ]}
                           >
-                            {flashTileId === tile.id ? (
-                              <Animated.View
-                                pointerEvents="none"
-                                style={[
-                                  styles.newTileFlashOverlay,
-                                  {
-                                    opacity: newTileFlashValue,
-                                  },
-                                ]}
-                              />
-                            ) : null}
-                            <TileVisual
-                              emoji={tile.emoji}
-                              visualType={tile.visualType}
-                              imageLocalUri={tile.imageLocalUri}
-                              imageRemotePath={tile.imageRemotePath}
-                              size={tileVisualSize}
-                            />
-                            {showLabels ? (
-                              <Text
-                                style={[styles.tileLabel, getTileLabelStyle(tile.labelCs)]}
-                                {...FITTED_TILE_LABEL_PROPS}
-                              >
-                                {tile.labelCs}
-                              </Text>
-                            ) : null}
-                          </Pressable>
-                        </Animated.View>
+                            {page.tiles.map((tile, localIndex) => {
+                              const colors = CATEGORY_COLORS[tile.category];
+                              const highContrast = settings?.highContrast ?? false;
+                              const globalIndex = page.pageIndex * pageSize + localIndex;
+                              const isDraggedTile = activeDrag?.tileId === tile.id;
+
+                              return (
+                                <Animated.View
+                                  key={tile.id}
+                                  style={
+                                    caregiverUnlocked && wiggleActive && !isDraggedTile
+                                      ? getTileWiggleStyle(globalIndex)
+                                      : undefined
+                                  }
+                                >
+                                  <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel={
+                                      caregiverUnlocked
+                                        ? `Upravit ${tile.labelCs}`
+                                        : `Řekni ${tile.labelCs}`
+                                    }
+                                    onPress={() => onTilePress(tile.id)}
+                                    onLongPress={
+                                      caregiverUnlocked
+                                        ? (event) => {
+                                            beginReorderTouch(
+                                              tile.id,
+                                              globalIndex,
+                                              event.nativeEvent.pageX,
+                                              event.nativeEvent.pageY
+                                            );
+                                          }
+                                        : undefined
+                                    }
+                                    delayLongPress={
+                                      caregiverUnlocked ? REORDER_LONG_PRESS_MS : undefined
+                                    }
+                                    onTouchEnd={
+                                      caregiverUnlocked
+                                        ? () => {
+                                            endReorderTouch();
+                                          }
+                                        : undefined
+                                    }
+                                    onTouchCancel={
+                                      caregiverUnlocked
+                                        ? () => {
+                                            endReorderTouch();
+                                          }
+                                        : undefined
+                                    }
+                                    style={({ pressed }) => [
+                                      styles.tile,
+                                      highContrast && styles.tileHighContrast,
+                                      {
+                                        width: tileSize,
+                                        height: tileSize,
+                                        backgroundColor: highContrast
+                                          ? '#FFFFFF'
+                                          : colors.background,
+                                        borderColor: highContrast ? '#111827' : 'transparent',
+                                      },
+                                      isDraggedTile && styles.tilePlaceholder,
+                                      pressed && styles.tilePressed,
+                                    ]}
+                                  >
+                                    {flashTileId === tile.id ? (
+                                      <Animated.View
+                                        pointerEvents="none"
+                                        style={[
+                                          styles.newTileFlashOverlay,
+                                          {
+                                            opacity: newTileFlashValue,
+                                          },
+                                        ]}
+                                      />
+                                    ) : null}
+                                    <TileVisual
+                                      emoji={tile.emoji}
+                                      visualType={tile.visualType}
+                                      imageLocalUri={tile.imageLocalUri}
+                                      imageRemotePath={tile.imageRemotePath}
+                                      size={tileVisualSize}
+                                    />
+                                    {showLabels ? (
+                                      <Text
+                                        style={[styles.tileLabel, getTileLabelStyle(tile.labelCs)]}
+                                        {...FITTED_TILE_LABEL_PROPS}
+                                      >
+                                        {tile.labelCs}
+                                      </Text>
+                                    ) : null}
+                                  </Pressable>
+                                </Animated.View>
+                              );
+                            })}
+                          </View>
+                        </View>
                       );
                     })}
                   </View>
@@ -1602,31 +1796,35 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             </Pressable>
           </View>
 
-          {pageCount > 1 ? (
+          {spreadCount > 1 ? (
             <View style={styles.pageControls}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Předchozí stránka"
-                onPress={() => scrollToPage(currentPage - 1, true)}
-                disabled={currentPage === 0}
+                accessibilityLabel={isSpreadMode ? 'Předchozí dvojstrana' : 'Předchozí stránka'}
+                onPress={() => scrollToPage(currentPage - visiblePagesPerSpread, true)}
+                disabled={currentSpreadIndex === 0}
                 style={[
                   styles.pageControlButton,
-                  currentPage === 0 && styles.pageControlButtonDisabled,
+                  currentSpreadIndex === 0 && styles.pageControlButtonDisabled,
                 ]}
               >
                 <Text style={styles.pageControlText}>{'<'}</Text>
               </Pressable>
 
               <View style={styles.pageIndicatorWrap}>
-                {Array.from({ length: pageCount }, (_, pageIndex) => (
+                {Array.from({ length: spreadCount }, (_, spreadIndex) => (
                   <Pressable
-                    key={`page-dot-${pageIndex}`}
+                    key={`page-dot-${spreadIndex}`}
                     accessibilityRole="button"
-                    accessibilityLabel={`Otevřít stránku ${pageIndex + 1}`}
-                    onPress={() => scrollToPage(pageIndex, true)}
+                    accessibilityLabel={
+                      isSpreadMode
+                        ? `Otevřít dvojstranu ${spreadIndex + 1}`
+                        : `Otevřít stránku ${spreadIndex + 1}`
+                    }
+                    onPress={() => scrollToPage(spreadIndex * visiblePagesPerSpread, true)}
                     style={[
                       styles.pageDot,
-                      currentPage === pageIndex && styles.pageDotActive,
+                      currentSpreadIndex === spreadIndex && styles.pageDotActive,
                     ]}
                   />
                 ))}
@@ -1634,12 +1832,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Další stránka"
-                onPress={() => scrollToPage(currentPage + 1, true)}
-                disabled={currentPage >= pageCount - 1}
+                accessibilityLabel={isSpreadMode ? 'Další dvojstrana' : 'Další stránka'}
+                onPress={() => scrollToPage(currentPage + visiblePagesPerSpread, true)}
+                disabled={currentSpreadIndex >= spreadCount - 1}
                 style={[
                   styles.pageControlButton,
-                  currentPage >= pageCount - 1 && styles.pageControlButtonDisabled,
+                  currentSpreadIndex >= spreadCount - 1 && styles.pageControlButtonDisabled,
                 ]}
               >
                 <Text style={styles.pageControlText}>{'>'}</Text>

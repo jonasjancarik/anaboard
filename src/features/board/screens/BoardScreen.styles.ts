@@ -179,6 +179,17 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  spread: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  spreadPagesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pageSpacer: {
+    opacity: 0,
+  },
   pageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
