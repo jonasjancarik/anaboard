@@ -30,7 +30,7 @@ const buildPrompt = (body: Required<Pick<RequestBody, 'label' | 'locale'>> & Req
   const stylePreset = body.stylePreset?.trim() || 'warm-flat-pictogram-v1';
 
   return [
-    `Create one square AAC tile illustration for the Czech label "${body.label}".`,
+    `Create one square AAC tile illustration for the label "${body.label}".`,
     `Locale: ${body.locale}.`,
     body.category ? `Category: ${body.category}.` : 'Category: unknown.',
     `Style preset: ${stylePreset}.`,
@@ -38,7 +38,7 @@ const buildPrompt = (body: Required<Pick<RequestBody, 'label' | 'locale'>> & Req
     'Single clear object. Centered composition. Soft edges. Soft color palette.',
     'No text. No letters. No watermark. No frame. No busy background.',
     'White or transparent-looking plain background.',
-    'Instantly recognizable for a preschool child.',
+    'Make the object instantly recognizable for a preschool child.',
   ].join(' ');
 };
 
