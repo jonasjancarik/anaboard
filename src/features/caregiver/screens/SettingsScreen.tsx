@@ -11,6 +11,7 @@ import { SettingRowButton } from '../components/SettingRowButton';
 import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
 import { SettingToggleRow } from '../components/SettingToggleRow';
 import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
+import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hasSupabaseConfig } from '../../../shared/services/supabaseClient';
@@ -649,7 +650,7 @@ const styles = StyleSheet.create({
     backgroundColor: APP_THEME.background,
   },
   content: {
-    padding: 12,
+    padding: SCREEN_CONTENT_PADDING,
     gap: 10,
     paddingBottom: 28,
   },

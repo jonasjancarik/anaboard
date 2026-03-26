@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../authService';
+import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { useAppStore } from '../../../store/useAppStore';
+import { ScreenHeader } from '../../caregiver/components/ScreenHeader';
 
 type AuthScreenProps = {
   onBack: () => void;
@@ -57,9 +59,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={24}
       >
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>Zpět</Text>
-        </Pressable>
+        <View style={styles.header}>
+          <ScreenHeader title="" onBack={onBack} />
+        </View>
 
         <View style={styles.form}>
           <Text style={styles.title}>Cloud sync</Text>
@@ -102,22 +104,14 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 24,
   },
-  backButton: {
-    position: 'absolute',
-    top: 12,
-    left: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+  header: {
+    paddingTop: SCREEN_CONTENT_PADDING,
+    paddingHorizontal: SCREEN_CONTENT_PADDING,
   },
   form: {
-    paddingTop: 112,
-  },
-  backText: {
-    color: APP_THEME.primaryBorder,
-    fontSize: 17,
-    fontWeight: '700',
+    paddingTop: 56,
+    paddingHorizontal: 24,
   },
   title: {
     fontSize: 30,

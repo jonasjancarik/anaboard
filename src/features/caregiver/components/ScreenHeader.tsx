@@ -1,5 +1,6 @@
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
+import { HEADER_HORIZONTAL_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { BackButton } from '../../../shared/components/BackButton';
@@ -37,7 +38,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    paddingHorizontal: HEADER_HORIZONTAL_PADDING,
     gap: 8,
   },
   side: {
