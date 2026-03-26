@@ -3,12 +3,14 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { authService } from '../authService';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { isWebPlatform } from '../../../shared/platform/runtime';
+import { useAppStore } from '../../../store/useAppStore';
 
 type AuthScreenProps = {
   onBack: () => void;
 };
 
 export const AuthScreen = ({ onBack }: AuthScreenProps) => {
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -45,7 +47,11 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         <Text style={styles.backText}>Zpět</Text>
       </Pressable>
       <Text style={styles.title}>Cloud sync</Text>
-      <Text style={styles.subtitle}>Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.</Text>
+      <Text style={styles.subtitle}>
+        {authIsAnonymous
+          ? 'Zadej e-mail. Pošleme jednorázový odkaz a po návratu se vrátíš k rozpracované dlaždici.'
+          : 'Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.'}
+      </Text>
 
       <TextInput
         style={styles.input}

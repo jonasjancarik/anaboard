@@ -92,6 +92,7 @@ type AppStore = {
   authIsAnonymous: boolean;
   authUserId: string | null;
   authEmail: string | null;
+  authReturnScreen: ScreenName | null;
   isAuthLoading: boolean;
   requiresBootstrap: boolean;
   remoteContext: RemoteContext | null;
@@ -127,6 +128,7 @@ type AppStore = {
     email: string | null;
   }) => void;
   setAuthLoading: (value: boolean) => void;
+  setAuthReturnScreen: (screen: ScreenName | null) => void;
   setRequiresBootstrap: (value: boolean) => void;
   setRemoteContext: (context: RemoteContext | null) => void;
   initializeApp: () => Promise<void>;
@@ -191,6 +193,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   authIsAnonymous: false,
   authUserId: null,
   authEmail: null,
+  authReturnScreen: null,
   isAuthLoading: true,
   requiresBootstrap: false,
   remoteContext: null,
@@ -233,6 +236,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setAuthLoading: (value) => {
     set({ isAuthLoading: value });
+  },
+
+  setAuthReturnScreen: (screen) => {
+    set({ authReturnScreen: screen });
   },
 
   setRequiresBootstrap: (value) => {

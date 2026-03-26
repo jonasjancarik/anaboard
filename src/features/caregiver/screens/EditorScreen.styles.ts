@@ -324,6 +324,16 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 16,
   },
+  inlineAuthLink: {
+    alignSelf: "flex-start",
+    marginTop: 2,
+    paddingVertical: 2,
+  },
+  inlineAuthLinkText: {
+    color: APP_THEME.primaryBorder,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   actionButton: {
     minHeight: 44,
     borderRadius: 16,

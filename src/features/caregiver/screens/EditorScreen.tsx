@@ -52,6 +52,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const deleteTile = useAppStore((state) => state.deleteTile);
   const saveClip = useAppStore((state) => state.saveClip);
   const deleteClip = useAppStore((state) => state.deleteClip);
+  const navigate = useAppStore((state) => state.navigate);
+  const setAuthReturnScreen = useAppStore((state) => state.setAuthReturnScreen);
   const editorTargetTileId = useAppStore((state) => state.editorTargetTileId);
   const setEditorTargetTileId = useAppStore(
     (state) => state.setEditorTargetTileId,
@@ -537,6 +539,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     void handleRecordToggle();
   };
 
+  const showAuthCtaForTileError =
+    authIsAnonymous &&
+    Boolean(tileActionError && /bez účtu|přihlas/i.test(tileActionError));
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <ScreenHeader title="Upravit dlaždici" onBack={onBack} />
@@ -835,7 +841,22 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                 </View>
 
                 {tileActionError ? (
-                  <Text style={styles.error}>{tileActionError}</Text>
+                  <>
+                    <Text style={styles.error}>{tileActionError}</Text>
+                    {showAuthCtaForTileError ? (
+                      <Pressable
+                        style={styles.inlineAuthLink}
+                        onPress={() => {
+                          setAuthReturnScreen("editor");
+                          navigate("auth");
+                        }}
+                      >
+                        <Text style={styles.inlineAuthLinkText}>
+                          Přihlásit / založit účet
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             ) : (

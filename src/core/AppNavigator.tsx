@@ -1,4 +1,4 @@
-import { Alert, BackHandler } from 'react-native';
+import { Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { useCallback, useEffect } from 'react';
 
 import { BoardScreen } from '../features/board/screens/BoardScreen';
@@ -17,10 +17,12 @@ export const AppNavigator = () => {
   const currentScreen = useAppStore((state) => state.currentScreen);
   const requiresBootstrap = useAppStore((state) => state.requiresBootstrap);
   const authStatus = useAppStore((state) => state.authStatus);
+  const authReturnScreen = useAppStore((state) => state.authReturnScreen);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const settings = useAppStore((state) => state.settings);
 
   const navigate = useAppStore((state) => state.navigate);
+  const setAuthReturnScreen = useAppStore((state) => state.setAuthReturnScreen);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
   const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
@@ -38,7 +40,9 @@ export const AppNavigator = () => {
     }
 
     if (currentScreen === 'auth') {
-      navigate('settings');
+      const nextScreen = authReturnScreen ?? 'settings';
+      setAuthReturnScreen(null);
+      navigate(nextScreen);
       return true;
     }
 
@@ -50,7 +54,7 @@ export const AppNavigator = () => {
     }
 
     return false;
-  }, [clearPendingCaregiverAction, currentScreen, navigate, setEditorTargetTileId]);
+  }, [authReturnScreen, clearPendingCaregiverAction, currentScreen, navigate, setAuthReturnScreen, setEditorTargetTileId]);
 
   useEffect(() => {
     if (
@@ -66,9 +70,11 @@ export const AppNavigator = () => {
 
   useEffect(() => {
     if (currentScreen === 'auth' && authStatus === 'signed_in' && !requiresBootstrap) {
-      navigate('settings');
+      const nextScreen = authReturnScreen ?? 'settings';
+      setAuthReturnScreen(null);
+      navigate(nextScreen);
     }
-  }, [authStatus, currentScreen, navigate, requiresBootstrap]);
+  }, [authReturnScreen, authStatus, currentScreen, navigate, requiresBootstrap, setAuthReturnScreen]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -119,8 +125,29 @@ export const AppNavigator = () => {
     return <BootstrapScreen />;
   }
 
+  const editorScreen = <EditorScreen onBack={() => navigate('board')} />;
+
   if (currentScreen === 'auth') {
-    return <AuthScreen onBack={() => navigate('settings')} />;
+    const authScreen = (
+      <AuthScreen
+        onBack={() => {
+          const nextScreen = authReturnScreen ?? 'settings';
+          setAuthReturnScreen(null);
+          navigate(nextScreen);
+        }}
+      />
+    );
+
+    if (authReturnScreen === 'editor') {
+      return (
+        <>
+          {editorScreen}
+          <View style={styles.authOverlay}>{authScreen}</View>
+        </>
+      );
+    }
+
+    return authScreen;
   }
 
   if (currentScreen === 'caregiverGate') {
@@ -135,7 +162,7 @@ export const AppNavigator = () => {
   }
 
   if (currentScreen === 'editor') {
-    return <EditorScreen onBack={() => navigate('board')} />;
+    return editorScreen;
   }
 
   if (currentScreen === 'settings') {
@@ -159,3 +186,9 @@ export const AppNavigator = () => {
 
   return <BoardScreen onOpenCaregiver={openCaregiver} onOpenSettings={() => navigate('settings')} />;
 };
+
+const styles = StyleSheet.create({
+  authOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});
