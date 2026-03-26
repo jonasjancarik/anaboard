@@ -17,6 +17,7 @@ export const AppNavigator = () => {
   const currentScreen = useAppStore((state) => state.currentScreen);
   const requiresBootstrap = useAppStore((state) => state.requiresBootstrap);
   const authStatus = useAppStore((state) => state.authStatus);
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const authReturnScreen = useAppStore((state) => state.authReturnScreen);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const settings = useAppStore((state) => state.settings);
@@ -69,12 +70,17 @@ export const AppNavigator = () => {
   }, [caregiverUnlocked, currentScreen, navigate, usesAppPin]);
 
   useEffect(() => {
-    if (currentScreen === 'auth' && authStatus === 'signed_in' && !requiresBootstrap) {
+    if (
+      currentScreen === 'auth' &&
+      authStatus === 'signed_in' &&
+      !authIsAnonymous &&
+      !requiresBootstrap
+    ) {
       const nextScreen = authReturnScreen ?? 'settings';
       setAuthReturnScreen(null);
       navigate(nextScreen);
     }
-  }, [authReturnScreen, authStatus, currentScreen, navigate, requiresBootstrap, setAuthReturnScreen]);
+  }, [authIsAnonymous, authReturnScreen, authStatus, currentScreen, navigate, requiresBootstrap, setAuthReturnScreen]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
