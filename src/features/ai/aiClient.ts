@@ -64,6 +64,46 @@ const invokeFunction = async <TResponse>(
   });
 
   if (error) {
+    const errorWithContext = error as typeof error & {
+      context?: {
+        clone?: () => {
+          json?: () => Promise<unknown>;
+          text?: () => Promise<string>;
+        };
+      };
+    };
+
+    const responseClone = errorWithContext.context?.clone?.();
+    if (responseClone?.json) {
+      try {
+        const payload = await responseClone.json();
+        const maybeMessage =
+          payload &&
+          typeof payload === 'object' &&
+          'error' in payload &&
+          typeof payload.error === 'string'
+            ? payload.error
+            : null;
+
+        if (maybeMessage) {
+          throw new Error(maybeMessage);
+        }
+      } catch {
+        // Fall through to text/default handling.
+      }
+    }
+
+    if (responseClone?.text) {
+      try {
+        const text = await responseClone.text();
+        if (text.trim()) {
+          throw new Error(text.trim());
+        }
+      } catch {
+        // Fall through to default handling.
+      }
+    }
+
     throw new Error(error.message || `Volání AI funkce ${functionName} selhalo.`);
   }
 
