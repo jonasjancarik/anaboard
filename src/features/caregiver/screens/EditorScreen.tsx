@@ -174,11 +174,6 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       return null;
     }
 
-    if (generatedDraft) {
-      setTileActionError("Nejdřív potvrď AI obrázek tlačítkem Použít.");
-      return null;
-    }
-
     if (visualSelectionIncomplete) {
       setTileActionError("Nejdřív přidej fotku z foťáku nebo knihovny.");
       return null;
@@ -200,15 +195,30 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       return;
     }
 
-    const payload = buildTileUpdatePayload();
-    if (!payload) {
-      return;
-    }
-
     setIsSaving(true);
     setTileActionError(null);
 
     try {
+      if (generatedDraft) {
+        const promoted = await imageDraftService.promoteDraft({
+          profileId: remoteContext?.profileId,
+          tileId: selectedTile.id,
+          draftId: generatedDraft.draftId,
+          draftStoragePath: generatedDraft.storagePath,
+        });
+
+        await applyGeneratedDraft({
+          localUri: promoted.localUri,
+          remotePath: promoted.storagePath,
+        });
+        setVisualType("image");
+      }
+
+      const payload = buildTileUpdatePayload();
+      if (!payload) {
+        return;
+      }
+
       await updateTileDraft(selectedTile.id, payload);
       await commitDraft(
         payload.visualType === "image" && Boolean(payload.imageLocalUri),
