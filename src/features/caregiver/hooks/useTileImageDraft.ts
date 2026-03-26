@@ -174,14 +174,20 @@ export const useTileImageDraft = ({
     setVisualType("image");
   };
 
-  const commitDraft = async (persistCurrentImage: boolean) => {
-    if (persistCurrentImage && imageLocalUri) {
-      draftImageUrisRef.current.delete(imageLocalUri);
+  const commitDraft = async (
+    persistCurrentImage: boolean,
+    persistedImageLocalUri?: string | null
+  ) => {
+    const nextPersistedImageLocalUri =
+      persistedImageLocalUri === undefined ? imageLocalUri : persistedImageLocalUri;
+
+    if (persistCurrentImage && nextPersistedImageLocalUri) {
+      draftImageUrisRef.current.delete(nextPersistedImageLocalUri);
       setGeneratedDraft(null);
       return;
     }
 
-    await discardDraftImage(imageLocalUri);
+    await discardDraftImage(nextPersistedImageLocalUri);
     setGeneratedDraft(null);
   };
 

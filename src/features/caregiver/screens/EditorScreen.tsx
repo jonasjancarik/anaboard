@@ -249,6 +249,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       await updateTileDraft(selectedTile.id, payload);
       await commitDraft(
         payload.visualType === "image" && Boolean(payload.imageLocalUri),
+        payload.imageLocalUri,
       );
     } catch (error) {
       setTileActionError(
