@@ -198,7 +198,7 @@ export const SettingsScreen = ({
       ? 'Kontroluji, jestli data přežijí obnovení stránky.'
       : webPersistenceSummary.status === 'passed'
         ? 'Ověřeno po obnovení stránky. Data zůstávají v tomto prohlížeči.'
-        : 'První kontrola hotová. Obnov stránku ještě jednou a AnaBoard potvrdí trvalé uložení.';
+        : 'První kontrola hotová. Obnov stránku ještě jednou a ÁňaBoard potvrdí trvalé uložení.';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

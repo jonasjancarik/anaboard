@@ -43,7 +43,7 @@ export const AuthScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>AnaBoard účet</Text>
+      <Text style={styles.title}>ÁňaBoard účet</Text>
       <Text style={styles.subtitle}>Cloud sync a rodinné profily</Text>
 
       <View style={styles.modeRow}>

@@ -22,11 +22,11 @@ export const getWebStorageSupport = async (): Promise<WebStorageSupportResult> =
   }
 
   if (!window.isSecureContext) {
-    return unsupported('AnaBoard v prohlížeči potřebuje bezpečné HTTPS úložiště.');
+    return unsupported('ÁňaBoard v prohlížeči potřebuje bezpečné HTTPS úložiště.');
   }
 
   if (!navigator.storage?.getDirectory) {
-    return unsupported('Tento prohlížeč neumí trvalé úložiště potřebné pro AnaBoard.');
+    return unsupported('Tento prohlížeč neumí trvalé úložiště potřebné pro ÁňaBoard.');
   }
 
   try {
@@ -56,6 +56,6 @@ export const getWebStorageSupport = async (): Promise<WebStorageSupportResult> =
       message: '',
     };
   } catch {
-    return unsupported('Prohlížeč neotevřel trvalé úložiště AnaBoardu.');
+    return unsupported('Prohlížeč neotevřel trvalé úložiště ÁňaBoardu.');
   }
 };
