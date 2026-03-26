@@ -1050,10 +1050,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       const newTileId = await createTileAfter(anchorTile.id);
       const nextPage = Math.floor((useAppStore.getState().tiles.length - 1) / pageSize);
       const resolvedPage = Math.max(0, nextPage);
+      const shouldAnimatePageChange = resolvedPage !== currentPageRef.current;
 
-      currentPageRef.current = resolvedPage;
-      setCurrentPage(resolvedPage);
-      pendingAnimatedPageRef.current = resolvedPage;
+      // Let the boardPageIndex effect drive the visible-page update so it still performs scrollTo.
+      pendingAnimatedPageRef.current = shouldAnimatePageChange ? resolvedPage : null;
       setBoardPageIndex(resolvedPage);
 
       if (flashNewTileTimerRef.current) {
