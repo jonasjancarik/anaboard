@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { aiClient } from "../../ai/aiClient";
+import { logError, logEvent } from "../../../shared/telemetry/logger";
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
 import type { Category } from "../../../shared/types/domain";
 
@@ -80,6 +81,7 @@ export const useEmojiSuggestions = ({
     requestIdRef.current = requestId;
     setIsLoading(true);
     setError(null);
+    const startedAtMs = Date.now();
 
     try {
       const response = await withTimeout(
@@ -97,6 +99,14 @@ export const useEmojiSuggestions = ({
       }
 
       setSuggestions(response.suggestions);
+      logEvent("ai_emoji_suggest_success", {
+        duration_ms: Date.now() - startedAtMs,
+        cached: response.cached,
+        suggestion_count: response.suggestions.length,
+        locale,
+        category: category ?? null,
+        label_length: normalizedLabel.length,
+      });
       if (response.suggestions.length === 0) {
         setError("Teď jsem nenašel dobrý emoji návrh.");
       }
@@ -106,6 +116,13 @@ export const useEmojiSuggestions = ({
       }
 
       setSuggestions([]);
+      logError("ai_emoji_suggest_error", requestError, {
+        duration_ms: Date.now() - startedAtMs,
+        timeout: requestError instanceof Error && requestError.message === createTimeoutError().message,
+        locale,
+        category: category ?? null,
+        label_length: normalizedLabel.length,
+      });
       setError(
         requestError instanceof Error
           ? requestError.message
