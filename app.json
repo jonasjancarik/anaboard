@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AnaBoard",
+    "name": "ÁňaBoard",
     "slug": "anaboard",
     "scheme": "anaboard",
     "version": "1.0.0",
@@ -17,9 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.anaboard",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Umožni AnaBoard používat Face ID pro odemknutí režimu pečovatele.",
-        "NSPhotoLibraryUsageDescription": "Umožni AnaBoard vybrat fotku pro dlaždici.",
-        "NSCameraUsageDescription": "Umožni AnaBoard vyfotit obrázek pro dlaždici."
+        "NSFaceIDUsageDescription": "Umožni ÁňaBoard používat Face ID pro odemknutí režimu pečovatele.",
+        "NSPhotoLibraryUsageDescription": "Umožni ÁňaBoard vybrat fotku pro dlaždici.",
+        "NSCameraUsageDescription": "Umožni ÁňaBoard vyfotit obrázek pro dlaždici."
       }
     },
     "android": {
@@ -45,8 +45,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Umožni AnaBoard vybrat fotku pro dlaždici.",
-          "cameraPermission": "Umožni AnaBoard vyfotit obrázek pro dlaždici.",
+          "photosPermission": "Umožni ÁňaBoard vybrat fotku pro dlaždici.",
+          "cameraPermission": "Umožni ÁňaBoard vyfotit obrázek pro dlaždici.",
           "microphonePermission": false
         }
       ]

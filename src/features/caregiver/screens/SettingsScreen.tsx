@@ -281,7 +281,7 @@ export const SettingsScreen = ({
       ? 'Kontroluji, jestli data přežijí obnovení stránky.'
       : webPersistenceSummary.status === 'passed'
         ? 'Ověřeno po obnovení stránky. Data zůstávají v tomto prohlížeči.'
-        : 'První kontrola hotová. Obnov stránku ještě jednou a AnaBoard potvrdí trvalé uložení.';
+        : 'První kontrola hotová. Obnov stránku ještě jednou a ÁňaBoard potvrdí trvalé uložení.';
 
   const availableVoiceOptions = voiceOptions.filter((option) => option.value !== DEFAULT_VOICE_VALUE);
   const availableVoiceCount = availableVoiceOptions.length;

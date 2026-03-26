@@ -29,15 +29,15 @@ export const getWebStorageSupport = async (): Promise<WebStorageSupportResult> =
 
     if (protocol === 'http:' && !isLoopbackHost) {
       return unsupported(
-        'Tahle HTTP adresa mimo localhost není pro Chrome bezpečný kontext. Na telefonu otevři AnaBoard přes HTTPS nebo Expo tunnel.'
+        'Tahle HTTP adresa mimo localhost není pro Chrome bezpečný kontext. Na telefonu otevři ÁňaBoard přes HTTPS nebo Expo tunnel.'
       );
     }
 
-    return unsupported('AnaBoard v prohlížeči potřebuje bezpečný HTTPS kontext.');
+    return unsupported('ÁňaBoard v prohlížeči potřebuje bezpečný HTTPS kontext.');
   }
 
   if (!navigator.storage?.getDirectory) {
-    return unsupported('Tento prohlížeč neumí trvalé úložiště potřebné pro AnaBoard.');
+    return unsupported('Tento prohlížeč neumí trvalé úložiště potřebné pro ÁňaBoard.');
   }
 
   try {
@@ -67,6 +67,6 @@ export const getWebStorageSupport = async (): Promise<WebStorageSupportResult> =
       message: '',
     };
   } catch {
-    return unsupported('Prohlížeč neotevřel trvalé úložiště AnaBoardu.');
+    return unsupported('Prohlížeč neotevřel trvalé úložiště ÁňaBoardu.');
   }
 };

@@ -357,7 +357,7 @@ export const AppRoot = () => {
   const isLoading =
     webSupportState.status === 'checking' || isAuthLoading || isBoardLoading || isSettingsLoading;
   const loaderText =
-    webSupportState.status === 'checking' ? 'Ověřuji prohlížeč...' : 'Načítám AnaBoard...';
+    webSupportState.status === 'checking' ? 'Ověřuji prohlížeč...' : 'Načítám ÁňaBoard...';
 
   return (
     <SafeAreaProvider>

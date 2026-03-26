@@ -1,6 +1,6 @@
 # Supabase Functions
 
-AnaBoard AI endpoints live here.
+ÁňaBoard AI endpoints live here.
 
 ## Required secrets
 

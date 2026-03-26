@@ -1,4 +1,4 @@
-# AnaBoard LLM V1 Design
+# ÁňaBoard LLM V1 Design
 
 Last updated: 2026-03-24
 
@@ -141,8 +141,8 @@ Expected usage:
 
 Important:
 
-- The model does not host the final image for AnaBoard.
-- The function must upload the image bytes to AnaBoard-controlled cloud storage.
+- The model does not host the final image for ÁňaBoard.
+- The function must upload the image bytes to ÁňaBoard-controlled cloud storage.
 
 Official reference:
 

@@ -1,4 +1,4 @@
-# AnaBoard
+# ÁňaBoard
 
 Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, local-first persistence, optional Supabase sync.
 

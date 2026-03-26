@@ -1,4 +1,4 @@
--- AnaBoard v1 baseline schema (Supabase/Postgres)
+-- ÁňaBoard v1 baseline schema (Supabase/Postgres)
 
 create table if not exists families (
   id uuid primary key default gen_random_uuid(),

@@ -14,7 +14,7 @@ export const UnsupportedBrowserScreen = ({
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.card}>
         <Text style={styles.kicker}>Web verze</Text>
-        <Text style={styles.title}>Tento prohlížeč teď AnaBoard neutáhne</Text>
+        <Text style={styles.title}>Tento prohlížeč teď ÁňaBoard neutáhne</Text>
         <Text style={styles.message}>{message}</Text>
         <Text style={styles.note}>
           Na telefonu nestačí `http://192.168…`. Použij HTTPS nebo Expo tunnel.
