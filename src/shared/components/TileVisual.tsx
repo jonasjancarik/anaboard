@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -9,7 +9,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { APP_THEME } from '../constants/theme';
 import { useResolvedMediaUri } from '../media/useResolvedMediaUri';
 import type { TileVisualType } from '../types/domain';
 
@@ -83,7 +82,7 @@ const getVisualTextMetrics = (value: string, size: number) => {
   };
 };
 
-export const TileVisual = ({
+const TileVisualComponent = ({
   emoji,
   visualType = 'emoji',
   imageLocalUri,
@@ -114,6 +113,19 @@ export const TileVisual = ({
     />
   );
 };
+
+export const TileVisual = memo(TileVisualComponent, (previous, next) => {
+  return (
+    previous.emoji === next.emoji &&
+    previous.visualType === next.visualType &&
+    previous.imageLocalUri === next.imageLocalUri &&
+    previous.imageRemotePath === next.imageRemotePath &&
+    previous.size === next.size &&
+    previous.cornerRadius === next.cornerRadius &&
+    previous.style === next.style &&
+    previous.emojiStyle === next.emojiStyle
+  );
+});
 
 type TileVisualFrameProps = {
   emoji: string;

@@ -370,7 +370,6 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.14,
     shadowRadius: 14,
-    transform: [{ scale: 1.04 }],
   },
   dragOverlayTileHighContrast: {
     borderWidth: 2,
