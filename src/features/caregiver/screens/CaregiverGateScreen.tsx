@@ -8,6 +8,7 @@ import {
   canUseNativeCaregiverAuth,
 } from '../../../shared/utils/deviceAuth';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hashPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
@@ -91,14 +92,17 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
           return;
         }
 
+        void appHaptics.error();
         setError('Ověření telefonu se nepovedlo.');
         return;
       }
 
       await updateSettings({ backupPinEnabled: false });
       unlockCaregiver();
+      void appHaptics.success();
       onPassed();
     } catch {
+      void appHaptics.error();
       setError('Ověření telefonu se nepovedlo.');
     } finally {
       setIsRecovering(false);
@@ -142,11 +146,13 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
                     unlockCaregiver();
                     setPin('');
                     setError(null);
+                    void appHaptics.success();
                     onPassed();
                     return;
                   }
 
                   setPin('');
+                  void appHaptics.error();
                   setError('Špatný PIN');
                   pinInputRef.current?.focus();
                 })();
@@ -166,6 +172,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
             <Pressable
               style={[styles.recoveryButton, isRecovering && styles.recoveryButtonDisabled]}
               onPress={() => {
+                void appHaptics.tap();
                 void recoverWithDeviceAuth();
               }}
               disabled={isRecovering}

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CATEGORY_COLORS, SPEECH_MODE_LABELS } from '../../../shared/constants/defaults';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 import { getArchivedTilesForBoard, restoreArchivedTileToBoard } from '../../../shared/storage/repositories/tileArchiveRepository';
 import type { ArchivedTile } from '../../../shared/types/domain';
 import { useAppStore } from '../../../store/useAppStore';
@@ -85,8 +86,10 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
       if (board) {
         setArchivedTiles(await getArchivedTilesForBoard(board.id));
       }
+      void appHaptics.success();
       setMessage('Dlaždice vrácena na konec tabule');
     } catch (error) {
+      void appHaptics.error();
       setMessage(error instanceof Error ? error.message : 'Vrácení dlaždice selhalo');
     } finally {
       setRestoringArchiveId(null);

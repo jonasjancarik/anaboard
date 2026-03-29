@@ -8,6 +8,7 @@ import {
 
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
 import { TileVisual } from '../../../shared/components/TileVisual';
+import { appHaptics } from '../../../shared/feedback/haptics';
 import type { Tile } from '../../../shared/types/domain';
 import { styles } from '../screens/BoardScreen.styles';
 
@@ -69,6 +70,7 @@ const BoardTileComponent = ({
 
   const handleLongPress = useCallback(
     (event: GestureResponderEvent) => {
+      void appHaptics.longPress();
       onBeginReorderTouch(
         tile.id,
         globalIndex,

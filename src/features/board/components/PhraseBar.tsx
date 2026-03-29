@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 import type { PhraseTokenSnapshot } from '../../../shared/types/domain';
 
 export type PhraseBarItem = {
@@ -60,8 +61,18 @@ export const PhraseBar = ({
                 key={item.id}
                 accessibilityRole="button"
                 accessibilityLabel={item.label}
-                onPress={() => onPressItem(item)}
-                onLongPress={onLongPressItem ? () => onLongPressItem(item) : undefined}
+                onPress={() => {
+                  void appHaptics.selection();
+                  onPressItem(item);
+                }}
+                onLongPress={
+                  onLongPressItem
+                    ? () => {
+                        void appHaptics.longPress();
+                        onLongPressItem(item);
+                      }
+                    : undefined
+                }
                 style={({ pressed }) => [
                   styles.chip,
                   {

@@ -1,6 +1,7 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 
 type SettingToggleRowProps = {
   title: string;
@@ -24,7 +25,10 @@ export const SettingToggleRow = ({
       <View style={styles.switchWrap}>
         <Switch
           value={value}
-          onValueChange={onValueChange}
+          onValueChange={(nextValue) => {
+            void appHaptics.toggle(nextValue);
+            onValueChange(nextValue);
+          }}
           trackColor={{
             false: APP_THEME.borderStrong,
             true: APP_THEME.success,

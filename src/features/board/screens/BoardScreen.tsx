@@ -44,6 +44,7 @@ import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 import type { PhraseSource, PhraseTokenSnapshot, SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
@@ -722,6 +723,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
+    void appHaptics.tileTap();
     setPhraseFeedback(null);
 
     if (caregiverUnlocked) {
@@ -749,6 +751,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   };
 
   const onSpeakSentence = () => {
+    void appHaptics.tap();
     setPhraseFeedback(null);
     void playTokens(sentence, {
       recordSource: 'manual',
@@ -773,11 +776,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       await saveCurrentSentenceAsPhrase();
+      void appHaptics.success();
       setPhraseFeedback({
         kind: 'success',
         text: 'Věta uložená',
       });
     } catch (error) {
+      void appHaptics.error();
       setPhraseFeedback({
         kind: 'error',
         text: error instanceof Error ? error.message : 'Větu nešlo uložit',
@@ -880,11 +885,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             void (async () => {
               try {
                 await deleteSavedPhrase(phrase.id);
+                void appHaptics.warning();
                 setPhraseFeedback({
                   kind: 'success',
                   text: 'Uložená věta smazaná',
                 });
               } catch (error) {
+                void appHaptics.error();
                 setPhraseFeedback({
                   kind: 'error',
                   text:
@@ -902,6 +909,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   const onClearSentence = () => {
+    void appHaptics.tap();
     clearSentence();
     setPhraseFeedback(null);
     setSpeaking(false);
@@ -952,6 +960,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
 
       if (targetPage !== currentPageRef.current) {
+        void appHaptics.page();
         scrollToPage(targetPage, false);
       }
 
@@ -1016,7 +1025,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       await moveTile(drag.tileId, finalIndex);
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
     }
   }, [clearBoardDragState, moveTile]);
@@ -1164,6 +1175,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   const onLockButtonPress = () => {
+    void appHaptics.tap();
     clearBoardDragState();
     clearPendingReorderTouch();
     setTileDragError(null);
@@ -1182,6 +1194,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
+    void appHaptics.tap();
     clearBoardDragState();
     clearPendingReorderTouch();
     setTileDragError(null);
@@ -1219,6 +1232,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       // Let the boardPageIndex effect drive the visible-page update so it still performs scrollTo.
       pendingAnimatedPageRef.current = shouldAnimatePageChange ? resolvedPage : null;
       setBoardPageIndex(resolvedPage);
+      void appHaptics.success();
 
       if (flashNewTileTimerRef.current) {
         clearTimeout(flashNewTileTimerRef.current);
@@ -1262,6 +1276,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         });
       }, 260);
     } catch (error) {
+      void appHaptics.error();
       setTileDragError(error instanceof Error ? error.message : 'Novou dlaždici nešlo přidat');
     } finally {
       setIsAddingTile(false);
@@ -1764,7 +1779,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={caregiverUnlocked ? 'Zamknout režim pečovatele' : 'Odemknout režim pečovatele'}
-              onPress={onLockButtonPress}
+                onPress={onLockButtonPress}
               style={({ pressed }) => [
                 styles.lockButton,
                 caregiverUnlocked && styles.lockButtonUnlocked,
@@ -1785,7 +1800,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={isSpreadMode ? 'Předchozí dvojstrana' : 'Předchozí stránka'}
-                onPress={() => scrollToPage(currentPage - visiblePagesPerSpread, true)}
+                onPress={() => {
+                  void appHaptics.page();
+                  scrollToPage(currentPage - visiblePagesPerSpread, true);
+                }}
                 disabled={currentSpreadIndex === 0}
                 style={[
                   styles.pageControlButton,
@@ -1805,7 +1823,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                         ? `Otevřít dvojstranu ${spreadIndex + 1}`
                         : `Otevřít stránku ${spreadIndex + 1}`
                     }
-                    onPress={() => scrollToPage(spreadIndex * visiblePagesPerSpread, true)}
+                    onPress={() => {
+                      void appHaptics.page();
+                      scrollToPage(spreadIndex * visiblePagesPerSpread, true);
+                    }}
                     style={[
                       styles.pageDot,
                       currentSpreadIndex === spreadIndex && styles.pageDotActive,
@@ -1817,7 +1838,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={isSpreadMode ? 'Další dvojstrana' : 'Další stránka'}
-                onPress={() => scrollToPage(currentPage + visiblePagesPerSpread, true)}
+                onPress={() => {
+                  void appHaptics.page();
+                  scrollToPage(currentPage + visiblePagesPerSpread, true);
+                }}
                 disabled={currentSpreadIndex >= spreadCount - 1}
                 style={[
                   styles.pageControlButton,

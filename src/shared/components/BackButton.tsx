@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { APP_THEME } from '../constants/theme';
+import { appHaptics } from '../feedback/haptics';
 
 type BackButtonProps = {
   onPress: () => void;
@@ -13,7 +14,10 @@ export const BackButton = ({ onPress, label = 'Zpět' }: BackButtonProps) => {
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={8}
-      onPress={onPress}
+      onPress={() => {
+        void appHaptics.tap();
+        onPress();
+      }}
       style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
     >
       <Text style={styles.chevron} allowFontScaling={false}>

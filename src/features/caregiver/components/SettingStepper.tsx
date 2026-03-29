@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 
 export type SettingStepperOption = {
   value: number;
@@ -44,6 +45,7 @@ export const SettingStepper = ({
           disabled={selectedIndex === 0}
           onPress={() => {
             if (selectedIndex > 0) {
+              void appHaptics.selection();
               onChange(options[selectedIndex - 1].value);
             }
           }}
@@ -66,7 +68,10 @@ export const SettingStepper = ({
                 key={`${title}-${option.value}`}
                 accessibilityRole="button"
                 accessibilityLabel={`${title}: ${option.label}`}
-                onPress={() => onChange(option.value)}
+                onPress={() => {
+                  void appHaptics.selection();
+                  onChange(option.value);
+                }}
                 style={styles.trackTap}
               >
                 <View
@@ -87,6 +92,7 @@ export const SettingStepper = ({
           disabled={selectedIndex === options.length - 1}
           onPress={() => {
             if (selectedIndex < options.length - 1) {
+              void appHaptics.selection();
               onChange(options[selectedIndex + 1].value);
             }
           }}

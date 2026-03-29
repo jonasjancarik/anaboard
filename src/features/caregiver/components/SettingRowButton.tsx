@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 
 type SettingRowButtonProps = {
   title: string;
@@ -19,7 +20,10 @@ export const SettingRowButton = ({
 }: SettingRowButtonProps) => {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        void appHaptics.tap();
+        onPress();
+      }}
       disabled={disabled}
       style={({ pressed }) => [
         styles.rowButton,

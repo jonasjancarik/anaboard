@@ -19,6 +19,7 @@ import {
   CATEGORY_COLORS,
   SPEECH_MODE_LABELS,
 } from "../../../shared/constants/defaults";
+import { appHaptics } from "../../../shared/feedback/haptics";
 import type {
   Category,
   SpeechMode,
@@ -258,7 +259,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         payload.visualType === "image" && Boolean(payload.imageLocalUri),
         payload.imageLocalUri,
       );
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : "Dlaždici nešlo uložit",
       );
@@ -327,6 +330,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         previewUrl: draft.signedUrl,
         localUri: draft.localUri,
       });
+      void appHaptics.success();
     } catch (error) {
       logError("ai_image_generate_error", error, {
         duration_ms: Date.now() - startedAtMs,
@@ -335,6 +339,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         category: promptCategory ?? null,
         label_length: normalizedLabel.length,
       });
+      void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : "AI obrázek nešel vytvořit",
       );
@@ -365,7 +370,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         remotePath: promoted.storagePath,
       });
       setVisualType("image");
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : "AI obrázek nešel použít",
       );
@@ -385,7 +392,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       try {
         await recordingService.start();
         setIsRecording(true);
+        void appHaptics.tap();
       } catch (error) {
+        void appHaptics.error();
         setRecordingError(
           error instanceof Error ? error.message : "Nahrávání se nepovedlo",
         );
@@ -398,6 +407,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       setIsRecording(false);
 
       if (!recording) {
+        void appHaptics.error();
         setRecordingError("Nahrávka je prázdná");
         return;
       }
@@ -407,7 +417,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         durationMs: recording.durationMs,
         format: "m4a",
       });
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setRecordingError(
         error instanceof Error ? error.message : "Nahrávání se nepovedlo",
       );
@@ -493,7 +505,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     try {
       await deleteClip(selectedTile.id);
+      void appHaptics.warning();
     } catch (error) {
+      void appHaptics.error();
       setRecordingError(
         error instanceof Error ? error.message : "Nahrávku nešlo smazat",
       );
@@ -510,8 +524,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     try {
       await deleteTile(selectedTile.id);
       setEditorTargetTileId(null);
+      void appHaptics.warning();
       onBack();
     } catch (error) {
+      void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : "Dlaždici nešlo smazat",
       );
@@ -711,6 +727,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                       <Pressable
                         key={item}
                         onPress={() => {
+                          void appHaptics.selection();
                           setCategory(item);
                           setHasExplicitCategoryChoice(true);
                         }}
@@ -748,7 +765,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                       return (
                         <Pressable
                           key={mode}
-                          onPress={() => setSpeechMode(mode)}
+                          onPress={() => {
+                            void appHaptics.selection();
+                            setSpeechMode(mode);
+                          }}
                           style={[
                             styles.chip,
                             styles.modeChip,

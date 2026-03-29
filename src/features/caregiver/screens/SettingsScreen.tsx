@@ -13,6 +13,7 @@ import { SettingToggleRow } from '../components/SettingToggleRow';
 import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
 import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hasSupabaseConfig } from '../../../shared/services/supabaseClient';
 import {
@@ -184,6 +185,7 @@ export const SettingsScreen = ({
       await updateSettings(update);
       await onSuccess?.();
     } catch (error) {
+      void appHaptics.error();
       setValue(previousValue);
       setMessage(getErrorMessage(error, fallbackMessage));
     }
@@ -214,8 +216,10 @@ export const SettingsScreen = ({
 
     try {
       await authService.signOut();
+      void appHaptics.success();
       setMessage('Odhlášeno');
     } catch (error) {
+      void appHaptics.error();
       setMessage(getErrorMessage(error, 'Odhlášení selhalo'));
     }
   };
@@ -226,8 +230,10 @@ export const SettingsScreen = ({
 
     try {
       await resetBoardToDefaults();
+      void appHaptics.success();
       setMessage('Tabule vrácena na výchozí stav');
     } catch (error) {
+      void appHaptics.error();
       setMessage(getErrorMessage(error, 'Obnovení tabule selhalo'));
     } finally {
       setIsResettingBoard(false);
@@ -241,8 +247,10 @@ export const SettingsScreen = ({
     try {
       await action();
       await refreshPendingSyncEvents();
+      void appHaptics.success();
       setMessage(successMessage);
     } catch (error) {
+      void appHaptics.error();
       setMessage(getErrorMessage(error, 'Cloud sync selhal'));
     } finally {
       setIsSyncActionRunning(false);

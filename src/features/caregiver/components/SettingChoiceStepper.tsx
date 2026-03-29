@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_THEME } from '../../../shared/constants/theme';
+import { appHaptics } from '../../../shared/feedback/haptics';
 
 export type SettingChoiceOption = {
   value: string;
@@ -49,6 +50,7 @@ export const SettingChoiceStepper = ({
           disabled={!canGoBack}
           onPress={() => {
             if (canGoBack) {
+              void appHaptics.selection();
               onChange(options[selectedIndex - 1].value);
             }
           }}
@@ -78,6 +80,7 @@ export const SettingChoiceStepper = ({
           disabled={!canGoForward}
           onPress={() => {
             if (canGoForward) {
+              void appHaptics.selection();
               onChange(options[selectedIndex + 1].value);
             }
           }}
