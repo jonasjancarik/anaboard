@@ -34,6 +34,7 @@ import {
 import { getSyncOverview } from '../features/sync/syncStateRepository';
 import { logError } from '../shared/telemetry/logger';
 import type { AuthStatus, RemoteContext } from '../features/auth/types';
+import type { SyncIssueCode } from '../features/sync/types';
 import type {
   AudioClip,
   Board,
@@ -115,6 +116,7 @@ type AppStore = {
   lastSuccessfulSyncAt: string | null;
   lastSyncPullAt: string | null;
   syncBoundProfileId: string | null;
+  syncLastIssue: SyncIssueCode | null;
   isSpeaking: boolean;
   editorTargetTileId: string | null;
   boardPageIndex: number;
@@ -216,6 +218,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   lastSuccessfulSyncAt: null,
   lastSyncPullAt: null,
   syncBoundProfileId: null,
+  syncLastIssue: null,
   isSpeaking: false,
   editorTargetTileId: null,
   boardPageIndex: 0,
@@ -284,6 +287,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         lastSuccessfulSyncAt: syncOverview.lastSuccessfulSyncAt,
         lastSyncPullAt: syncOverview.lastPullAt,
         syncBoundProfileId: syncOverview.boundProfileId,
+        syncLastIssue: syncOverview.lastIssue,
       });
     } catch (error) {
       logError('initialize_app_failed', error);
@@ -534,6 +538,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       lastSuccessfulSyncAt: overview.lastSuccessfulSyncAt,
       lastSyncPullAt: overview.lastPullAt,
       syncBoundProfileId: overview.boundProfileId,
+      syncLastIssue: overview.lastIssue,
     });
   },
 }));

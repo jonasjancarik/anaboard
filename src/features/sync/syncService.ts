@@ -23,12 +23,14 @@ import {
   getBoundSyncProfileId,
   recordSuccessfulPull,
   recordSuccessfulSync,
+  setLastSyncIssue,
   setBoundSyncProfileId,
 } from './syncStateRepository';
 import {
   uploadAudioClipToSupabase,
   uploadTileImageToSupabase,
 } from './supabaseMediaSync';
+import { canSafelyDiscardLocalStateForInitialBind, SyncIssueError } from './initialBindGuard';
 
 type SyncCallbacks = {
   onStatusChange?: (status: SyncStatus) => void;
@@ -145,11 +147,33 @@ class SyncService {
       const isBoundToCurrentProfile = boundProfileId === this.remoteContext.profileId;
 
       if (!isBoundToCurrentProfile) {
-        const pulledRemote = await this.pullRemoteSnapshot({ clearQueueBeforeApply: true });
-        if (pulledRemote) {
+        if (boundProfileId && boundProfileId !== this.remoteContext.profileId) {
+          throw new SyncIssueError(
+            'profile_switch_requires_review',
+            'This device was previously linked to a different cloud profile.'
+          );
+        }
+
+        const snapshot = await fetchRemoteSnapshot(this.remoteContext);
+        if (remoteSnapshotHasData(snapshot)) {
+          const canDiscardLocalState = await canSafelyDiscardLocalStateForInitialBind();
+          if (!canDiscardLocalState) {
+            throw new SyncIssueError(
+              'initial_bind_requires_review',
+              'Local-only data exists on this device, so initial cloud bind was blocked.'
+            );
+          }
+
+          const applied = await applyRemoteSnapshot(snapshot);
+          await clearUnsyncedSyncEvents();
+          await recordSuccessfulPull();
           await setBoundSyncProfileId(this.remoteContext.profileId);
+          await setLastSyncIssue(null);
           await recordSuccessfulSync();
           this.callbacks.onPendingCountChange?.(0);
+          if (applied) {
+            this.callbacks.onDataChanged?.();
+          }
           this.callbacks.onStatusChange?.('idle');
           return;
         }
@@ -184,10 +208,21 @@ class SyncService {
 
       await this.pullRemoteSnapshot();
       await setBoundSyncProfileId(this.remoteContext.profileId);
+      await setLastSyncIssue(null);
       await recordSuccessfulSync();
       this.callbacks.onPendingCountChange?.(0);
       this.callbacks.onStatusChange?.('idle');
     } catch (error) {
+      if (error instanceof SyncIssueError) {
+        await setLastSyncIssue(error.issueCode);
+        logEvent('sync_blocked', {
+          issue_code: error.issueCode,
+        });
+        this.callbacks.onPendingCountChange?.(0);
+        this.callbacks.onStatusChange?.('error');
+        return;
+      }
+
       logError('sync_run_failed', error, {
         profile_id: this.remoteContext.profileId,
       });

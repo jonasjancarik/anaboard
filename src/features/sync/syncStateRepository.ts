@@ -1,11 +1,12 @@
 import { nowIso } from '../../shared/utils/time';
 import { getDatabase } from '../../shared/storage/db';
-import type { SyncOverview } from './types';
+import type { SyncIssueCode, SyncOverview } from './types';
 
 const APP_META_KEYS = {
   boundProfileId: 'sync_bound_profile_id',
   lastSuccessfulSyncAt: 'sync_last_success_at',
   lastPullAt: 'sync_last_pull_at',
+  lastIssue: 'sync_last_issue',
 } as const;
 
 type AppMetaRow = {
@@ -51,10 +52,11 @@ export const getSyncOverview = async (): Promise<SyncOverview> => {
     `
   );
 
-  const [lastSuccessfulSyncAt, lastPullAt, boundProfileId] = await Promise.all([
+  const [lastSuccessfulSyncAt, lastPullAt, boundProfileId, lastIssue] = await Promise.all([
     getMetaValue(APP_META_KEYS.lastSuccessfulSyncAt),
     getMetaValue(APP_META_KEYS.lastPullAt),
     getMetaValue(APP_META_KEYS.boundProfileId),
+    getMetaValue(APP_META_KEYS.lastIssue),
   ]);
 
   return {
@@ -63,6 +65,7 @@ export const getSyncOverview = async (): Promise<SyncOverview> => {
     lastSuccessfulSyncAt,
     lastPullAt,
     boundProfileId,
+    lastIssue: (lastIssue as SyncIssueCode | null) ?? null,
   };
 };
 
@@ -72,6 +75,10 @@ export const getBoundSyncProfileId = async (): Promise<string | null> => {
 
 export const setBoundSyncProfileId = async (profileId: string | null): Promise<void> => {
   await setMetaValue(APP_META_KEYS.boundProfileId, profileId);
+};
+
+export const setLastSyncIssue = async (issueCode: SyncIssueCode | null): Promise<void> => {
+  await setMetaValue(APP_META_KEYS.lastIssue, issueCode);
 };
 
 export const recordSuccessfulSync = async (timestamp = nowIso()): Promise<void> => {

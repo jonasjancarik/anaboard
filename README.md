@@ -174,4 +174,5 @@ Caregiver emails keep the original `email` for UI/outgoing auth, with generated 
 - On physical iPhone/iPad devices, Expo TTS can still stay silent while the device is in silent mode.
 - App currently keeps web support for preview/testing.
 - Supabase sync requires schema setup and auth membership alignment for RLS policies.
+- First cloud bind is conservative: if this device already has non-default local data, sync stops instead of overwriting it silently.
 - If Supabase env vars are missing, app runs local-only mode.

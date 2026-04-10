@@ -20,6 +20,7 @@ import {
   getWebPersistenceSmokeSummary,
   type WebPersistenceSmokeSummary,
 } from '../../../shared/storage/webPersistenceSmoke';
+import type { SyncIssueCode } from '../../sync/types';
 import { useAppStore } from '../../../store/useAppStore';
 
 type SettingsScreenProps = {
@@ -77,6 +78,18 @@ const formatTimestamp = (value: string | null): string | null => {
   }).format(date);
 };
 
+const formatSyncIssue = (issueCode: SyncIssueCode | null): string | null => {
+  if (issueCode === 'initial_bind_requires_review') {
+    return 'Tento telefon už má vlastní místní data. Bez potvrzení je cloud nepřepíše.';
+  }
+
+  if (issueCode === 'profile_switch_requires_review') {
+    return 'Tento telefon byl dřív připojený k jiné cloud tabuli. Automatický přenos jsem zablokoval.';
+  }
+
+  return null;
+};
+
 export const SettingsScreen = ({
   onBack,
   onOpenArchive,
@@ -95,6 +108,7 @@ export const SettingsScreen = ({
   const syncErrorEvents = useAppStore((state) => state.syncErrorEvents);
   const lastSuccessfulSyncAt = useAppStore((state) => state.lastSuccessfulSyncAt);
   const lastSyncPullAt = useAppStore((state) => state.lastSyncPullAt);
+  const syncLastIssue = useAppStore((state) => state.syncLastIssue);
   const { voiceOptions, isVoiceOptionsLoading } = useSpeechVoiceOptions();
 
   const [ttsRate, setTtsRate] = useState(0.86);
@@ -328,6 +342,7 @@ export const SettingsScreen = ({
 
   const lastSuccessfulSyncLabel = formatTimestamp(lastSuccessfulSyncAt);
   const lastPullLabel = formatTimestamp(lastSyncPullAt);
+  const syncIssueDetail = formatSyncIssue(syncLastIssue);
   const syncUnavailable = !hasSupabaseConfig || authStatus === 'disabled';
   const syncSignedOut = !syncUnavailable && authStatus === 'signed_out';
   const syncAnonymous = !syncUnavailable && authStatus === 'signed_in' && authIsAnonymous;
@@ -371,6 +386,7 @@ export const SettingsScreen = ({
         ]
     : [
         remoteContext?.caregiverEmail ? `Účet: ${remoteContext.caregiverEmail}` : null,
+        syncIssueDetail,
         pendingSyncEvents > 0 ? `Ve frontě: ${pendingSyncEvents}` : 'Ve frontě: 0',
         syncErrorEvents > 0 ? `Chyby: ${syncErrorEvents}` : 'Chyby: 0',
         lastSuccessfulSyncLabel ? `Poslední hotovo: ${lastSuccessfulSyncLabel}` : null,

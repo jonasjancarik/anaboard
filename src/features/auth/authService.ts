@@ -5,6 +5,7 @@ import { logError } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
 import type { RemoteContext } from './types';
 import { clearRemoteContext, loadRemoteContext, saveRemoteContext } from '../sync/remoteContextStorage';
+import { setLastSyncIssue } from '../sync/syncStateRepository';
 import { getOriginalEmailAddress } from './emailAddress';
 
 export type BootstrapInput = {
@@ -259,6 +260,7 @@ export const authService = {
     const { error } = await client.auth.signOut();
 
     await clearRemoteContext();
+    await setLastSyncIssue(null);
 
     if (error) {
       throw error;
@@ -312,7 +314,10 @@ export const authService = {
     if (!caregiver) {
       const { data: family, error: familyError } = await client
         .from('families')
-        .insert({ name: input.familyName.trim() || 'Moje rodina' })
+        .insert({
+          name: input.familyName.trim() || 'Moje rodina',
+          created_by: user.id,
+        })
         .select('id')
         .single<{ id: string }>();
 

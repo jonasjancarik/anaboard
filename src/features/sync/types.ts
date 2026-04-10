@@ -4,7 +4,12 @@ export type SyncOverview = {
   lastSuccessfulSyncAt: string | null;
   lastPullAt: string | null;
   boundProfileId: string | null;
+  lastIssue: SyncIssueCode | null;
 };
+
+export type SyncIssueCode =
+  | 'initial_bind_requires_review'
+  | 'profile_switch_requires_review';
 
 export type RemoteBoardRow = {
   id: string;
