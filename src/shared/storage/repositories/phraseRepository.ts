@@ -8,6 +8,7 @@ import type {
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/time';
 import { getDatabase } from '../db';
+import { enqueueSyncEvent } from './syncRepository';
 
 type SavedPhraseRow = {
   id: string;
@@ -151,6 +152,49 @@ const mapPhraseEventRow = (row: PhraseEventRow): PhraseEventRecord | null => {
     source,
     spokenAt: row.spoken_at,
   };
+};
+
+const buildSavedPhrasePayload = (row: SavedPhraseRow) => ({
+  id: row.id,
+  profile_id: row.profile_id,
+  phrase_key: row.phrase_key,
+  label: row.label,
+  spoken_text: row.spoken_text,
+  tokens_json: row.tokens_json,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+  usage_count: row.usage_count,
+});
+
+const buildPhraseEventPayload = (row: PhraseEventRow) => ({
+  id: row.id,
+  profile_id: row.profile_id,
+  tile_sequence: row.tile_sequence,
+  spoken_text: row.spoken_text,
+  mode: row.mode,
+  spoken_at: row.spoken_at,
+});
+
+const getSavedPhraseRowById = async (phraseId: string): Promise<SavedPhraseRow | null> => {
+  const db = await getDatabase();
+  return db.getFirstAsync<SavedPhraseRow>(
+    `
+      SELECT
+        id,
+        profile_id,
+        phrase_key,
+        label,
+        spoken_text,
+        tokens_json,
+        created_at,
+        updated_at,
+        usage_count
+      FROM saved_phrases
+      WHERE id = ?
+      LIMIT 1
+    `,
+    phraseId
+  );
 };
 
 export const getSavedPhrases = async (
@@ -306,6 +350,15 @@ export const savePhrase = async (
   );
 
   if (existing) {
+    const nextRow: SavedPhraseRow = {
+      ...existing,
+      label,
+      spoken_text: spokenText,
+      tokens_json: serializedTokens,
+      updated_at: timestamp,
+      usage_count: existing.usage_count + 1,
+    };
+
     await db.runAsync(
       `
         UPDATE saved_phrases
@@ -324,15 +377,10 @@ export const savePhrase = async (
       existing.id
     );
 
+    await enqueueSyncEvent('saved_phrases', existing.id, 'upsert', buildSavedPhrasePayload(nextRow));
+
     return {
-      ...(mapSavedPhraseRow({
-        ...existing,
-        label,
-        spoken_text: spokenText,
-        tokens_json: serializedTokens,
-        updated_at: timestamp,
-        usage_count: existing.usage_count + 1,
-      }) as SavedPhrase),
+      ...(mapSavedPhraseRow(nextRow) as SavedPhrase),
     };
   }
 
@@ -362,6 +410,18 @@ export const savePhrase = async (
     timestamp
   );
 
+  await enqueueSyncEvent('saved_phrases', phraseId, 'upsert', {
+    id: phraseId,
+    profile_id: profileId,
+    phrase_key: phraseKey,
+    label,
+    spoken_text: spokenText,
+    tokens_json: serializedTokens,
+    created_at: timestamp,
+    updated_at: timestamp,
+    usage_count: 1,
+  });
+
   return {
     id: phraseId,
     profileId,
@@ -376,21 +436,42 @@ export const savePhrase = async (
 };
 
 export const deleteSavedPhrase = async (phraseId: string): Promise<void> => {
+  const existing = await getSavedPhraseRowById(phraseId);
+  if (!existing) {
+    return;
+  }
+
   const db = await getDatabase();
   await db.runAsync('DELETE FROM saved_phrases WHERE id = ?', phraseId);
+  await enqueueSyncEvent('saved_phrases', phraseId, 'delete', {
+    id: phraseId,
+    profile_id: existing.profile_id,
+  });
 };
 
 export const noteSavedPhrasePlayed = async (phraseId: string): Promise<void> => {
+  const existing = await getSavedPhraseRowById(phraseId);
+  if (!existing) {
+    return;
+  }
+
   const db = await getDatabase();
+  const updatedAt = nowIso();
   await db.runAsync(
     `
       UPDATE saved_phrases
       SET updated_at = ?, usage_count = usage_count + 1
       WHERE id = ?
     `,
-    nowIso(),
+    updatedAt,
     phraseId
   );
+
+  await enqueueSyncEvent('saved_phrases', phraseId, 'upsert', buildSavedPhrasePayload({
+    ...existing,
+    updated_at: updatedAt,
+    usage_count: existing.usage_count + 1,
+  }));
 };
 
 export const recordPhraseEvent = async (params: {
@@ -407,6 +488,15 @@ export const recordPhraseEvent = async (params: {
 
   const db = await getDatabase();
   const spokenAt = nowIso();
+  const eventId = createId('phrase-event');
+  const payload: PhraseEventRow = {
+    id: eventId,
+    profile_id: params.profileId,
+    tile_sequence: serializePhraseTokens(sanitizedTokens),
+    spoken_text: buildPhraseSpokenText(sanitizedTokens),
+    mode: params.source,
+    spoken_at: spokenAt,
+  };
 
   await db.runAsync(
     `
@@ -419,11 +509,13 @@ export const recordPhraseEvent = async (params: {
         spoken_at
       ) VALUES (?, ?, ?, ?, ?, ?)
     `,
-    createId('phrase-event'),
-    params.profileId,
-    serializePhraseTokens(sanitizedTokens),
-    buildPhraseSpokenText(sanitizedTokens),
-    params.source,
-    spokenAt
+    payload.id,
+    payload.profile_id,
+    payload.tile_sequence,
+    payload.spoken_text,
+    payload.mode,
+    payload.spoken_at
   );
+
+  await enqueueSyncEvent('phrase_events', payload.id, 'upsert', buildPhraseEventPayload(payload));
 };

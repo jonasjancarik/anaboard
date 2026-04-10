@@ -17,7 +17,9 @@ export type EntityType =
   | 'boards'
   | 'tiles'
   | 'audio_clips'
-  | 'profile_settings';
+  | 'profile_settings'
+  | 'saved_phrases'
+  | 'phrase_events';
 
 export interface Board {
   id: string;

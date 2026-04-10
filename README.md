@@ -169,7 +169,7 @@ Caregiver emails keep the original `email` for UI/outgoing auth, with generated 
 - Default caregiver PIN is `1234` until changed in Settings.
 - Default board ships as a 2-page preschool starter set: page 1 home/core words, page 2 child fringe/routines/favorites.
 - Tile labels are shown by default for easier symbol learning and partner interpretation.
-- Saved phrases and recent phrase history stay local for now; no Supabase sync yet.
+- Saved phrases and recent phrase history sync through Supabase when cloud sync is enabled.
 - Caregiver settings act as the central hub for archive, reset-to-defaults, appearance, speech, PIN, and account actions.
 - On physical iPhone/iPad devices, Expo TTS can still stay silent while the device is in silent mode.
 - App currently keeps web support for preview/testing.

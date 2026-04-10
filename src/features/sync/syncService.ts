@@ -44,6 +44,8 @@ const EVENT_PRIORITY: Record<EntityType, number> = {
   profile_settings: 1,
   tiles: 2,
   audio_clips: 3,
+  saved_phrases: 4,
+  phrase_events: 5,
 };
 
 const primaryKeyColumn = (entityType: EntityType): 'id' | 'profile_id' => {
@@ -408,6 +410,31 @@ class SyncService {
 
     if (entityType === 'audio_clips') {
       return await this.prepareAudioClipPayload(payload);
+    }
+
+    if (entityType === 'saved_phrases') {
+      return {
+        id: payload.id,
+        profile_id: this.remoteContext?.profileId ?? payload.profile_id,
+        phrase_key: payload.phrase_key,
+        label: payload.label,
+        spoken_text: payload.spoken_text,
+        tokens_json: payload.tokens_json,
+        created_at: payload.created_at,
+        updated_at: payload.updated_at,
+        usage_count: payload.usage_count,
+      };
+    }
+
+    if (entityType === 'phrase_events') {
+      return {
+        id: payload.id,
+        profile_id: this.remoteContext?.profileId ?? payload.profile_id,
+        tile_sequence: payload.tile_sequence,
+        spoken_text: payload.spoken_text,
+        mode: payload.mode,
+        spoken_at: payload.spoken_at,
+      };
     }
 
     return {

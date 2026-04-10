@@ -10,6 +10,8 @@ import {
 import type {
   RemoteAudioClipRow,
   RemoteBoardRow,
+  RemotePhraseEventRow,
+  RemoteSavedPhraseRow,
   RemoteSettingsRow,
   RemoteSnapshot,
   RemoteTileRow,
@@ -68,6 +70,27 @@ type LocalSettingsSyncRow = {
   suggestion_count: number;
   updated_at: string;
   revision: number;
+};
+
+type LocalSavedPhraseSyncRow = {
+  id: string;
+  profile_id: string;
+  phrase_key: string;
+  label: string;
+  spoken_text: string;
+  tokens_json: string;
+  created_at: string;
+  updated_at: string;
+  usage_count: number;
+};
+
+type LocalPhraseEventSyncRow = {
+  id: string;
+  profile_id: string;
+  tile_sequence: string;
+  spoken_text: string;
+  mode: string;
+  spoken_at: string;
 };
 
 const toBoolean = (value?: boolean | null): boolean => Boolean(value);
@@ -198,17 +221,44 @@ export const fetchRemoteSnapshot = async (
   }
 
   const settings = await fetchRemoteSettings(context.profileId);
+  const [savedPhrasesResult, phraseEventsResult] = await Promise.all([
+    supabaseClient
+      .from('saved_phrases')
+      .select('id, profile_id, phrase_key, label, spoken_text, tokens_json, created_at, updated_at, usage_count')
+      .eq('profile_id', context.profileId)
+      .order('updated_at', { ascending: false }),
+    supabaseClient
+      .from('phrase_events')
+      .select('id, profile_id, tile_sequence, spoken_text, mode, spoken_at')
+      .eq('profile_id', context.profileId)
+      .order('spoken_at', { ascending: false }),
+  ]);
+
+  if (savedPhrasesResult.error) {
+    throw savedPhrasesResult.error;
+  }
+
+  if (phraseEventsResult.error) {
+    throw phraseEventsResult.error;
+  }
 
   return {
     boards,
     tiles,
     audioClips,
     settings,
+    savedPhrases: (savedPhrasesResult.data ?? []) as RemoteSavedPhraseRow[],
+    phraseEvents: (phraseEventsResult.data ?? []) as RemotePhraseEventRow[],
   };
 };
 
 export const remoteSnapshotHasData = (snapshot: RemoteSnapshot): boolean => {
-  return snapshot.boards.length > 0 || snapshot.settings !== null;
+  return (
+    snapshot.boards.length > 0 ||
+    snapshot.settings !== null ||
+    snapshot.savedPhrases.length > 0 ||
+    snapshot.phraseEvents.length > 0
+  );
 };
 
 export const getLocalEntitySyncPayload = async (
@@ -275,6 +325,49 @@ export const getLocalEntitySyncPayload = async (
     );
 
     return clip ? { ...clip } : null;
+  }
+
+  if (entityType === 'saved_phrases') {
+    const savedPhrase = await db.getFirstAsync<LocalSavedPhraseSyncRow>(
+      `
+        SELECT
+          id,
+          profile_id,
+          phrase_key,
+          label,
+          spoken_text,
+          tokens_json,
+          created_at,
+          updated_at,
+          usage_count
+        FROM saved_phrases
+        WHERE id = ?
+        LIMIT 1
+      `,
+      entityId
+    );
+
+    return savedPhrase ? { ...savedPhrase } : null;
+  }
+
+  if (entityType === 'phrase_events') {
+    const phraseEvent = await db.getFirstAsync<LocalPhraseEventSyncRow>(
+      `
+        SELECT
+          id,
+          profile_id,
+          tile_sequence,
+          spoken_text,
+          mode,
+          spoken_at
+        FROM phrase_events
+        WHERE id = ?
+        LIMIT 1
+      `,
+      entityId
+    );
+
+    return phraseEvent ? { ...phraseEvent } : null;
   }
 
   const settings = await db.getFirstAsync<LocalSettingsSyncRow>(
@@ -415,7 +508,7 @@ const buildDeleteSql = (tableName: string, columnName: string, ids: string[]): s
 };
 
 export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boolean> => {
-  if (snapshot.boards.length === 0) {
+  if (!remoteSnapshotHasData(snapshot)) {
     return false;
   }
 
@@ -436,102 +529,112 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
   const boardIds = snapshot.boards.map((board) => board.id);
   const tileIds = snapshot.tiles.map((tile) => tile.id);
   const audioClipIds = snapshot.audioClips.map((clip) => clip.id);
+  const savedPhraseIds = snapshot.savedPhrases.map((phrase) => phrase.id);
+  const phraseEventIds = snapshot.phraseEvents.map((event) => event.id);
+  const profileId =
+    snapshot.settings?.profile_id ??
+    snapshot.boards[0]?.profile_id ??
+    snapshot.savedPhrases[0]?.profile_id ??
+    snapshot.phraseEvents[0]?.profile_id ??
+    null;
 
   await db.withTransactionAsync(async () => {
-    await db.runAsync('UPDATE boards SET is_active = 0');
+    if (snapshot.boards.length > 0) {
+      await db.runAsync('UPDATE boards SET is_active = 0');
 
-    for (const board of snapshot.boards) {
-      await db.runAsync(
-        `
-          INSERT INTO boards (
-            id, profile_id, name, locale, columns_count, rows_count, is_active, updated_at, revision, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-          ON CONFLICT(id) DO UPDATE SET
-            profile_id = excluded.profile_id,
-            name = excluded.name,
-            locale = excluded.locale,
-            columns_count = excluded.columns_count,
-            rows_count = excluded.rows_count,
-            is_active = excluded.is_active,
-            updated_at = excluded.updated_at,
-            revision = excluded.revision,
-            dirty = 0
-        `,
-        board.id,
-        board.profile_id,
-        board.name,
-        board.locale,
-        board.columns_count,
-        board.rows_count,
-        toBoolean(board.is_active) ? 1 : 0,
-        board.updated_at,
-        board.revision
-      );
-    }
+      for (const board of snapshot.boards) {
+        await db.runAsync(
+          `
+            INSERT INTO boards (
+              id, profile_id, name, locale, columns_count, rows_count, is_active, updated_at, revision, dirty
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            ON CONFLICT(id) DO UPDATE SET
+              profile_id = excluded.profile_id,
+              name = excluded.name,
+              locale = excluded.locale,
+              columns_count = excluded.columns_count,
+              rows_count = excluded.rows_count,
+              is_active = excluded.is_active,
+              updated_at = excluded.updated_at,
+              revision = excluded.revision,
+              dirty = 0
+          `,
+          board.id,
+          board.profile_id,
+          board.name,
+          board.locale,
+          board.columns_count,
+          board.rows_count,
+          toBoolean(board.is_active) ? 1 : 0,
+          board.updated_at,
+          board.revision
+        );
+      }
 
-    for (const tile of snapshot.tiles) {
-      await db.runAsync(
-        `
-          INSERT INTO tiles (
-            id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
-            category, speech_mode, audio_clip_id, updated_at, revision, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-          ON CONFLICT(id) DO UPDATE SET
-            board_id = excluded.board_id,
-            position = excluded.position,
-            label_cs = excluded.label_cs,
-            emoji = excluded.emoji,
-            visual_type = excluded.visual_type,
-            image_local_uri = excluded.image_local_uri,
-            image_remote_path = excluded.image_remote_path,
-            category = excluded.category,
-            speech_mode = excluded.speech_mode,
-            audio_clip_id = excluded.audio_clip_id,
-            updated_at = excluded.updated_at,
-            revision = excluded.revision,
-            dirty = 0
-        `,
-        tile.id,
-        tile.board_id,
-        tile.position,
-        tile.label_cs,
-        tile.emoji,
-        tile.visual_type,
-        tileImageUris.get(tile.id) ?? null,
-        tile.image_remote_path ?? null,
-        tile.category,
-        tile.speech_mode,
-        tile.audio_clip_id ?? null,
-        tile.updated_at,
-        tile.revision
-      );
-    }
+      for (const tile of snapshot.tiles) {
+        await db.runAsync(
+          `
+            INSERT INTO tiles (
+              id, board_id, position, label_cs, emoji, visual_type, image_local_uri, image_remote_path,
+              category, speech_mode, audio_clip_id, updated_at, revision, dirty
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            ON CONFLICT(id) DO UPDATE SET
+              board_id = excluded.board_id,
+              position = excluded.position,
+              label_cs = excluded.label_cs,
+              emoji = excluded.emoji,
+              visual_type = excluded.visual_type,
+              image_local_uri = excluded.image_local_uri,
+              image_remote_path = excluded.image_remote_path,
+              category = excluded.category,
+              speech_mode = excluded.speech_mode,
+              audio_clip_id = excluded.audio_clip_id,
+              updated_at = excluded.updated_at,
+              revision = excluded.revision,
+              dirty = 0
+          `,
+          tile.id,
+          tile.board_id,
+          tile.position,
+          tile.label_cs,
+          tile.emoji,
+          tile.visual_type,
+          tileImageUris.get(tile.id) ?? null,
+          tile.image_remote_path ?? null,
+          tile.category,
+          tile.speech_mode,
+          tile.audio_clip_id ?? null,
+          tile.updated_at,
+          tile.revision
+        );
+      }
 
-    for (const clip of snapshot.audioClips) {
-      await db.runAsync(
-        `
-          INSERT INTO audio_clips (
-            id, tile_id, local_uri, remote_path, duration_ms, checksum, format, updated_at, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-          ON CONFLICT(id) DO UPDATE SET
-            tile_id = excluded.tile_id,
-            local_uri = excluded.local_uri,
-            remote_path = excluded.remote_path,
-            duration_ms = excluded.duration_ms,
-            checksum = excluded.checksum,
-            format = excluded.format,
-            updated_at = excluded.updated_at,
-            dirty = 0
-        `,
-        clip.id,
-        clip.tile_id,
-        audioClipUris.get(clip.id) ?? null,
-        clip.remote_path ?? null,
-        clip.duration_ms,
-        clip.checksum ?? null,
-        clip.format,
-        clip.updated_at
-      );
+      for (const clip of snapshot.audioClips) {
+        await db.runAsync(
+          `
+            INSERT INTO audio_clips (
+              id, tile_id, local_uri, remote_path, duration_ms, checksum, format, updated_at, dirty
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+            ON CONFLICT(id) DO UPDATE SET
+              tile_id = excluded.tile_id,
+              local_uri = excluded.local_uri,
+              remote_path = excluded.remote_path,
+              duration_ms = excluded.duration_ms,
+              checksum = excluded.checksum,
+              format = excluded.format,
+              updated_at = excluded.updated_at,
+              dirty = 0
+          `,
+          clip.id,
+          clip.tile_id,
+          audioClipUris.get(clip.id) ?? null,
+          clip.remote_path ?? null,
+          clip.duration_ms,
+          clip.checksum ?? null,
+          clip.format,
+          clip.updated_at
+        );
+      }
     }
 
     if (snapshot.settings) {
@@ -572,22 +675,104 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
       );
     }
 
-    if (audioClipIds.length > 0) {
-      await db.runAsync(buildDeleteSql('audio_clips', 'id', audioClipIds), ...audioClipIds);
-    } else {
-      await db.runAsync('DELETE FROM audio_clips');
+    for (const phrase of snapshot.savedPhrases) {
+      await db.runAsync(
+        `
+          INSERT INTO saved_phrases (
+            id, profile_id, phrase_key, label, spoken_text, tokens_json, created_at, updated_at, usage_count
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            profile_id = excluded.profile_id,
+            phrase_key = excluded.phrase_key,
+            label = excluded.label,
+            spoken_text = excluded.spoken_text,
+            tokens_json = excluded.tokens_json,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            usage_count = excluded.usage_count
+        `,
+        phrase.id,
+        phrase.profile_id,
+        phrase.phrase_key,
+        phrase.label,
+        phrase.spoken_text,
+        phrase.tokens_json,
+        phrase.created_at,
+        phrase.updated_at,
+        phrase.usage_count
+      );
     }
 
-    if (tileIds.length > 0) {
-      await db.runAsync(buildDeleteSql('tiles', 'id', tileIds), ...tileIds);
-    } else {
-      await db.runAsync('DELETE FROM tiles');
+    for (const event of snapshot.phraseEvents) {
+      await db.runAsync(
+        `
+          INSERT INTO phrase_events (
+            id, profile_id, tile_sequence, spoken_text, mode, spoken_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            profile_id = excluded.profile_id,
+            tile_sequence = excluded.tile_sequence,
+            spoken_text = excluded.spoken_text,
+            mode = excluded.mode,
+            spoken_at = excluded.spoken_at
+        `,
+        event.id,
+        event.profile_id,
+        event.tile_sequence,
+        event.spoken_text,
+        event.mode,
+        event.spoken_at
+      );
     }
 
-    if (boardIds.length > 0) {
-      await db.runAsync(buildDeleteSql('boards', 'id', boardIds), ...boardIds);
-    } else {
-      await db.runAsync('DELETE FROM boards');
+    if (snapshot.boards.length > 0) {
+      if (audioClipIds.length > 0) {
+        await db.runAsync(buildDeleteSql('audio_clips', 'id', audioClipIds), ...audioClipIds);
+      } else {
+        await db.runAsync('DELETE FROM audio_clips');
+      }
+
+      if (tileIds.length > 0) {
+        await db.runAsync(buildDeleteSql('tiles', 'id', tileIds), ...tileIds);
+      } else {
+        await db.runAsync('DELETE FROM tiles');
+      }
+
+      if (boardIds.length > 0) {
+        await db.runAsync(buildDeleteSql('boards', 'id', boardIds), ...boardIds);
+      } else {
+        await db.runAsync('DELETE FROM boards');
+      }
+    }
+
+    if (profileId) {
+      if (savedPhraseIds.length > 0) {
+        await db.runAsync(
+          `
+            DELETE FROM saved_phrases
+            WHERE profile_id = ?
+              AND id NOT IN (${savedPhraseIds.map(() => '?').join(',')})
+          `,
+          profileId,
+          ...savedPhraseIds
+        );
+      } else {
+        await db.runAsync('DELETE FROM saved_phrases WHERE profile_id = ?', profileId);
+      }
+
+      if (phraseEventIds.length > 0) {
+        await db.runAsync(
+          `
+            DELETE FROM phrase_events
+            WHERE profile_id = ?
+              AND id NOT IN (${phraseEventIds.map(() => '?').join(',')})
+          `,
+          profileId,
+          ...phraseEventIds
+        );
+      } else {
+        await db.runAsync('DELETE FROM phrase_events WHERE profile_id = ?', profileId);
+      }
     }
   });
 

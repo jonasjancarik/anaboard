@@ -65,9 +65,32 @@ export type RemoteSettingsRow = {
   revision: number;
 };
 
+export type RemoteSavedPhraseRow = {
+  id: string;
+  profile_id: string;
+  phrase_key: string;
+  label: string;
+  spoken_text: string;
+  tokens_json: string;
+  created_at: string;
+  updated_at: string;
+  usage_count: number;
+};
+
+export type RemotePhraseEventRow = {
+  id: string;
+  profile_id: string;
+  tile_sequence: string;
+  spoken_text: string;
+  mode: string;
+  spoken_at: string;
+};
+
 export type RemoteSnapshot = {
   boards: RemoteBoardRow[];
   tiles: RemoteTileRow[];
   audioClips: RemoteAudioClipRow[];
   settings: RemoteSettingsRow | null;
+  savedPhrases: RemoteSavedPhraseRow[];
+  phraseEvents: RemotePhraseEventRow[];
 };
