@@ -41,6 +41,7 @@
     },
     "plugins": [
       "expo-sqlite",
+      "expo-asset",
       "expo-audio",
       [
         "expo-image-picker",
