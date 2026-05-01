@@ -48,6 +48,18 @@ const EVENT_PRIORITY: Record<EntityType, number> = {
   phrase_events: 5,
 };
 
+const isTileImagePathForRemoteContext = (
+  context: RemoteContext,
+  remotePath: string | null
+): boolean => {
+  if (!remotePath) {
+    return false;
+  }
+
+  const expectedPrefix = `${context.familyId}/${context.profileId}/`;
+  return remotePath.startsWith(expectedPrefix) && !remotePath.includes('/ai-drafts/');
+};
+
 const primaryKeyColumn = (entityType: EntityType): 'id' | 'profile_id' => {
   return entityType === 'profile_settings' ? 'profile_id' : 'id';
 };
@@ -457,6 +469,13 @@ class SyncService {
   private prepareTilePayload = async (
     payload: Record<string, unknown>
   ): Promise<Record<string, unknown>> => {
+    const existingRemotePath =
+      typeof payload.image_remote_path === 'string' && payload.image_remote_path.length > 0
+        ? payload.image_remote_path
+        : null;
+    const existingRemotePathMatchesContext =
+      this.remoteContext !== null &&
+      isTileImagePathForRemoteContext(this.remoteContext, existingRemotePath);
     const nextPayload = {
       id: payload.id,
       board_id: payload.board_id,
@@ -464,7 +483,10 @@ class SyncService {
       label_cs: payload.label_cs,
       emoji: payload.emoji,
       visual_type: payload.visual_type,
-      image_remote_path: payload.image_remote_path ?? null,
+      image_remote_path:
+        this.remoteContext && !existingRemotePathMatchesContext
+          ? null
+          : existingRemotePath,
       category: payload.category,
       speech_mode: payload.speech_mode,
       audio_clip_id: payload.audio_clip_id ?? null,
@@ -477,7 +499,7 @@ class SyncService {
       payload.visual_type === 'image' &&
       typeof payload.image_local_uri === 'string' &&
       payload.image_local_uri.length > 0 &&
-      !payload.image_remote_path
+      !existingRemotePathMatchesContext
     ) {
       nextPayload.image_remote_path = await uploadTileImageToSupabase(
         this.remoteContext,

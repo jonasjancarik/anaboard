@@ -1,6 +1,6 @@
 # ÁňaBoard Roadmap
 
-Last updated: 2026-02-21
+Last updated: 2026-05-01
 
 ## Product Goal
 Reliable AAC app for pilot families.
@@ -31,7 +31,6 @@ Implemented:
 - Queue-based speech engine with cancel semantics.
 - Per-tile modes:
   - `tts`
-  - `recording_with_tts_fallback`
   - `recording_only`
 - Sentence playback queue with 120ms inter-segment pause.
 - Clip missing detection and speech telemetry events.
@@ -47,10 +46,9 @@ Status: PARTIAL (main flows shipped)
 
 Implemented:
 - Caregiver PIN gate.
-- Lockout rule: 3 failed attempts -> 30s cooldown.
 - Editor: tile text/emoji/category/speech mode, reorder, clip record/delete.
 - Editor: create/delete tile actions with automatic position reindex.
-- Board actions: reset to defaults, duplicate board.
+- Board actions: reset to defaults.
 - Settings: TTS rate/pitch, high contrast, PIN change.
 
 Remaining:

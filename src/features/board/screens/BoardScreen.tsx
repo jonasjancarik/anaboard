@@ -73,6 +73,13 @@ type PendingReorderTouch = {
   startPageY: number;
 };
 
+type RecentTileTap = {
+  tileId: string;
+  tokenId: string;
+  atMs: number;
+  compositionTimer: ReturnType<typeof setTimeout> | null;
+};
+
 type PagerScrollEvent = {
   nativeEvent: {
     contentOffset: {
@@ -88,6 +95,7 @@ type LogicalBoardPage = {
 
 const REORDER_LONG_PRESS_MS = 180;
 const PAGE_SWITCH_EDGE_THRESHOLD = 44;
+const TILE_TAP_UNDO_WINDOW_MS = 550;
 const VISIBLE_SPREAD_WINDOW_RADIUS = 1;
 const REORDER_LAYOUT_TRANSITION = LinearTransition.duration(140);
 const ACTION_TEXT_PROPS = {
@@ -156,6 +164,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const pagerScrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAnimatedPageRef = useRef<number | null>(null);
   const suppressTapAfterLongPressRef = useRef(false);
+  const recentTileTapRef = useRef<RecentTileTap | null>(null);
+  const pendingCompositionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const dragStateRef = useRef<BoardDragState | null>(null);
   const reorderTileIdsRef = useRef<string[]>([]);
   const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
@@ -656,6 +666,43 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setActiveDrag(null);
   }, [dragOverlayTranslateX, dragOverlayTranslateY]);
 
+  const clearAllPendingCompositionRecords = useCallback(() => {
+    pendingCompositionTimersRef.current.forEach((timer) => {
+      clearTimeout(timer);
+    });
+    pendingCompositionTimersRef.current.clear();
+    recentTileTapRef.current = null;
+  }, []);
+
+  const clearRecentTileTap = useCallback((cancelPendingComposition: boolean) => {
+    const recentTileTap = recentTileTapRef.current;
+    if (cancelPendingComposition && recentTileTap?.compositionTimer) {
+      clearTimeout(recentTileTap.compositionTimer);
+      pendingCompositionTimersRef.current.delete(recentTileTap.compositionTimer);
+    }
+
+    recentTileTapRef.current = null;
+  }, []);
+
+  const schedulePhraseCompositionRecord = useCallback(
+    (tokens: PhraseTokenSnapshot[]) => {
+      if (tokens.length < 2) {
+        return null;
+      }
+
+      const timer = setTimeout(() => {
+        pendingCompositionTimersRef.current.delete(timer);
+        void recordPhraseComposition(tokens).catch(() => {
+          // Suggestions should still work even if composition history fails to persist.
+        });
+      }, TILE_TAP_UNDO_WINDOW_MS);
+
+      pendingCompositionTimersRef.current.add(timer);
+      return timer;
+    },
+    [recordPhraseComposition]
+  );
+
   const playTokens = async (
     tokens: Array<SentenceToken | PhraseTokenSnapshot>,
     options?: {
@@ -723,29 +770,62 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    void appHaptics.tileTap();
     setPhraseFeedback(null);
 
     if (caregiverUnlocked) {
+      clearRecentTileTap(false);
+      void appHaptics.tileTap();
       setEditorTargetTileId(tileId);
       navigate('editor');
       return;
     }
 
-    const tile = tilesById[tileId];
-    if (!tile) {
+    const lastSentenceToken = sentence[sentence.length - 1];
+    const recentTileTap = recentTileTapRef.current;
+    const now = Date.now();
+    const shouldUndoRecentTileTap =
+      Boolean(lastSentenceToken) &&
+      lastSentenceToken?.tileId === tileId &&
+      recentTileTap?.tileId === tileId &&
+      recentTileTap?.tokenId === lastSentenceToken?.tokenId &&
+      now - recentTileTap.atMs <= TILE_TAP_UNDO_WINDOW_MS;
+
+    if (lastSentenceToken && shouldUndoRecentTileTap) {
+      clearRecentTileTap(true);
+      void appHaptics.selection();
+      removeSentenceToken(lastSentenceToken.tokenId);
+      setSpeaking(false);
+      void speechEngine.cancel().catch(() => {
+        // Undo should still work even if speech does not stop cleanly.
+      });
       return;
     }
 
+    const tile = tilesById[tileId];
+    if (!tile) {
+      clearRecentTileTap(false);
+      return;
+    }
+
+    void appHaptics.tileTap();
     const phraseToken = toPhraseTokenSnapshot(tile);
     const nextSentenceTokens = [...sentence, phraseToken].map((token) =>
       'tokenId' in token ? toPhraseTokenSnapshot(token) : token
     );
 
     addTileToSentence(tileId);
-    void recordPhraseComposition(nextSentenceTokens).catch(() => {
-      // Suggestions should still work even if composition history fails to persist.
-    });
+    const nextSentence = useAppStore.getState().sentence;
+    const nextSentenceToken = nextSentence[nextSentence.length - 1];
+    const compositionTimer = schedulePhraseCompositionRecord(nextSentenceTokens);
+    recentTileTapRef.current =
+      nextSentenceToken?.tileId === tileId
+        ? {
+            tileId,
+            tokenId: nextSentenceToken.tokenId,
+            atMs: now,
+            compositionTimer,
+          }
+        : null;
 
     void playTokens([phraseToken]);
   };
@@ -819,6 +899,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   const onPhraseBarItemPress = useCallback(
     (item: PhraseBarItem) => {
+      clearRecentTileTap(false);
       setPhraseFeedback(null);
 
       if (item.kind === 'prediction') {
@@ -845,6 +926,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         return;
       }
 
+      clearAllPendingCompositionRecords();
       replaceSentenceWithTokens(phrase.tokens);
       void playTokens(phrase.tokens, {
         recordSource: item.kind,
@@ -853,6 +935,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     },
     [
       appendPhraseTokens,
+      clearAllPendingCompositionRecords,
+      clearRecentTileTap,
       playTokens,
       recentPhrases,
       recordPhraseComposition,
@@ -909,6 +993,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   const onClearSentence = () => {
+    clearAllPendingCompositionRecords();
     void appHaptics.tap();
     clearSentence();
     setPhraseFeedback(null);
@@ -1043,6 +1128,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   useEffect(() => {
     return () => {
+      clearAllPendingCompositionRecords();
       clearPendingReorderTouch();
       if (flashNewTileTimerRef.current) {
         clearTimeout(flashNewTileTimerRef.current);
@@ -1052,7 +1138,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
       newTileFlashValue.stopAnimation();
     };
-  }, [clearPendingReorderTouch, newTileFlashValue]);
+  }, [clearAllPendingCompositionRecords, clearPendingReorderTouch, newTileFlashValue]);
 
   const startReorderDrag = useCallback(
     (pendingTouch: PendingReorderTouch) => {
@@ -1427,7 +1513,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               sentence.map((token) => (
                 <Pressable
                   key={token.tokenId}
-                  onPress={() => removeSentenceToken(token.tokenId)}
+                  onPress={() => {
+                    clearAllPendingCompositionRecords();
+                    removeSentenceToken(token.tokenId);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={`Odebrat ${token.label}`}
                   style={({ pressed }) => [

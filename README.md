@@ -10,10 +10,9 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
 - Speech engine with queue + cancel semantics
 - Per-tile speech modes:
   - `tts`
-  - `recording_with_tts_fallback`
   - `recording_only`
-- Recording support (`expo-av`) with per-tile clip save/delete
-- Caregiver PIN gate with lockout (3 failed attempts -> 30s)
+- Recording support (`expo-audio`) with per-tile clip save/delete
+- Caregiver PIN gate / native unlock for editing
 - Caregiver tile editor:
   - tile text/emoji/category/speech mode
   - per-tile recording management

@@ -108,8 +108,6 @@ type AppStore = {
   settings: ProfileSettings | null;
   isSettingsLoading: boolean;
   caregiverUnlocked: boolean;
-  failedPinAttempts: number;
-  lockoutUntil: number | null;
   syncStatus: SyncStatus;
   pendingSyncEvents: number;
   syncErrorEvents: number;
@@ -178,8 +176,6 @@ type AppStore = {
 
   unlockCaregiver: () => void;
   lockCaregiver: () => void;
-  registerPinFailure: () => void;
-  clearPinFailures: () => void;
   setEditorTargetTileId: (tileId: string | null) => void;
   setBoardPageIndex: (pageIndex: number) => void;
   setPendingCaregiverAction: (action: PendingCaregiverAction) => void;
@@ -210,8 +206,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   settings: null,
   isSettingsLoading: true,
   caregiverUnlocked: false,
-  failedPinAttempts: 0,
-  lockoutUntil: null,
   syncStatus: 'idle',
   pendingSyncEvents: 0,
   syncErrorEvents: 0,
@@ -481,28 +475,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   unlockCaregiver: () => {
-    set({ caregiverUnlocked: true, failedPinAttempts: 0, lockoutUntil: null });
+    set({ caregiverUnlocked: true });
   },
 
   lockCaregiver: () => {
     set({ caregiverUnlocked: false, editorTargetTileId: null });
-  },
-
-  registerPinFailure: () => {
-    const failedPinAttempts = get().failedPinAttempts + 1;
-    if (failedPinAttempts >= 3) {
-      set({
-        failedPinAttempts: 0,
-        lockoutUntil: Date.now() + 30_000,
-      });
-      return;
-    }
-
-    set({ failedPinAttempts });
-  },
-
-  clearPinFailures: () => {
-    set({ failedPinAttempts: 0, lockoutUntil: null });
   },
 
   setEditorTargetTileId: (tileId) => {
