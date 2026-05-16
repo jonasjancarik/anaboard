@@ -1,9 +1,6 @@
 [functions.ai-emoji-suggest]
 verify_jwt = false
 
-[functions.ai-autocomplete-rerank]
-verify_jwt = false
-
 [functions.ai-image-draft-generate]
 verify_jwt = false
 

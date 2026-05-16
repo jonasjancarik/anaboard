@@ -9,6 +9,5 @@ const toBooleanFlag = (value: string | undefined, fallback = false): boolean => 
 
 export const AI_FEATURE_FLAGS = {
   emojiSuggestions: toBooleanFlag(process.env.EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS, __DEV__),
-  autocompleteRerank: toBooleanFlag(process.env.EXPO_PUBLIC_AI_AUTOCOMPLETE_RERANK, false),
   generatedTileImages: toBooleanFlag(process.env.EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES, false),
 } as const;

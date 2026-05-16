@@ -107,7 +107,6 @@ Env vars:
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_SENTRY_DSN`
 - `EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS`
-- `EXPO_PUBLIC_AI_AUTOCOMPLETE_RERANK`
 - `EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES`
 
 `EXPO_PUBLIC_SENTRY_DSN` enables the Settings toggle for remote error reporting. The toggle is off by default and stored only on the current device.

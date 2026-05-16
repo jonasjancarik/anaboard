@@ -9,8 +9,7 @@ Add small, caregiver-facing AI assists without making the core AAC board depend 
 V1 target features:
 
 1. Label -> emoji suggestion.
-2. AI-assisted autocomplete rerank.
-3. Generated tile image fallback when emoji is weak or missing.
+2. Generated tile image fallback when emoji is weak or missing.
 
 Non-goals for V1:
 
@@ -69,8 +68,6 @@ supabase/
   config.toml
   functions/
     ai-emoji-suggest/
-      index.ts
-    ai-autocomplete-rerank/
       index.ts
     ai-image-draft-generate/
       index.ts
@@ -136,7 +133,6 @@ OpenAI is the provider for this iteration.
 Expected usage:
 
 - emoji suggestion: text response
-- autocomplete rerank: text/JSON response
 - image generation: OpenAI returns base64 image data; the function stores the result in Supabase Storage
 
 Important:
@@ -185,7 +181,6 @@ Hard rules:
 Trust rules:
 
 - emoji suggestion: never auto-apply
-- autocomplete: only rerank existing tiles
 - image generation: explicit user action
 - suggested new tiles: later, caregiver inbox/review only
 
@@ -210,18 +205,7 @@ UI:
 - tap chip -> preview emoji
 - still requires save
 
-### 2. Autocomplete rerank
-
-Use AI only as an overlay on top of the current deterministic scorer in `src/features/board/utils/phraseSuggestions.ts`.
-
-Rules:
-
-- local scorer always runs
-- AI only reranks a constrained candidate set
-- candidate set must be existing tiles only
-- no freeform generated text shown to child
-
-### 3. Generated tile image
+### 2. Generated tile image
 
 Use only when caregiver explicitly requests it.
 
@@ -268,44 +252,6 @@ Response:
   "cached": false
 }
 ```
-
-### `ai-autocomplete-rerank`
-
-Purpose:
-
-- choose the best next tiles from an already constrained candidate set
-
-Request:
-
-```json
-{
-  "locale": "cs-CZ",
-  "sentenceTileIds": ["tile-ja", "tile-chci"],
-  "sentenceLabels": ["já", "chci"],
-  "candidates": [
-    { "tileId": "tile-pit", "label": "pít", "category": "needs" },
-    { "tileId": "tile-jit", "label": "jít", "category": "social" },
-    { "tileId": "tile-banan", "label": "banan", "category": "food" }
-  ],
-  "limit": 3
-}
-```
-
-Response:
-
-```json
-{
-  "suggestions": [
-    { "tileId": "tile-pit", "confidence": 0.82, "reason": "common continuation" },
-    { "tileId": "tile-banan", "confidence": 0.44, "reason": "object after desire verb" }
-  ],
-  "provider": "openai"
-}
-```
-
-Rule:
-
-- function must only return `tileId` values from the input candidate list
 
 ### `ai-image-draft-generate`
 
@@ -487,7 +433,6 @@ V1 scope restriction:
 Add local feature flags:
 
 - `aiEmojiSuggestions`
-- `aiAutocompleteRerank`
 - `aiGeneratedTileImages`
 
 Gate by:
@@ -515,17 +460,6 @@ Behavior:
 - do not block tile editing
 - hide error behind small helper text, not modal
 
-### Autocomplete states
-
-- local deterministic suggestions always available
-- AI rerank pending
-- rerank accepted silently only if response arrives quickly and confidence is above threshold
-- otherwise keep local order
-
-Suggested threshold:
-
-- only reorder when top candidate confidence is significantly above others
-
 ### Image generation states
 
 - idle
@@ -549,15 +483,9 @@ Hard fallback rules:
 - if image generation fails: stay on emoji/photo path
 - if user is offline/signed-out: do not expose AI-dependent flows as primary actions
 
-Autocomplete fallback:
-
-- local scorer remains source of truth
-- AI may rerank only when response arrives within a short timeout
-
 Suggested timeout:
 
 - emoji suggestion: ~4s
-- autocomplete rerank: ~400-800ms budget
 - image generation: longer, explicit spinner acceptable
 
 ## Caching
@@ -614,12 +542,6 @@ Avoid sending:
 
 ### Phase 3
 
-- implement `ai-autocomplete-rerank`
-- keep current deterministic scorer as baseline
-- rerank only constrained candidates
-
-### Phase 4
-
 - implement `ai-image-draft-generate`
 - implement `ai-image-draft-promote`
 - wire preview/apply flow in tile editor
@@ -639,8 +561,7 @@ Avoid sending:
 1. Signed-in only for all AI, or allow emoji suggestion without account via another backend path?
 2. OpenAI only, or provider abstraction from day 1?
 3. Do we want one fixed visual preset or 2-3 presets for caregiver choice?
-4. How aggressive should autocomplete reranking be before it feels unstable?
-5. Should accepted generated images immediately replace local draft image, or wait until tile save?
+4. Should accepted generated images immediately replace local draft image, or wait until tile save?
 
 ## Initial recommendation
 
@@ -650,8 +571,7 @@ Choose the smallest path:
 2. Supabase Edge Functions.
 3. Reuse existing `tile-images` bucket.
 4. Emoji suggestion first.
-5. Autocomplete rerank second.
-6. Generated image drafts third.
+5. Generated image drafts second.
 
 This keeps V1 cheap, reversible, and aligned with the app's local-first architecture.
 

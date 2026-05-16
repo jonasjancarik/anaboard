@@ -45,7 +45,6 @@ supabase secrets set \
   SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
   OPENAI_API_KEY=<openai-api-key>
 supabase functions deploy ai-emoji-suggest
-supabase functions deploy ai-autocomplete-rerank
 supabase functions deploy ai-image-draft-generate
 supabase functions deploy ai-image-draft-promote
 ```

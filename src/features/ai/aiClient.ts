@@ -1,6 +1,4 @@
 import type {
-  AutocompleteRerankRequest,
-  AutocompleteRerankResponse,
   EmojiSuggestion,
   EmojiSuggestionRequest,
   EmojiSuggestionResponse,
@@ -141,12 +139,6 @@ export const aiClient = {
 
     EMOJI_CACHE.set(cacheKey, normalizedResponse);
     return normalizedResponse;
-  },
-
-  async rerankAutocomplete(
-    request: AutocompleteRerankRequest
-  ): Promise<AutocompleteRerankResponse> {
-    return invokeFunction<AutocompleteRerankResponse>('ai-autocomplete-rerank', request);
   },
 
   async generateTileImageDraft(
