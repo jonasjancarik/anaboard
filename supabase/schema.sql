@@ -132,6 +132,9 @@ create table if not exists profile_settings (
   show_labels boolean not null default false,
   phrase_bar_enabled boolean not null default true,
   suggestion_count int not null default 3,
+  board_layout_mode text not null default 'manual',
+  category_order text not null default '["needs","feelings","social","food"]',
+  categories_start_new_page boolean not null default true,
   updated_at timestamptz not null,
   revision int not null default 1,
   created_at timestamptz not null default now()
@@ -148,6 +151,15 @@ add column if not exists phrase_bar_enabled boolean not null default true;
 
 alter table profile_settings
 add column if not exists suggestion_count int not null default 3;
+
+alter table profile_settings
+add column if not exists board_layout_mode text not null default 'manual';
+
+alter table profile_settings
+add column if not exists category_order text not null default '["needs","feelings","social","food"]';
+
+alter table profile_settings
+add column if not exists categories_start_new_page boolean not null default true;
 
 create table if not exists phrase_events (
   id uuid primary key default gen_random_uuid(),

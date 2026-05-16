@@ -37,7 +37,9 @@ import type { AuthStatus, RemoteContext } from '../features/auth/types';
 import type { SyncIssueCode } from '../features/sync/types';
 import type {
   AudioClip,
+  BoardLayoutMode,
   Board,
+  Category,
   PhraseEventRecord,
   PhraseSource,
   PhraseTokenSnapshot,
@@ -171,6 +173,9 @@ type AppStore = {
     showLabels?: boolean;
     phraseBarEnabled?: boolean;
     suggestionCount?: number;
+    boardLayoutMode?: BoardLayoutMode;
+    categoryOrder?: Category[];
+    categoriesStartNewPage?: boolean;
     pinHash?: string;
   }) => Promise<void>;
 

@@ -33,6 +33,7 @@ type BoardTileProps = {
   newTileFlashValue: Animated.Value;
   labelStyle: TileLabelStyle;
   caregiverUnlocked: boolean;
+  canReorder: boolean;
   longPressDelayMs: number;
   globalIndex: number;
   onTilePress: (tileId: string) => void;
@@ -56,6 +57,7 @@ const BoardTileComponent = ({
   newTileFlashValue,
   labelStyle,
   caregiverUnlocked,
+  canReorder,
   longPressDelayMs,
   globalIndex,
   onTilePress,
@@ -90,10 +92,10 @@ const BoardTileComponent = ({
       accessibilityRole="button"
       accessibilityLabel={caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`}
       onPress={handlePress}
-      onLongPress={caregiverUnlocked ? handleLongPress : undefined}
-      delayLongPress={caregiverUnlocked ? longPressDelayMs : undefined}
-      onTouchEnd={caregiverUnlocked ? handleTouchEnd : undefined}
-      onTouchCancel={caregiverUnlocked ? handleTouchEnd : undefined}
+      onLongPress={canReorder ? handleLongPress : undefined}
+      delayLongPress={canReorder ? longPressDelayMs : undefined}
+      onTouchEnd={canReorder ? handleTouchEnd : undefined}
+      onTouchCancel={canReorder ? handleTouchEnd : undefined}
       style={({ pressed }) => [
         styles.tile,
         highContrast && styles.tileHighContrast,
@@ -156,6 +158,7 @@ export const BoardTile = memo(BoardTileComponent, (previous, next) => {
     previous.labelStyle.fontSize === next.labelStyle.fontSize &&
     previous.labelStyle.lineHeight === next.labelStyle.lineHeight &&
     previous.caregiverUnlocked === next.caregiverUnlocked &&
+    previous.canReorder === next.canReorder &&
     previous.longPressDelayMs === next.longPressDelayMs &&
     previous.globalIndex === next.globalIndex &&
     previous.onTilePress === next.onTilePress &&

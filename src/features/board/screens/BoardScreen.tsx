@@ -40,7 +40,11 @@ import {
   normalizeBoardPageIndex,
   WIDE_BOARD_BREAKPOINT,
 } from './boardPagerLayout';
-import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
+import {
+  CATEGORY_COLORS,
+  CATEGORY_LABELS,
+  DEFAULT_CATEGORY_ORDER,
+} from '../../../shared/constants/defaults';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
@@ -48,6 +52,11 @@ import { appHaptics } from '../../../shared/feedback/haptics';
 import type { PhraseSource, PhraseTokenSnapshot, SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
+import {
+  getBoardPagesForLayout,
+  getTilesForBoardLayout,
+  type OrderedBoardPage,
+} from '../utils/boardOrdering';
 
 type BoardScreenProps = {
   onOpenCaregiver: () => Promise<boolean>;
@@ -88,16 +97,12 @@ type PagerScrollEvent = {
   };
 };
 
-type LogicalBoardPage = {
-  pageIndex: number;
-  tiles: Tile[];
-};
-
 const REORDER_LONG_PRESS_MS = 180;
 const PAGE_SWITCH_EDGE_THRESHOLD = 44;
 const TILE_TAP_UNDO_WINDOW_MS = 550;
 const VISIBLE_SPREAD_WINDOW_RADIUS = 1;
 const REORDER_LAYOUT_TRANSITION = LinearTransition.duration(140);
+const CATEGORY_PAGE_HEADER_HEIGHT = 34;
 const ACTION_TEXT_PROPS = {
   allowFontScaling: false,
   numberOfLines: 1 as const,
@@ -214,6 +219,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const showLabels = settings?.showLabels ?? false;
   const phraseBarEnabled = settings?.phraseBarEnabled ?? true;
   const suggestionCount = settings?.suggestionCount ?? 3;
+  const boardLayoutMode = settings?.boardLayoutMode ?? 'manual';
+  const categoryOrder = settings?.categoryOrder ?? DEFAULT_CATEGORY_ORDER;
+  const categoriesStartNewPage = settings?.categoriesStartNewPage ?? true;
+  const showCategoryPageHeaders =
+    boardLayoutMode === 'category' && categoriesStartNewPage;
+  const canReorderTiles = caregiverUnlocked && boardLayoutMode === 'manual';
   const gridColumns = board?.columns ?? GRID_COLUMNS;
   const gridRows = board?.rows ?? GRID_ROWS;
   const pageSize = gridColumns * gridRows;
@@ -310,14 +321,18 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
   const tileSize = useMemo(() => {
     const widthBound = (availableGridWidth - GRID_GAP * (gridColumns - 1)) / gridColumns;
-    const heightBound =
+    const availableGridHeight =
       boardViewportHeight > 0
-        ? (boardViewportHeight - GRID_GAP * (gridRows - 1)) / gridRows
+        ? Math.max(0, boardViewportHeight - (showCategoryPageHeaders ? CATEGORY_PAGE_HEADER_HEIGHT : 0))
+        : 0;
+    const heightBound =
+      availableGridHeight > 0
+        ? (availableGridHeight - GRID_GAP * (gridRows - 1)) / gridRows
         : widthBound;
     const rawTileSize = Math.min(widthBound, heightBound);
 
     return Math.max(MIN_TILE_SIZE, Math.min(MAX_TILE_SIZE, Math.floor(rawTileSize)));
-  }, [availableGridWidth, boardViewportHeight, gridColumns, gridRows]);
+  }, [availableGridWidth, boardViewportHeight, gridColumns, gridRows, showCategoryPageHeaders]);
 
   const tileStep = tileSize + GRID_GAP;
   const pageGridWidth = tileSize * gridColumns + GRID_GAP * (gridColumns - 1);
@@ -340,7 +355,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   useEffect(() => {
     let animation: Animated.CompositeAnimation | null = null;
 
-    if (!caregiverUnlocked || !wiggleActive) {
+    if (!canReorderTiles || !wiggleActive) {
       wiggleValue.stopAnimation();
       wiggleValue.setValue(0);
       return;
@@ -377,10 +392,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       wiggleValue.stopAnimation();
       wiggleValue.setValue(0);
     };
-  }, [caregiverUnlocked, wiggleActive, wiggleValue]);
+  }, [canReorderTiles, wiggleActive, wiggleValue]);
 
   useEffect(() => {
-    if (!caregiverUnlocked) {
+    if (!canReorderTiles) {
       if (reorderLongPressTimerRef.current) {
         clearTimeout(reorderLongPressTimerRef.current);
         reorderLongPressTimerRef.current = null;
@@ -391,21 +406,21 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       setReorderTileIds([]);
       setWiggleActive(false);
     }
-  }, [caregiverUnlocked]);
+  }, [canReorderTiles]);
 
   useEffect(() => {
-    if (!caregiverUnlocked || dragStateRef.current) {
+    if (!canReorderTiles || dragStateRef.current) {
       return;
     }
 
     const nextIds = tiles.map((tile) => tile.id);
     reorderTileIdsRef.current = nextIds;
     setReorderTileIds(nextIds);
-  }, [caregiverUnlocked, tiles]);
+  }, [canReorderTiles, tiles]);
 
   const orderedTiles = useMemo(() => {
-    if (!caregiverUnlocked) {
-      return tiles;
+    if (!canReorderTiles) {
+      return getTilesForBoardLayout(tiles, boardLayoutMode, categoryOrder);
     }
 
     const nextOrderedTiles = reorderTileIds
@@ -421,25 +436,21 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       ...nextOrderedTiles,
       ...tiles.filter((tile) => !orderedTileIds.has(tile.id)),
     ];
-  }, [caregiverUnlocked, reorderTileIds, tiles, tilesById]);
+  }, [boardLayoutMode, canReorderTiles, categoryOrder, reorderTileIds, tiles, tilesById]);
 
-  const pageCount = Math.max(1, Math.ceil(orderedTiles.length / pageSize));
-  const logicalPages = useMemo<LogicalBoardPage[]>(() => {
-    const pages: LogicalBoardPage[] = [];
-
-    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-      const startIndex = pageIndex * pageSize;
-      pages.push({
-        pageIndex,
-        tiles: orderedTiles.slice(startIndex, startIndex + pageSize),
-      });
-    }
-
-    return pages;
-  }, [orderedTiles, pageCount, pageSize]);
+  const logicalPages = useMemo<OrderedBoardPage[]>(() => {
+    return getBoardPagesForLayout(
+      orderedTiles,
+      boardLayoutMode,
+      categoryOrder,
+      pageSize,
+      categoriesStartNewPage
+    );
+  }, [boardLayoutMode, categoriesStartNewPage, categoryOrder, orderedTiles, pageSize]);
+  const pageCount = logicalPages.length;
   const spreadCount = getSpreadCount(pageCount, visiblePagesPerSpread);
   const pagedSpreads = useMemo(() => {
-    const spreads: Array<Array<LogicalBoardPage | null>> = [];
+    const spreads: Array<Array<OrderedBoardPage | null>> = [];
 
     for (let spreadIndex = 0; spreadIndex < spreadCount; spreadIndex += 1) {
       const startPageIndex = spreadIndex * visiblePagesPerSpread;
@@ -1185,7 +1196,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   const beginReorderTouch = useCallback(
     (tileId: string, startIndex: number, pageX: number, pageY: number) => {
-      if (!caregiverUnlocked || dragStateRef.current) {
+      if (!canReorderTiles || dragStateRef.current) {
         return;
       }
 
@@ -1208,7 +1219,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       startReorderDrag(pendingTouch);
     },
     [
-      caregiverUnlocked,
+      canReorderTiles,
       clearPendingReorderTouch,
       startReorderDrag,
     ]
@@ -1239,8 +1250,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: () => caregiverUnlocked && Boolean(dragStateRef.current),
-        onMoveShouldSetPanResponderCapture: () => caregiverUnlocked && Boolean(dragStateRef.current),
+        onMoveShouldSetPanResponder: () => canReorderTiles && Boolean(dragStateRef.current),
+        onMoveShouldSetPanResponderCapture: () => canReorderTiles && Boolean(dragStateRef.current),
         onPanResponderTerminationRequest: () => false,
         onPanResponderMove: (event, gestureState) => {
           handleReorderTouchMove(
@@ -1257,7 +1268,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           endReorderTouch();
         },
       }),
-    [caregiverUnlocked, endReorderTouch, handleReorderTouchMove]
+    [canReorderTiles, endReorderTouch, handleReorderTouchMove]
   );
 
   const onLockButtonPress = () => {
@@ -1292,7 +1303,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    const anchorTile = orderedTiles[orderedTiles.length - 1];
+    const anchorTile = tiles[tiles.length - 1];
     if (!anchorTile) {
       return;
     }
@@ -1305,9 +1316,28 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       const newTileId = await createTileAfter(anchorTile.id);
-      const nextTileCount = useAppStore.getState().tiles.length;
-      const nextPageCount = Math.max(1, Math.ceil(nextTileCount / pageSize));
-      const nextPage = Math.max(0, Math.floor((nextTileCount - 1) / pageSize));
+      const nextTiles = useAppStore.getState().tiles;
+      const nextOrderedTiles = getTilesForBoardLayout(
+        nextTiles,
+        boardLayoutMode,
+        categoryOrder
+      );
+      const nextPages = getBoardPagesForLayout(
+        nextOrderedTiles,
+        boardLayoutMode,
+        categoryOrder,
+        pageSize,
+        categoriesStartNewPage
+      );
+      const newTilePageIndex = nextPages.findIndex((page) =>
+        page.tiles.some((tile) => tile.id === newTileId)
+      );
+      const nextTileCount = nextTiles.length;
+      const nextPageCount = Math.max(1, nextPages.length);
+      const nextPage =
+        newTilePageIndex >= 0
+          ? newTilePageIndex
+          : Math.max(0, Math.floor((nextTileCount - 1) / pageSize));
       const resolvedPage = normalizeBoardPageIndex(
         nextPage,
         nextPageCount,
@@ -1369,13 +1399,16 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     }
   }, [
     caregiverUnlocked,
+    boardLayoutMode,
+    categoriesStartNewPage,
+    categoryOrder,
     clearBoardDragState,
     clearPendingReorderTouch,
     createTileAfter,
     newTileFlashValue,
-    orderedTiles,
     pageSize,
     setBoardPageIndex,
+    tiles,
     visiblePagesPerSpread,
   ]);
 
@@ -1631,7 +1664,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           ref={boardViewportRef}
           style={styles.boardPagerViewport}
           onLayout={onBoardViewportLayout}
-          {...(caregiverUnlocked ? reorderGridResponder.panHandlers : {})}
+          {...(canReorderTiles ? reorderGridResponder.panHandlers : {})}
         >
           <ScrollView
             ref={boardPagerRef}
@@ -1704,6 +1737,26 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                               },
                             ]}
                           >
+                            {showCategoryPageHeaders && page.category ? (
+                              <View style={styles.categoryPageHeader}>
+                                <View
+                                  style={[
+                                    styles.categoryPageHeaderSwatch,
+                                    {
+                                      backgroundColor: CATEGORY_COLORS[page.category].background,
+                                      borderColor: CATEGORY_COLORS[page.category].border,
+                                    },
+                                  ]}
+                                />
+                                <Text
+                                  style={styles.categoryPageHeaderText}
+                                  allowFontScaling={false}
+                                  numberOfLines={1}
+                                >
+                                  {CATEGORY_LABELS[page.category]}
+                                </Text>
+                              </View>
+                            ) : null}
                             <View
                               style={[
                                 styles.pageGrid,
@@ -1739,6 +1792,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                                         newTileFlashValue={newTileFlashValue}
                                         labelStyle={getTileLabelStyle(tile.labelCs)}
                                         caregiverUnlocked={caregiverUnlocked}
+                                        canReorder={canReorderTiles}
                                         longPressDelayMs={REORDER_LONG_PRESS_MS}
                                         globalIndex={globalIndex}
                                         onTilePress={onTilePress}

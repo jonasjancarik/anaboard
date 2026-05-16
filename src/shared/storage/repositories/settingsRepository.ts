@@ -2,7 +2,12 @@ import {
   DEFAULT_PROFILE_ID,
   DEFAULT_PROFILE_SETTINGS,
 } from '../../constants/defaults';
-import type { ProfileSettings } from '../../types/domain';
+import type { BoardLayoutMode, Category, ProfileSettings } from '../../types/domain';
+import {
+  normalizeBoardLayoutMode,
+  normalizeCategoryOrder,
+  serializeCategoryOrder,
+} from '../../utils/categoryOrder';
 import { hashPin } from '../../utils/security';
 import { nowIso } from '../../utils/time';
 import { getDatabase } from '../db';
@@ -20,6 +25,9 @@ type SettingsRow = {
   show_labels: number;
   phrase_bar_enabled: number;
   suggestion_count: number;
+  board_layout_mode: string;
+  category_order: string;
+  categories_start_new_page: number;
   updated_at: string;
   revision: number;
 };
@@ -36,6 +44,9 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
   showLabels: row.show_labels === 1,
   phraseBarEnabled: row.phrase_bar_enabled === 1,
   suggestionCount: row.suggestion_count,
+  boardLayoutMode: normalizeBoardLayoutMode(row.board_layout_mode),
+  categoryOrder: normalizeCategoryOrder(row.category_order),
+  categoriesStartNewPage: row.categories_start_new_page === 1,
   updatedAt: row.updated_at,
   revision: row.revision,
 });
@@ -62,8 +73,9 @@ export const ensureDefaultSettingsForProfile = async (profileId: string): Promis
     `
       INSERT INTO profile_settings (
         profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
-        high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision, dirty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order,
+        categories_start_new_page, updated_at, revision, dirty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
     profileId,
     defaults.pinHash,
@@ -76,6 +88,9 @@ export const ensureDefaultSettingsForProfile = async (profileId: string): Promis
     defaults.showLabels ? 1 : 0,
     defaults.phraseBarEnabled ? 1 : 0,
     defaults.suggestionCount,
+    defaults.boardLayoutMode,
+    serializeCategoryOrder(defaults.categoryOrder),
+    defaults.categoriesStartNewPage ? 1 : 0,
     defaults.updatedAt,
     defaults.revision
   );
@@ -92,6 +107,9 @@ export const ensureDefaultSettingsForProfile = async (profileId: string): Promis
     show_labels: defaults.showLabels ? 1 : 0,
     phrase_bar_enabled: defaults.phraseBarEnabled ? 1 : 0,
     suggestion_count: defaults.suggestionCount,
+    board_layout_mode: defaults.boardLayoutMode,
+    category_order: serializeCategoryOrder(defaults.categoryOrder),
+    categories_start_new_page: defaults.categoriesStartNewPage ? 1 : 0,
     updated_at: defaults.updatedAt,
     revision: defaults.revision,
   });
@@ -102,7 +120,7 @@ export const getProfileSettings = async (profileId = DEFAULT_PROFILE_ID): Promis
   const row = await db.getFirstAsync<SettingsRow>(
     `
       SELECT profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
-           , show_labels, phrase_bar_enabled, suggestion_count
+           , show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
@@ -128,6 +146,9 @@ type SettingsUpdate = {
   showLabels?: boolean;
   phraseBarEnabled?: boolean;
   suggestionCount?: number;
+  boardLayoutMode?: BoardLayoutMode;
+  categoryOrder?: Category[];
+  categoriesStartNewPage?: boolean;
   pinHash?: string;
 };
 
@@ -151,6 +172,13 @@ export const updateProfileSettings = async (
     showLabels: update.showLabels ?? current.showLabels,
     phraseBarEnabled: update.phraseBarEnabled ?? current.phraseBarEnabled,
     suggestionCount: update.suggestionCount ?? current.suggestionCount,
+    boardLayoutMode: normalizeBoardLayoutMode(update.boardLayoutMode ?? current.boardLayoutMode),
+    categoryOrder:
+      update.categoryOrder === undefined
+        ? current.categoryOrder
+        : normalizeCategoryOrder(update.categoryOrder),
+    categoriesStartNewPage:
+      update.categoriesStartNewPage ?? current.categoriesStartNewPage,
     pinHash: update.pinHash ?? current.pinHash,
   };
 
@@ -168,6 +196,9 @@ export const updateProfileSettings = async (
         show_labels = ?,
         phrase_bar_enabled = ?,
         suggestion_count = ?,
+        board_layout_mode = ?,
+        category_order = ?,
+        categories_start_new_page = ?,
         updated_at = ?,
         revision = ?,
         dirty = 1
@@ -183,6 +214,9 @@ export const updateProfileSettings = async (
     next.showLabels ? 1 : 0,
     next.phraseBarEnabled ? 1 : 0,
     next.suggestionCount,
+    next.boardLayoutMode,
+    serializeCategoryOrder(next.categoryOrder),
+    next.categoriesStartNewPage ? 1 : 0,
     updatedAt,
     revision,
     current.profileId
@@ -200,6 +234,9 @@ export const updateProfileSettings = async (
     show_labels: next.showLabels ? 1 : 0,
     phrase_bar_enabled: next.phraseBarEnabled ? 1 : 0,
     suggestion_count: next.suggestionCount,
+    board_layout_mode: next.boardLayoutMode,
+    category_order: serializeCategoryOrder(next.categoryOrder),
+    categories_start_new_page: next.categoriesStartNewPage ? 1 : 0,
     updated_at: updatedAt,
     revision,
   });

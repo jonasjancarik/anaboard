@@ -2,6 +2,11 @@ import { mediaAssetExists } from '../../shared/media/mediaStorage';
 import { supabaseClient } from '../../shared/services/supabaseClient';
 import { getDatabase } from '../../shared/storage/db';
 import type { EntityType } from '../../shared/types/domain';
+import {
+  normalizeBoardLayoutMode,
+  normalizeCategoryOrder,
+  serializeCategoryOrder,
+} from '../../shared/utils/categoryOrder';
 import type { RemoteContext } from '../auth/types';
 import {
   downloadAudioClipFromSupabase,
@@ -68,6 +73,9 @@ type LocalSettingsSyncRow = {
   show_labels: number;
   phrase_bar_enabled: number;
   suggestion_count: number;
+  board_layout_mode: string;
+  category_order: string;
+  categories_start_new_page: number;
   updated_at: string;
   revision: number;
 };
@@ -133,14 +141,46 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
     throw new Error('Supabase client missing');
   }
 
-  const withBackupPin = await supabaseClient
+  const withCategoryPages = await supabaseClient
     .from('profile_settings')
-    .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision')
+    .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page, updated_at, revision')
     .eq('profile_id', profileId)
     .maybeSingle<RemoteSettingsRow>();
 
-  if (!withBackupPin.error) {
-    return withBackupPin.data ?? null;
+  if (!withCategoryPages.error) {
+    return withCategoryPages.data ?? null;
+  }
+
+  const withBoardLayout = await supabaseClient
+    .from('profile_settings')
+    .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, updated_at, revision')
+    .eq('profile_id', profileId)
+    .maybeSingle<Omit<RemoteSettingsRow, 'categories_start_new_page'>>();
+
+  if (!withBoardLayout.error) {
+    return withBoardLayout.data
+      ? {
+          ...withBoardLayout.data,
+          categories_start_new_page: true,
+        }
+      : null;
+  }
+
+  const withoutBoardLayout = await supabaseClient
+    .from('profile_settings')
+    .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision')
+    .eq('profile_id', profileId)
+    .maybeSingle<Omit<RemoteSettingsRow, 'board_layout_mode' | 'category_order'>>();
+
+  if (!withoutBoardLayout.error) {
+    return withoutBoardLayout.data
+      ? {
+          ...withoutBoardLayout.data,
+          board_layout_mode: 'manual',
+          category_order: serializeCategoryOrder(null),
+          categories_start_new_page: true,
+        }
+      : null;
   }
 
   const fallback = await supabaseClient
@@ -150,13 +190,16 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
     .maybeSingle<Omit<RemoteSettingsRow, 'backup_pin_enabled'>>();
 
   if (fallback.error) {
-    throw withBackupPin.error;
+    throw withCategoryPages.error;
   }
 
   return fallback.data
     ? {
         ...fallback.data,
         backup_pin_enabled: false,
+        board_layout_mode: 'manual',
+        category_order: serializeCategoryOrder(null),
+        categories_start_new_page: true,
       }
     : null;
 };
@@ -384,6 +427,9 @@ export const getLocalEntitySyncPayload = async (
         show_labels,
         phrase_bar_enabled,
         suggestion_count,
+        board_layout_mode,
+        category_order,
+        categories_start_new_page,
         updated_at,
         revision
       FROM profile_settings
@@ -642,8 +688,9 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
         `
           INSERT INTO profile_settings (
             profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
-            high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order,
+            categories_start_new_page, updated_at, revision, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
           ON CONFLICT(profile_id) DO UPDATE SET
             pin_hash = excluded.pin_hash,
             lock_enabled = excluded.lock_enabled,
@@ -655,6 +702,9 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
             show_labels = excluded.show_labels,
             phrase_bar_enabled = excluded.phrase_bar_enabled,
             suggestion_count = excluded.suggestion_count,
+            board_layout_mode = excluded.board_layout_mode,
+            category_order = excluded.category_order,
+            categories_start_new_page = excluded.categories_start_new_page,
             updated_at = excluded.updated_at,
             revision = excluded.revision,
             dirty = 0
@@ -670,6 +720,9 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
         snapshot.settings.show_labels ? 1 : 0,
         snapshot.settings.phrase_bar_enabled ? 1 : 0,
         snapshot.settings.suggestion_count,
+        normalizeBoardLayoutMode(snapshot.settings.board_layout_mode),
+        serializeCategoryOrder(normalizeCategoryOrder(snapshot.settings.category_order)),
+        snapshot.settings.categories_start_new_page !== false ? 1 : 0,
         snapshot.settings.updated_at,
         snapshot.settings.revision
       );

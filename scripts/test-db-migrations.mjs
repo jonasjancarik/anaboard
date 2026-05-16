@@ -280,6 +280,24 @@ const createLegacyDatabase = (database) => {
       '2026-01-01T00:00:00.000Z',
       'pending'
     );
+
+  database
+    .prepare(`
+      INSERT INTO sync_events (
+        entity_type, entity_id, operation, payload, created_at, status
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      'profile_settings',
+      'default-profile',
+      'upsert',
+      JSON.stringify({
+        profile_id: 'default-profile',
+        suggestion_count: 3,
+      }),
+      '2026-01-01T00:00:00.000Z',
+      'pending'
+    );
 };
 
 const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'anaboard-migrations-'));
@@ -298,6 +316,9 @@ try {
   assert.equal(hasColumn(database, 'profile_settings', 'backup_pin_enabled'), true);
   assert.equal(hasColumn(database, 'profile_settings', 'phrase_bar_enabled'), true);
   assert.equal(hasColumn(database, 'profile_settings', 'suggestion_count'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'board_layout_mode'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'category_order'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'categories_start_new_page'), true);
   assert.equal(hasColumn(database, 'tiles', 'visual_type'), true);
   assert.equal(hasColumn(database, 'tile_archive', 'image_remote_path'), true);
   assert.equal(hasColumn(database, 'saved_phrases', 'tokens_json'), true);
@@ -319,11 +340,22 @@ try {
   assert.equal(pendingPayload.speech_mode, 'recording_only');
 
   const settingsRow = database
-    .prepare('SELECT show_labels, backup_pin_enabled, suggestion_count FROM profile_settings WHERE profile_id = ?')
+    .prepare('SELECT show_labels, backup_pin_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page FROM profile_settings WHERE profile_id = ?')
     .get('default-profile');
   assert.equal(settingsRow.show_labels, 0);
   assert.equal(settingsRow.backup_pin_enabled, 0);
   assert.equal(settingsRow.suggestion_count, 3);
+  assert.equal(settingsRow.board_layout_mode, 'manual');
+  assert.equal(settingsRow.category_order, '["needs","feelings","social","food"]');
+  assert.equal(settingsRow.categories_start_new_page, 1);
+
+  const pendingSettingsEvent = database
+    .prepare('SELECT payload FROM sync_events WHERE entity_type = ? AND entity_id = ?')
+    .get('profile_settings', 'default-profile');
+  const pendingSettingsPayload = JSON.parse(pendingSettingsEvent.payload);
+  assert.equal(pendingSettingsPayload.board_layout_mode, 'manual');
+  assert.equal(pendingSettingsPayload.category_order, '["needs","feelings","social","food"]');
+  assert.equal(pendingSettingsPayload.categories_start_new_page, 1);
 
   const phraseEventsIndex = database
     .prepare(`

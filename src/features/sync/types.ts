@@ -61,6 +61,9 @@ export type RemoteSettingsRow = {
   show_labels: boolean;
   phrase_bar_enabled: boolean;
   suggestion_count: number;
+  board_layout_mode?: string | null;
+  category_order?: string | null;
+  categories_start_new_page?: boolean | null;
   updated_at: string;
   revision: number;
 };

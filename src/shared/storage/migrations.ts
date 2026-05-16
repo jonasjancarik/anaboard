@@ -17,6 +17,7 @@ type AppMetaRow = {
 };
 
 const LEGACY_COMBINED_SPEECH_MODE = 'recording_with_tts_fallback';
+const DEFAULT_CATEGORY_ORDER_JSON = '["needs","feelings","social","food"]';
 
 const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
   await db.execAsync(`
@@ -113,6 +114,9 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
       show_labels INTEGER NOT NULL DEFAULT 0,
       phrase_bar_enabled INTEGER NOT NULL DEFAULT 1,
       suggestion_count INTEGER NOT NULL DEFAULT 3,
+      board_layout_mode TEXT NOT NULL DEFAULT 'manual',
+      category_order TEXT NOT NULL DEFAULT '["needs","feelings","social","food"]',
+      categories_start_new_page INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 1,
       dirty INTEGER NOT NULL DEFAULT 0
@@ -334,6 +338,53 @@ const ensureSuggestionCountSetting = async (db: MigrationDatabase): Promise<void
   }
 };
 
+const ensureBoardLayoutSettings = async (db: MigrationDatabase): Promise<void> => {
+  if (!(await hasColumn(db, 'profile_settings', 'board_layout_mode'))) {
+    await db.runAsync("ALTER TABLE profile_settings ADD COLUMN board_layout_mode TEXT NOT NULL DEFAULT 'manual'");
+  }
+
+  if (!(await hasColumn(db, 'profile_settings', 'category_order'))) {
+    await db.runAsync(`ALTER TABLE profile_settings ADD COLUMN category_order TEXT NOT NULL DEFAULT '${DEFAULT_CATEGORY_ORDER_JSON}'`);
+  }
+
+  const syncEvents = await db.getAllAsync<{ id: number; payload: string }>(
+    "SELECT id, payload FROM sync_events WHERE entity_type = 'profile_settings' AND status != 'synced'"
+  );
+
+  for (const event of syncEvents) {
+    try {
+      const payload = JSON.parse(event.payload) as Record<string, unknown>;
+      payload.board_layout_mode ??= 'manual';
+      payload.category_order ??= DEFAULT_CATEGORY_ORDER_JSON;
+      await db.runAsync('UPDATE sync_events SET payload = ? WHERE id = ?', JSON.stringify(payload), event.id);
+    } catch {
+      // Leave malformed payloads untouched.
+    }
+  }
+};
+
+const ensureCategoryPageSetting = async (db: MigrationDatabase): Promise<void> => {
+  if (!(await hasColumn(db, 'profile_settings', 'categories_start_new_page'))) {
+    await db.runAsync(
+      'ALTER TABLE profile_settings ADD COLUMN categories_start_new_page INTEGER NOT NULL DEFAULT 1'
+    );
+  }
+
+  const syncEvents = await db.getAllAsync<{ id: number; payload: string }>(
+    "SELECT id, payload FROM sync_events WHERE entity_type = 'profile_settings' AND status != 'synced'"
+  );
+
+  for (const event of syncEvents) {
+    try {
+      const payload = JSON.parse(event.payload) as Record<string, unknown>;
+      payload.categories_start_new_page ??= 1;
+      await db.runAsync('UPDATE sync_events SET payload = ? WHERE id = ?', JSON.stringify(payload), event.id);
+    } catch {
+      // Leave malformed payloads untouched.
+    }
+  }
+};
+
 const migrationSteps: MigrationStep[] = [
   {
     version: 1,
@@ -433,6 +484,16 @@ const migrationSteps: MigrationStep[] = [
     version: 9,
     label: 'profile-settings-suggestion-count',
     run: ensureSuggestionCountSetting,
+  },
+  {
+    version: 10,
+    label: 'profile-settings-board-layout',
+    run: ensureBoardLayoutSettings,
+  },
+  {
+    version: 11,
+    label: 'profile-settings-category-pages',
+    run: ensureCategoryPageSetting,
   },
 ];
 

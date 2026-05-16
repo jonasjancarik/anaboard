@@ -339,7 +339,10 @@ class SyncService {
         Object.prototype.hasOwnProperty.call(remotePayload, 'backup_pin_enabled') ||
         Object.prototype.hasOwnProperty.call(remotePayload, 'show_labels') ||
         Object.prototype.hasOwnProperty.call(remotePayload, 'phrase_bar_enabled') ||
-        Object.prototype.hasOwnProperty.call(remotePayload, 'suggestion_count')
+        Object.prototype.hasOwnProperty.call(remotePayload, 'suggestion_count') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'board_layout_mode') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'category_order') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'categories_start_new_page')
       )
     ) {
       const fallbackPayload = { ...remotePayload };
@@ -347,6 +350,9 @@ class SyncService {
       delete fallbackPayload.show_labels;
       delete fallbackPayload.phrase_bar_enabled;
       delete fallbackPayload.suggestion_count;
+      delete fallbackPayload.board_layout_mode;
+      delete fallbackPayload.category_order;
+      delete fallbackPayload.categories_start_new_page;
       const fallbackResult = await supabaseClient
         .from(event.entityType)
         .upsert(fallbackPayload, { onConflict: primaryKey });
@@ -461,6 +467,9 @@ class SyncService {
       show_labels: Boolean(payload.show_labels),
       phrase_bar_enabled: Boolean(payload.phrase_bar_enabled),
       suggestion_count: payload.suggestion_count,
+      board_layout_mode: payload.board_layout_mode ?? 'manual',
+      category_order: payload.category_order ?? '["needs","feelings","social","food"]',
+      categories_start_new_page: Boolean(payload.categories_start_new_page ?? true),
       updated_at: payload.updated_at,
       revision: payload.revision,
     };

@@ -198,6 +198,26 @@ export const styles = StyleSheet.create({
     gap: GRID_GAP,
     position: 'relative',
   },
+  categoryPageHeader: {
+    height: 24,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  categoryPageHeaderSwatch: {
+    width: 16,
+    height: 16,
+    borderRadius: 5,
+    borderWidth: 1,
+  },
+  categoryPageHeaderText: {
+    color: APP_THEME.text,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+  },
   pageControls: {
     flexDirection: 'row',
     justifyContent: 'center',

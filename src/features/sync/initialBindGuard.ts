@@ -48,6 +48,9 @@ type SettingsRow = {
   show_labels: number;
   phrase_bar_enabled: number;
   suggestion_count: number;
+  board_layout_mode: string;
+  category_order: string;
+  categories_start_new_page: number;
 };
 
 const countRows = async (tableName: string): Promise<number> => {
@@ -142,7 +145,10 @@ const matchesDefaultSettings = async (): Promise<boolean> => {
         high_contrast,
         show_labels,
         phrase_bar_enabled,
-        suggestion_count
+        suggestion_count,
+        board_layout_mode,
+        category_order,
+        categories_start_new_page
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
@@ -168,7 +174,10 @@ const matchesDefaultSettings = async (): Promise<boolean> => {
     settings.high_contrast === (expected.highContrast ? 1 : 0) &&
     settings.show_labels === (expected.showLabels ? 1 : 0) &&
     settings.phrase_bar_enabled === (expected.phraseBarEnabled ? 1 : 0) &&
-    settings.suggestion_count === expected.suggestionCount
+    settings.suggestion_count === expected.suggestionCount &&
+    settings.board_layout_mode === expected.boardLayoutMode &&
+    settings.category_order === JSON.stringify(expected.categoryOrder) &&
+    settings.categories_start_new_page === (expected.categoriesStartNewPage ? 1 : 0)
   );
 };
 

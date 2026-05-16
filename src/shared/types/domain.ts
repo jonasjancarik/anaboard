@@ -1,5 +1,9 @@
 export type Category = 'needs' | 'feelings' | 'social' | 'food';
 
+export type BoardLayoutMode =
+  | 'manual'
+  | 'category';
+
 export type SpeechMode =
   | 'tts'
   | 'recording_only';
@@ -94,6 +98,9 @@ export interface ProfileSettings {
   showLabels: boolean;
   phraseBarEnabled: boolean;
   suggestionCount: number;
+  boardLayoutMode: BoardLayoutMode;
+  categoryOrder: Category[];
+  categoriesStartNewPage: boolean;
   updatedAt: string;
   revision: number;
 }

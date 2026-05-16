@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../../auth/authService';
 import { speechEngine } from '../../speech/speechEngine';
 import { syncService } from '../../sync/syncService';
+import { CategoryOrderControl } from '../components/CategoryOrderControl';
 import { DiagnosticsSettingsSection } from '../components/DiagnosticsSettingsSection';
 import { SettingChoiceStepper } from '../components/SettingChoiceStepper';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -12,6 +13,10 @@ import { SettingRowButton } from '../components/SettingRowButton';
 import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
 import { SettingToggleRow } from '../components/SettingToggleRow';
 import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
+import {
+  BOARD_LAYOUT_MODE_LABELS,
+  DEFAULT_CATEGORY_ORDER,
+} from '../../../shared/constants/defaults';
 import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { appHaptics } from '../../../shared/feedback/haptics';
@@ -21,6 +26,7 @@ import {
   getWebPersistenceSmokeSummary,
   type WebPersistenceSmokeSummary,
 } from '../../../shared/storage/webPersistenceSmoke';
+import type { BoardLayoutMode, Category } from '../../../shared/types/domain';
 import type { SyncIssueCode } from '../../sync/types';
 import { useAppStore } from '../../../store/useAppStore';
 
@@ -53,6 +59,19 @@ const SUGGESTION_COUNT_OPTIONS = [
   { value: '3', label: '3 tipy', detail: 'Vyvážené.' },
   { value: '4', label: '4 tipy', detail: 'Širší výběr.' },
   { value: '5', label: '5 tipů', detail: 'Nejvíc možností.' },
+] as const;
+
+const BOARD_LAYOUT_OPTIONS = [
+  {
+    value: 'manual',
+    label: BOARD_LAYOUT_MODE_LABELS.manual,
+    detail: 'Dlaždice zůstanou tam, kam je přesuneš.',
+  },
+  {
+    value: 'category',
+    label: BOARD_LAYOUT_MODE_LABELS.category,
+    detail: 'Kategorie za sebou, uvnitř abecedně.',
+  },
 ] as const;
 
 const VOICE_PREVIEW_TEXT = 'Tohle je ukázka hlasu.';
@@ -113,6 +132,7 @@ export const SettingsScreen = ({
   const lastSuccessfulSyncAt = useAppStore((state) => state.lastSuccessfulSyncAt);
   const lastSyncPullAt = useAppStore((state) => state.lastSyncPullAt);
   const syncLastIssue = useAppStore((state) => state.syncLastIssue);
+  const setBoardPageIndex = useAppStore((state) => state.setBoardPageIndex);
   const { voiceOptions, isVoiceOptionsLoading } = useSpeechVoiceOptions();
 
   const [ttsRate, setTtsRate] = useState(0.86);
@@ -121,6 +141,9 @@ export const SettingsScreen = ({
   const [showLabels, setShowLabels] = useState(false);
   const [phraseBarEnabled, setPhraseBarEnabled] = useState(true);
   const [suggestionCount, setSuggestionCount] = useState('3');
+  const [boardLayoutMode, setBoardLayoutMode] = useState<BoardLayoutMode>('manual');
+  const [categoryOrder, setCategoryOrder] = useState<Category[]>([...DEFAULT_CATEGORY_ORDER]);
+  const [categoriesStartNewPage, setCategoriesStartNewPage] = useState(true);
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
   const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
@@ -141,6 +164,9 @@ export const SettingsScreen = ({
     setShowLabels(settings.showLabels);
     setPhraseBarEnabled(settings.phraseBarEnabled);
     setSuggestionCount(String(settings.suggestionCount));
+    setBoardLayoutMode(settings.boardLayoutMode);
+    setCategoryOrder(settings.categoryOrder);
+    setCategoriesStartNewPage(settings.categoriesStartNewPage);
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
     setSelectedVoiceValue(settings.preferredVoice ?? DEFAULT_VOICE_VALUE);
@@ -542,6 +568,57 @@ export const SettingsScreen = ({
                 );
               }}
             />
+            <View style={styles.divider} />
+            <SettingChoiceStepper
+              title="Řazení dlaždic"
+              value={boardLayoutMode}
+              options={[...BOARD_LAYOUT_OPTIONS]}
+              onChange={(nextValue) => {
+                const nextMode = nextValue as BoardLayoutMode;
+                void updateSetting(
+                  boardLayoutMode,
+                  nextMode,
+                  setBoardLayoutMode,
+                  { boardLayoutMode: nextMode },
+                  'Řazení dlaždic nešlo uložit',
+                  () => setBoardPageIndex(0)
+                );
+              }}
+            />
+            {boardLayoutMode === 'category' ? (
+              <>
+                <View style={styles.divider} />
+                <SettingToggleRow
+                  title="Kategorie na nové stránce"
+                  detail="Každá kategorie začne zvlášť a nahoře ukáže název."
+                  value={categoriesStartNewPage}
+                  onValueChange={(nextValue) => {
+                    void updateSetting(
+                      categoriesStartNewPage,
+                      nextValue,
+                      setCategoriesStartNewPage,
+                      { categoriesStartNewPage: nextValue },
+                      'Stránky kategorií nešly uložit',
+                      () => setBoardPageIndex(0)
+                    );
+                  }}
+                />
+                <View style={styles.divider} />
+                <CategoryOrderControl
+                  value={categoryOrder}
+                  onChange={(nextOrder) => {
+                    void updateSetting(
+                      categoryOrder,
+                      nextOrder,
+                      setCategoryOrder,
+                      { categoryOrder: nextOrder },
+                      'Pořadí kategorií nešlo uložit',
+                      () => setBoardPageIndex(0)
+                    );
+                  }}
+                />
+              </>
+            ) : null}
             <View style={styles.divider} />
             <SettingToggleRow
               title="Rychlé věty a tipy"

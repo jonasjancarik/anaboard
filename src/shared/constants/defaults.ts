@@ -1,4 +1,5 @@
 import type {
+  BoardLayoutMode,
   Category,
   ProfileSettings,
   SpeechMode,
@@ -7,6 +8,9 @@ import type {
 
 export const DEFAULT_PROFILE_ID = "default-profile";
 export const DEFAULT_BOARD_ID = "default-board";
+export const DEFAULT_BOARD_LAYOUT_MODE: BoardLayoutMode = "manual";
+export const DEFAULT_CATEGORY_ORDER: Category[] = ["needs", "feelings", "social", "food"];
+export const DEFAULT_CATEGORIES_START_NEW_PAGE = true;
 
 const DEFAULT_TILE_ROWS: Array<{
   emoji: string;
@@ -81,6 +85,9 @@ export const DEFAULT_PROFILE_SETTINGS = (
   showLabels: true,
   phraseBarEnabled: true,
   suggestionCount: 3,
+  boardLayoutMode: DEFAULT_BOARD_LAYOUT_MODE,
+  categoryOrder: [...DEFAULT_CATEGORY_ORDER],
+  categoriesStartNewPage: DEFAULT_CATEGORIES_START_NEW_PAGE,
   updatedAt,
   revision: 1,
 });
@@ -100,6 +107,11 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   feelings: "Pocity",
   social: "Sociální",
   food: "Jídlo",
+};
+
+export const BOARD_LAYOUT_MODE_LABELS: Record<BoardLayoutMode, string> = {
+  manual: "Vlastní pořadí",
+  category: "Podle kategorií",
 };
 
 export const SPEECH_MODE_LABELS: Record<SpeechMode, string> = {
