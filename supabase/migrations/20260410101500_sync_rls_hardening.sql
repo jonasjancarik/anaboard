@@ -100,7 +100,7 @@ using (
     select 1
     from profiles p
     join caregivers c on c.family_id = p.family_id
-    where p.id = profile_settings.profile_id and c.id = auth.uid()
+    where p.id::text = profile_settings.profile_id and c.id = auth.uid()
   )
 )
 with check (
@@ -108,7 +108,7 @@ with check (
     select 1
     from profiles p
     join caregivers c on c.family_id = p.family_id
-    where p.id = profile_settings.profile_id and c.id = auth.uid()
+    where p.id::text = profile_settings.profile_id and c.id = auth.uid()
   )
 );
 
@@ -120,7 +120,7 @@ using (
     select 1
     from profiles p
     join caregivers c on c.family_id = p.family_id
-    where p.id = phrase_events.profile_id and c.id = auth.uid()
+    where p.id::text = phrase_events.profile_id and c.id = auth.uid()
   )
 )
 with check (
@@ -128,6 +128,6 @@ with check (
     select 1
     from profiles p
     join caregivers c on c.family_id = p.family_id
-    where p.id = phrase_events.profile_id and c.id = auth.uid()
+    where p.id::text = phrase_events.profile_id and c.id = auth.uid()
   )
 );

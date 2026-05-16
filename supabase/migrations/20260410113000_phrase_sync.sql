@@ -23,7 +23,7 @@ using (
     select 1
     from profiles p
     join caregivers c on c.family_id = p.family_id
-    where p.id = saved_phrases.profile_id and c.id = auth.uid()
+    where p.id::text = saved_phrases.profile_id and c.id = auth.uid()
   )
 )
 with check (
@@ -31,6 +31,6 @@ with check (
     select 1
     from profiles p
     join caregivers c on c.family_id = p.family_id
-    where p.id = saved_phrases.profile_id and c.id = auth.uid()
+    where p.id::text = saved_phrases.profile_id and c.id = auth.uid()
   )
 );
