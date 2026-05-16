@@ -1,0 +1,127 @@
+name: Release Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to publish, for example v1.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-android-apk-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build APK and attach release asset
+    runs-on: ubuntu-latest
+    env:
+      APK_DIR: release-artifacts
+      CI: true
+      SENTRY_DISABLE_AUTO_UPLOAD: true
+    steps:
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            tag="${{ github.event.release.tag_name }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ -z "${tag}" ]]; then
+            echo "Release tag is required." >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "apk_name=anaboard-${tag}.apk" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release environment
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_URL}" ]]; then
+            echo "Missing EXPO_PUBLIC_SUPABASE_URL in GitHub Actions variables or secrets." >&2
+            exit 1
+          fi
+
+          if [[ -z "${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY}" && -z "${EXPO_PUBLIC_SUPABASE_ANON_KEY}" ]]; then
+            echo "Missing EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY or EXPO_PUBLIC_SUPABASE_ANON_KEY in GitHub Actions variables or secrets." >&2
+            exit 1
+          fi
+
+      - name: Build release APK
+        run: npm run android:apk
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN || secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS: ${{ vars.EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS || secrets.EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS || '0' }}
+          EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES: ${{ vars.EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES || secrets.EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES || '0' }}
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          mkdir -p "${APK_DIR}"
+          cp android/app/build/outputs/apk/release/app-release.apk "${APK_DIR}/${{ steps.release.outputs.apk_name }}"
+          ls -lh "${APK_DIR}/${{ steps.release.outputs.apk_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ env.APK_DIR }}/${{ steps.release.outputs.apk_name }}
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          APK: ${{ env.APK_DIR }}/${{ steps.release.outputs.apk_name }}
+        shell: bash
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${APK}" --clobber
+          else
+            gh release create "${TAG}" "${APK}" --title "${TAG}" --notes "Android APK build for ${TAG}." --verify-tag
+          fi

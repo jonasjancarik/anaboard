@@ -65,6 +65,28 @@ Tester APK via EAS Build:
 npx eas-cli@latest build -p android --profile preview
 ```
 
+GitHub Release APK:
+
+- push a tag like `v1.0.0`
+- or publish a GitHub Release for an existing tag
+- GitHub Actions builds the local release APK
+- the workflow creates or updates the matching GitHub Release and uploads `anaboard-v1.0.0.apk`
+- manual rerun: Actions -> Release Android APK -> enter an existing tag
+- this is a tester APK; use the production EAS build for Google Play
+
+Required GitHub Actions variables or secrets:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+
+Optional GitHub Actions variables or secrets:
+
+- `EXPO_PUBLIC_SENTRY_DSN`
+- `EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS`
+- `EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES`
+
+These `EXPO_PUBLIC_*` values are embedded in the APK. Do not add server-only secrets such as Supabase service-role keys or OpenAI API keys to the app build.
+
 Google Play bundle:
 
 ```bash
