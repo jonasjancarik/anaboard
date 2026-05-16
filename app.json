@@ -40,6 +40,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@sentry/react-native",
       "expo-sqlite",
       "expo-asset",
       "expo-audio",

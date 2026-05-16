@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../../auth/authService';
 import { speechEngine } from '../../speech/speechEngine';
 import { syncService } from '../../sync/syncService';
+import { DiagnosticsSettingsSection } from '../components/DiagnosticsSettingsSection';
 import { SettingChoiceStepper } from '../components/SettingChoiceStepper';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SettingRowButton } from '../components/SettingRowButton';
@@ -97,6 +98,9 @@ export const SettingsScreen = ({
   onOpenAuth,
 }: SettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
+  const board = useAppStore((state) => state.board);
+  const tiles = useAppStore((state) => state.tiles);
+  const clipsById = useAppStore((state) => state.clipsById);
   const authStatus = useAppStore((state) => state.authStatus);
   const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const remoteContext = useAppStore((state) => state.remoteContext);
@@ -632,6 +636,24 @@ export const SettingsScreen = ({
             )}
           </View>
         </View>
+        <DiagnosticsSettingsSection
+          diagnosticsInput={{
+            authStatus,
+            authIsAnonymous,
+            syncStatus,
+            pendingSyncEvents,
+            syncErrorEvents,
+            lastSuccessfulSyncAt,
+            lastSyncPullAt,
+            syncLastIssue,
+            board,
+            tiles,
+            clipsById,
+            settings,
+            webPersistenceSummary,
+          }}
+          onMessage={setMessage}
+        />
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Správa tabule</Text>
           <View style={styles.cardStack}>

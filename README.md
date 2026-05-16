@@ -44,7 +44,8 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
   - optional email magic-link sign in
   - first-run family + child profile bootstrap
   - persisted session via AsyncStorage
-- Telemetry abstraction with console logging
+- Privacy-safe telemetry abstraction with local diagnostics buffer
+- Opt-in Sentry error reporting plus caregiver diagnostics email/share action
 
 ## Run
 
@@ -109,6 +110,8 @@ Env vars:
 - `EXPO_PUBLIC_AI_AUTOCOMPLETE_RERANK`
 - `EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES`
 
+`EXPO_PUBLIC_SENTRY_DSN` enables the Settings toggle for remote error reporting. The toggle is off by default and stored only on the current device.
+
 For magic-link auth:
 
 - add `anaboard://**` to Supabase Auth redirect URLs
@@ -170,6 +173,7 @@ Caregiver emails keep the original `email` for UI/outgoing auth, with generated 
 - Tile labels are shown by default for easier symbol learning and partner interpretation.
 - Saved phrases and recent phrase history sync through Supabase when cloud sync is enabled.
 - Caregiver settings act as the central hub for archive, reset-to-defaults, appearance, speech, PIN, and account actions.
+- Diagnostics export sends sanitized JSON only: counts/statuses/settings plus recent local telemetry, without tile labels, phrases, emails, media paths, or auth IDs.
 - On physical iPhone/iPad devices, Expo TTS can still stay silent while the device is in silent mode.
 - App currently keeps web support for preview/testing.
 - Supabase sync requires schema setup and auth membership alignment for RLS policies.

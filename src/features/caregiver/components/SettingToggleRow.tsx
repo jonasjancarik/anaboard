@@ -8,6 +8,7 @@ type SettingToggleRowProps = {
   detail?: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 };
 
 export const SettingToggleRow = ({
@@ -15,9 +16,10 @@ export const SettingToggleRow = ({
   detail,
   value,
   onValueChange,
+  disabled = false,
 }: SettingToggleRowProps) => {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, disabled && styles.rowDisabled]}>
       <View style={styles.copyWrap}>
         <Text style={styles.title}>{title}</Text>
         {detail ? <Text style={styles.detail}>{detail}</Text> : null}
@@ -25,6 +27,7 @@ export const SettingToggleRow = ({
       <View style={styles.switchWrap}>
         <Switch
           value={value}
+          disabled={disabled}
           onValueChange={(nextValue) => {
             void appHaptics.toggle(nextValue);
             onValueChange(nextValue);
@@ -48,6 +51,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 14,
+  },
+  rowDisabled: {
+    opacity: 0.55,
   },
   copyWrap: {
     flex: 1,

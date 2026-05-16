@@ -22,7 +22,8 @@ Implemented:
 - Zustand app state with board/speech/session/sync slices.
 - Local SQLite schema + repositories.
 - App bootstrap with loading/auth/sync wiring.
-- Telemetry abstraction + optional Sentry init.
+- Privacy-safe telemetry abstraction with local diagnostics buffer.
+- Opt-in Sentry error reporting and caregiver diagnostics share/email action.
 
 ### M1 Speech Engine + Recording (Weeks 3-6)
 Status: PARTIAL (core shipped)
@@ -88,11 +89,14 @@ Remaining:
 - Guided Access/screen pinning onboarding screen.
 
 ### M5 Pilot Hardening (Weeks 19-22)
-Status: NOT STARTED
+Status: PARTIAL
+
+Implemented:
+- In-app diagnostics export via native share / web mail or JSON download.
+- Device-local opt-in for Sentry error reporting.
 
 Planned:
-- In-app diagnostics export + non-PII bug report flow.
-- Reliability dashboards (crash-free sessions, speech failure rate, sync failure rate).
+- Reliability dashboards (speech failure rate, sync failure rate; crash-free sessions after session telemetry is enabled).
 - Offline/low-battery/interruption test matrix.
 - Pilot feedback loop and weekly defect triage cadence.
 
@@ -126,7 +130,7 @@ Planned:
 
 ### Sprint C
 1. Pilot ops instrumentation + dashboard setup.
-2. Diagnostics export and bug report flow.
+2. Sentry source map upload setup (`SENTRY_AUTH_TOKEN`, org, project).
 3. Beta readiness gates.
 
 ## Release Gates (must pass)

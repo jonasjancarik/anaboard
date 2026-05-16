@@ -57,7 +57,7 @@ export const AppRoot = () => {
     let isMounted = true;
 
     const bootstrap = async () => {
-      initTelemetry();
+      await initTelemetry();
 
       if (isWebPlatform) {
         const support = await getWebStorageSupport();

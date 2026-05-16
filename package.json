@@ -9,8 +9,9 @@
     "android:prebuild": "bash ./scripts/android-local-build.sh prebuild",
     "android:apk": "bash ./scripts/android-local-build.sh apk",
     "admin:ai-trial": "node ./scripts/admin-ai-trial.mjs",
-    "check": "npm run typecheck && npm run migrations:test && npm run email:test && npm run functions:check",
+    "check": "npm run typecheck && npm run migrations:test && npm run email:test && npm run telemetry:test && npm run functions:check",
     "email:test": "node --experimental-strip-types ./scripts/test-email-normalization.mjs",
+    "telemetry:test": "node --experimental-strip-types ./scripts/test-telemetry-privacy.mjs",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@sentry/react-native": "~7.2.0",
     "@supabase/supabase-js": "^2.97.0",
     "expo": "~54.0.34",
     "expo-application": "~7.0.8",
