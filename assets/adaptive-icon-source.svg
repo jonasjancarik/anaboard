@@ -1,0 +1,61 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="boardShadow" x="112" y="122" width="800" height="810" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#1F1A14" flood-opacity="0.14"/>
+    </filter>
+    <filter id="tileShadow" x="-12%" y="-10%" width="124%" height="126%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#1F1A14" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="coral" x1="258" y1="250" x2="406" y2="398" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E7837B"/>
+      <stop offset="1" stop-color="#D86D78"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="438" y1="250" x2="586" y2="398" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8993E"/>
+      <stop offset="1" stop-color="#C98233"/>
+    </linearGradient>
+    <linearGradient id="sage" x1="618" y1="250" x2="766" y2="398" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#82A481"/>
+      <stop offset="1" stop-color="#6F9873"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="258" y1="430" x2="406" y2="578" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5F8DB9"/>
+      <stop offset="1" stop-color="#4F759A"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="618" y1="430" x2="766" y2="578" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B91CF"/>
+      <stop offset="1" stop-color="#727ABB"/>
+    </linearGradient>
+    <linearGradient id="green" x1="258" y1="610" x2="406" y2="758" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7EA07F"/>
+      <stop offset="1" stop-color="#65906B"/>
+    </linearGradient>
+    <linearGradient id="indigo" x1="438" y1="610" x2="586" y2="758" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7E86C3"/>
+      <stop offset="1" stop-color="#6871AD"/>
+    </linearGradient>
+    <linearGradient id="peach" x1="618" y1="610" x2="766" y2="758" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1A077"/>
+      <stop offset="1" stop-color="#DD805E"/>
+    </linearGradient>
+  </defs>
+  <rect x="172" y="172" width="680" height="680" rx="152" fill="#FFFDF8" filter="url(#boardShadow)"/>
+  <rect x="192" y="192" width="640" height="640" rx="134" stroke="#FFFFFF" stroke-width="7" stroke-opacity="0.7"/>
+  <g>
+    <rect x="258" y="250" width="148" height="148" rx="38" fill="#D86D78"/>
+    <rect x="438" y="250" width="148" height="148" rx="38" fill="#C98233"/>
+    <rect x="618" y="250" width="148" height="148" rx="38" fill="#6F9873"/>
+    <rect x="258" y="430" width="148" height="148" rx="38" fill="#4F759A"/>
+    <rect x="618" y="430" width="148" height="148" rx="38" fill="#727ABB"/>
+    <rect x="258" y="610" width="148" height="148" rx="38" fill="#65906B"/>
+    <rect x="438" y="610" width="148" height="148" rx="38" fill="#6871AD"/>
+    <rect x="618" y="610" width="148" height="148" rx="38" fill="#DD805E"/>
+  </g>
+  <g filter="url(#tileShadow)">
+    <path d="M466 430H558C582.301 430 602 449.699 602 474V530C602 554.301 582.301 574 558 574H537L540 604C541.022 614.304 528.843 620.5 521.102 613.634L478.997 574H466C441.699 574 422 554.301 422 530V474C422 449.699 441.699 430 466 430Z" fill="#FFFFFF"/>
+    <path d="M466 430H558C582.301 430 602 449.699 602 474V530C602 554.301 582.301 574 558 574H537L540 604C541.022 614.304 528.843 620.5 521.102 613.634L478.997 574H466C441.699 574 422 554.301 422 530V474C422 449.699 441.699 430 466 430Z" stroke="#D9D0C2" stroke-width="4"/>
+    <circle cx="477" cy="503" r="11" fill="#243248"/>
+    <circle cx="512" cy="503" r="11" fill="#243248"/>
+    <circle cx="547" cy="503" r="11" fill="#243248"/>
+  </g>
+</svg>
