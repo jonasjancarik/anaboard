@@ -296,8 +296,11 @@ try {
   assert.equal(await getDatabaseSchemaVersion(adapter), LATEST_SCHEMA_VERSION);
   assert.equal(hasColumn(database, 'profile_settings', 'show_labels'), true);
   assert.equal(hasColumn(database, 'profile_settings', 'backup_pin_enabled'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'phrase_bar_enabled'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'suggestion_count'), true);
   assert.equal(hasColumn(database, 'tiles', 'visual_type'), true);
   assert.equal(hasColumn(database, 'tile_archive', 'image_remote_path'), true);
+  assert.equal(hasColumn(database, 'saved_phrases', 'tokens_json'), true);
 
   const tile = database
     .prepare('SELECT speech_mode FROM tiles WHERE id = ?')
@@ -316,10 +319,20 @@ try {
   assert.equal(pendingPayload.speech_mode, 'recording_only');
 
   const settingsRow = database
-    .prepare('SELECT show_labels, backup_pin_enabled FROM profile_settings WHERE profile_id = ?')
+    .prepare('SELECT show_labels, backup_pin_enabled, suggestion_count FROM profile_settings WHERE profile_id = ?')
     .get('default-profile');
   assert.equal(settingsRow.show_labels, 0);
   assert.equal(settingsRow.backup_pin_enabled, 0);
+  assert.equal(settingsRow.suggestion_count, 3);
+
+  const phraseEventsIndex = database
+    .prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'index' AND name = 'idx_phrase_events_profile_spoken'
+    `)
+    .get();
+  assert.equal(phraseEventsIndex.name, 'idx_phrase_events_profile_spoken');
 
   await migrateDatabaseSchema(adapter);
   assert.equal(await getDatabaseSchemaVersion(adapter), LATEST_SCHEMA_VERSION);

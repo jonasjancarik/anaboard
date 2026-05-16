@@ -4,15 +4,80 @@ import { AppState, type AppStateStatus } from 'react-native';
 import type { RemoteContext } from '../auth/types';
 import { logError, logEvent } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
-import { getPendingSyncEvents, markSyncEventsError, markSyncEventsSynced } from '../../shared/storage/repositories/syncRepository';
-import type { SyncStatus } from '../../shared/types/domain';
+import {
+  clearUnsyncedSyncEvents,
+  countErroredSyncEvents,
+  getPendingSyncEvents,
+  markSyncEventsError,
+  markSyncEventsSynced,
+  retryErroredSyncEvents,
+} from '../../shared/storage/repositories/syncRepository';
+import type { EntityType, SyncEvent, SyncStatus } from '../../shared/types/domain';
+import {
+  applyRemoteSnapshot,
+  fetchRemoteSnapshot,
+  getLocalEntitySyncPayload,
+  remoteSnapshotHasData,
+} from './remoteSyncRepository';
+import {
+  getBoundSyncProfileId,
+  recordSuccessfulPull,
+  recordSuccessfulSync,
+  setLastSyncIssue,
+  setBoundSyncProfileId,
+} from './syncStateRepository';
+import {
+  uploadAudioClipToSupabase,
+  uploadTileImageToSupabase,
+} from './supabaseMediaSync';
+import { canSafelyDiscardLocalStateForInitialBind, SyncIssueError } from './initialBindGuard';
 
 type SyncCallbacks = {
   onStatusChange?: (status: SyncStatus) => void;
   onPendingCountChange?: (count: number) => void;
+  onDataChanged?: () => void;
 };
 
 const SYNC_INTERVAL_MS = 20_000;
+const EVENT_PRIORITY: Record<EntityType, number> = {
+  boards: 0,
+  profile_settings: 1,
+  tiles: 2,
+  audio_clips: 3,
+  saved_phrases: 4,
+  phrase_events: 5,
+};
+
+const isTileImagePathForRemoteContext = (
+  context: RemoteContext,
+  remotePath: string | null
+): boolean => {
+  if (!remotePath) {
+    return false;
+  }
+
+  const expectedPrefix = `${context.familyId}/${context.profileId}/`;
+  return remotePath.startsWith(expectedPrefix) && !remotePath.includes('/ai-drafts/');
+};
+
+const primaryKeyColumn = (entityType: EntityType): 'id' | 'profile_id' => {
+  return entityType === 'profile_settings' ? 'profile_id' : 'id';
+};
+
+const sortPendingEvents = (events: SyncEvent[]): SyncEvent[] => {
+  return [...events].sort((left, right) => {
+    const priorityDelta = EVENT_PRIORITY[left.entityType] - EVENT_PRIORITY[right.entityType];
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+
+    if (left.createdAt !== right.createdAt) {
+      return left.createdAt.localeCompare(right.createdAt);
+    }
+
+    return left.id - right.id;
+  });
+};
 
 class SyncService {
   private syncTimer: ReturnType<typeof setInterval> | null = null;
@@ -24,6 +89,8 @@ class SyncService {
   private remoteContext: RemoteContext | null = null;
 
   private isAuthenticated = false;
+
+  private isRunning = false;
 
   public setRuntime = (params: {
     remoteContext: RemoteContext | null;
@@ -37,7 +104,7 @@ class SyncService {
     this.callbacks = callbacks;
     this.stop();
 
-    this.runOnce();
+    void this.runOnce();
 
     this.syncTimer = setInterval(() => {
       void this.runOnce();
@@ -58,7 +125,17 @@ class SyncService {
     }
   };
 
+  public retryFailed = async (): Promise<void> => {
+    await retryErroredSyncEvents();
+    this.callbacks.onPendingCountChange?.(0);
+    await this.runOnce();
+  };
+
   public runOnce = async (): Promise<void> => {
+    if (this.isRunning) {
+      return;
+    }
+
     if (!hasSupabaseConfig || !supabaseClient) {
       this.callbacks.onStatusChange?.('disabled');
       return;
@@ -69,59 +146,146 @@ class SyncService {
       return;
     }
 
-    const networkState = await Network.getNetworkStateAsync();
-    if (!networkState.isConnected || !networkState.isInternetReachable) {
-      this.callbacks.onStatusChange?.('offline');
-      return;
-    }
+    this.isRunning = true;
 
-    this.callbacks.onStatusChange?.('syncing');
+    try {
+      const networkState = await Network.getNetworkStateAsync();
+      if (!networkState.isConnected || !networkState.isInternetReachable) {
+        this.callbacks.onStatusChange?.('offline');
+        return;
+      }
 
-    const pending = await getPendingSyncEvents(50);
-    this.callbacks.onPendingCountChange?.(pending.length);
+      this.callbacks.onStatusChange?.('syncing');
 
-    if (pending.length === 0) {
+      const boundProfileId = await getBoundSyncProfileId();
+      const isBoundToCurrentProfile = boundProfileId === this.remoteContext.profileId;
+
+      if (!isBoundToCurrentProfile) {
+        if (boundProfileId && boundProfileId !== this.remoteContext.profileId) {
+          throw new SyncIssueError(
+            'profile_switch_requires_review',
+            'This device was previously linked to a different cloud profile.'
+          );
+        }
+
+        const snapshot = await fetchRemoteSnapshot(this.remoteContext);
+        if (remoteSnapshotHasData(snapshot)) {
+          const canDiscardLocalState = await canSafelyDiscardLocalStateForInitialBind();
+          if (!canDiscardLocalState) {
+            throw new SyncIssueError(
+              'initial_bind_requires_review',
+              'Local-only data exists on this device, so initial cloud bind was blocked.'
+            );
+          }
+
+          const applied = await applyRemoteSnapshot(snapshot);
+          await clearUnsyncedSyncEvents();
+          await recordSuccessfulPull();
+          await setBoundSyncProfileId(this.remoteContext.profileId);
+          await setLastSyncIssue(null);
+          await recordSuccessfulSync();
+          this.callbacks.onPendingCountChange?.(0);
+          if (applied) {
+            this.callbacks.onDataChanged?.();
+          }
+          this.callbacks.onStatusChange?.('idle');
+          return;
+        }
+      }
+
+      const pending = sortPendingEvents(await getPendingSyncEvents(100));
+      this.callbacks.onPendingCountChange?.(pending.length);
+
+      if (pending.length > 0) {
+        const pushResult = await this.pushPendingEvents(pending);
+        if (pushResult.failedEventIds.length > 0) {
+          await markSyncEventsError(pushResult.failedEventIds);
+          this.callbacks.onPendingCountChange?.(0);
+          this.callbacks.onStatusChange?.('error');
+          return;
+        }
+
+        if (pushResult.successfulEventIds.length > 0) {
+          await markSyncEventsSynced(pushResult.successfulEventIds);
+          logEvent('sync_events_synced', {
+            count: pushResult.successfulEventIds.length,
+          });
+        }
+      }
+
+      const erroredEvents = await countErroredSyncEvents();
+      if (erroredEvents > 0) {
+        this.callbacks.onPendingCountChange?.(0);
+        this.callbacks.onStatusChange?.('error');
+        return;
+      }
+
+      await this.pullRemoteSnapshot();
+      await setBoundSyncProfileId(this.remoteContext.profileId);
+      await setLastSyncIssue(null);
+      await recordSuccessfulSync();
+      this.callbacks.onPendingCountChange?.(0);
       this.callbacks.onStatusChange?.('idle');
-      return;
+    } catch (error) {
+      if (error instanceof SyncIssueError) {
+        await setLastSyncIssue(error.issueCode);
+        logEvent('sync_blocked', {
+          issue_code: error.issueCode,
+        });
+        this.callbacks.onPendingCountChange?.(0);
+        this.callbacks.onStatusChange?.('error');
+        return;
+      }
+
+      logError('sync_run_failed', error, {
+        profile_id: this.remoteContext.profileId,
+      });
+      this.callbacks.onPendingCountChange?.(0);
+      this.callbacks.onStatusChange?.('error');
+    } finally {
+      this.isRunning = false;
+    }
+  };
+
+  private handleAppStateChange = (nextState: AppStateStatus): void => {
+    if (nextState === 'active') {
+      void this.runOnce();
+    }
+  };
+
+  private pullRemoteSnapshot = async (
+    options: { clearQueueBeforeApply?: boolean } = {}
+  ): Promise<boolean> => {
+    if (!this.remoteContext) {
+      return false;
     }
 
+    const snapshot = await fetchRemoteSnapshot(this.remoteContext);
+    if (!remoteSnapshotHasData(snapshot)) {
+      return false;
+    }
+
+    const applied = await applyRemoteSnapshot(snapshot);
+    if (options.clearQueueBeforeApply) {
+      await clearUnsyncedSyncEvents();
+    }
+    await recordSuccessfulPull();
+    if (applied) {
+      this.callbacks.onDataChanged?.();
+    }
+
+    return applied;
+  };
+
+  private pushPendingEvents = async (
+    pending: SyncEvent[]
+  ): Promise<{ successfulEventIds: number[]; failedEventIds: number[] }> => {
     const successfulEventIds: number[] = [];
     const failedEventIds: number[] = [];
 
     for (const event of pending) {
       try {
-        const payload = JSON.parse(event.payload) as Record<string, unknown>;
-        const enrichedPayload = this.enrichPayload(event.entityType, payload);
-
-        if (event.operation === 'delete') {
-          const { error } = await supabaseClient
-            .from(event.entityType)
-            .delete()
-            .eq('id', event.entityId);
-
-          if (error) {
-            throw error;
-          }
-        } else {
-          let { error } = await supabaseClient.from(event.entityType).upsert(enrichedPayload);
-          if (
-            error &&
-            event.entityType === 'profile_settings' &&
-            Object.prototype.hasOwnProperty.call(enrichedPayload, 'show_labels')
-          ) {
-            const fallbackPayload = { ...enrichedPayload };
-            delete fallbackPayload.show_labels;
-            const fallbackResult = await supabaseClient
-              .from(event.entityType)
-              .upsert(fallbackPayload);
-            error = fallbackResult.error ?? null;
-          }
-
-          if (error) {
-            throw error;
-          }
-        }
-
+        await this.pushEvent(event);
         successfulEventIds.push(event.id);
       } catch (error) {
         failedEventIds.push(event.id);
@@ -133,30 +297,82 @@ class SyncService {
       }
     }
 
-    if (successfulEventIds.length > 0) {
-      await markSyncEventsSynced(successfulEventIds);
-      logEvent('sync_events_synced', {
-        count: successfulEventIds.length,
-      });
+    return {
+      successfulEventIds,
+      failedEventIds,
+    };
+  };
+
+  private pushEvent = async (event: SyncEvent): Promise<void> => {
+    if (!supabaseClient) {
+      throw new Error('Supabase client missing');
     }
 
-    if (failedEventIds.length > 0) {
-      await markSyncEventsError(failedEventIds);
-      this.callbacks.onStatusChange?.('error');
+    const primaryKey = primaryKeyColumn(event.entityType);
+    if (event.operation === 'delete') {
+      const { error } = await supabaseClient
+        .from(event.entityType)
+        .delete()
+        .eq(primaryKey, event.entityId);
+
+      if (error) {
+        throw error;
+      }
+
       return;
     }
 
-    this.callbacks.onStatusChange?.('idle');
-  };
+    const eventPayload = JSON.parse(event.payload) as Record<string, unknown>;
+    const localPayload = await getLocalEntitySyncPayload(event.entityType, event.entityId);
+    const payload = localPayload ?? eventPayload;
+    const enrichedPayload = this.enrichPayload(event.entityType, payload);
+    const remotePayload = await this.prepareRemotePayload(event.entityType, enrichedPayload);
 
-  private handleAppStateChange = (nextState: AppStateStatus): void => {
-    if (nextState === 'active') {
-      void this.runOnce();
+    let { error } = await supabaseClient
+      .from(event.entityType)
+      .upsert(remotePayload, { onConflict: primaryKey });
+
+    if (
+      error &&
+      event.entityType === 'profile_settings' &&
+      (
+        Object.prototype.hasOwnProperty.call(remotePayload, 'backup_pin_enabled') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'show_labels') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'phrase_bar_enabled') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'suggestion_count')
+      )
+    ) {
+      const fallbackPayload = { ...remotePayload };
+      delete fallbackPayload.backup_pin_enabled;
+      delete fallbackPayload.show_labels;
+      delete fallbackPayload.phrase_bar_enabled;
+      delete fallbackPayload.suggestion_count;
+      const fallbackResult = await supabaseClient
+        .from(event.entityType)
+        .upsert(fallbackPayload, { onConflict: primaryKey });
+      error = fallbackResult.error ?? null;
+    }
+
+    if (
+      error &&
+      event.entityType === 'boards' &&
+      Object.prototype.hasOwnProperty.call(remotePayload, 'is_active')
+    ) {
+      const fallbackPayload = { ...remotePayload };
+      delete fallbackPayload.is_active;
+      const fallbackResult = await supabaseClient
+        .from(event.entityType)
+        .upsert(fallbackPayload, { onConflict: primaryKey });
+      error = fallbackResult.error ?? null;
+    }
+
+    if (error) {
+      throw error;
     }
   };
 
   private enrichPayload = (
-    entityType: string,
+    entityType: EntityType,
     payload: Record<string, unknown>
   ): Record<string, unknown> => {
     if (!this.remoteContext) {
@@ -178,15 +394,152 @@ class SyncService {
       };
     }
 
-    if (entityType === 'phrase_events') {
+    return payload;
+  };
+
+  private prepareRemotePayload = async (
+    entityType: EntityType,
+    payload: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    if (entityType === 'boards') {
       return {
-        ...payload,
-        profile_id: this.remoteContext.profileId,
+        id: payload.id,
+        family_id: payload.family_id,
+        profile_id: payload.profile_id,
+        name: payload.name,
+        locale: payload.locale,
+        columns_count: payload.columns_count,
+        rows_count: payload.rows_count,
+        is_active: Boolean(payload.is_active),
+        updated_at: payload.updated_at,
+        revision: payload.revision,
       };
     }
 
-    return payload;
+    if (entityType === 'tiles') {
+      return await this.prepareTilePayload(payload);
+    }
+
+    if (entityType === 'audio_clips') {
+      return await this.prepareAudioClipPayload(payload);
+    }
+
+    if (entityType === 'saved_phrases') {
+      return {
+        id: payload.id,
+        profile_id: this.remoteContext?.profileId ?? payload.profile_id,
+        phrase_key: payload.phrase_key,
+        label: payload.label,
+        spoken_text: payload.spoken_text,
+        tokens_json: payload.tokens_json,
+        created_at: payload.created_at,
+        updated_at: payload.updated_at,
+        usage_count: payload.usage_count,
+      };
+    }
+
+    if (entityType === 'phrase_events') {
+      return {
+        id: payload.id,
+        profile_id: this.remoteContext?.profileId ?? payload.profile_id,
+        tile_sequence: payload.tile_sequence,
+        spoken_text: payload.spoken_text,
+        mode: payload.mode,
+        spoken_at: payload.spoken_at,
+      };
+    }
+
+    return {
+      profile_id: payload.profile_id,
+      pin_hash: payload.pin_hash,
+      lock_enabled: Boolean(payload.lock_enabled),
+      backup_pin_enabled: Boolean(payload.backup_pin_enabled),
+      tts_rate: payload.tts_rate,
+      tts_pitch: payload.tts_pitch,
+      preferred_voice: payload.preferred_voice ?? null,
+      high_contrast: Boolean(payload.high_contrast),
+      show_labels: Boolean(payload.show_labels),
+      phrase_bar_enabled: Boolean(payload.phrase_bar_enabled),
+      suggestion_count: payload.suggestion_count,
+      updated_at: payload.updated_at,
+      revision: payload.revision,
+    };
   };
+
+  private prepareTilePayload = async (
+    payload: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    const existingRemotePath =
+      typeof payload.image_remote_path === 'string' && payload.image_remote_path.length > 0
+        ? payload.image_remote_path
+        : null;
+    const existingRemotePathMatchesContext =
+      this.remoteContext !== null &&
+      isTileImagePathForRemoteContext(this.remoteContext, existingRemotePath);
+    const nextPayload = {
+      id: payload.id,
+      board_id: payload.board_id,
+      position: payload.position,
+      label_cs: payload.label_cs,
+      emoji: payload.emoji,
+      visual_type: payload.visual_type,
+      image_remote_path:
+        this.remoteContext && !existingRemotePathMatchesContext
+          ? null
+          : existingRemotePath,
+      category: payload.category,
+      speech_mode: payload.speech_mode,
+      audio_clip_id: payload.audio_clip_id ?? null,
+      updated_at: payload.updated_at,
+      revision: payload.revision,
+    };
+
+    if (
+      this.remoteContext &&
+      payload.visual_type === 'image' &&
+      typeof payload.image_local_uri === 'string' &&
+      payload.image_local_uri.length > 0 &&
+      !existingRemotePathMatchesContext
+    ) {
+      nextPayload.image_remote_path = await uploadTileImageToSupabase(
+        this.remoteContext,
+        String(payload.id),
+        payload.image_local_uri
+      );
+    }
+
+    return nextPayload;
+  };
+
+  private prepareAudioClipPayload = async (
+    payload: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    const nextPayload = {
+      id: payload.id,
+      tile_id: payload.tile_id,
+      remote_path: payload.remote_path ?? null,
+      duration_ms: payload.duration_ms,
+      checksum: payload.checksum ?? null,
+      format: payload.format,
+      updated_at: payload.updated_at,
+    };
+
+    if (
+      this.remoteContext &&
+      typeof payload.local_uri === 'string' &&
+      payload.local_uri.length > 0 &&
+      typeof payload.format === 'string'
+    ) {
+      nextPayload.remote_path = await uploadAudioClipToSupabase(
+        this.remoteContext,
+        String(payload.id),
+        payload.local_uri,
+        payload.format
+      );
+    }
+
+    return nextPayload;
+  }
 }
 
 export const syncService = new SyncService();

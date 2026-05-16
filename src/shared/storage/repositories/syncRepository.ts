@@ -103,3 +103,33 @@ export const countPendingSyncEvents = async (): Promise<number> => {
 
   return result?.count ?? 0;
 };
+
+export const countErroredSyncEvents = async (): Promise<number> => {
+  const db = await getDatabase();
+  const result = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM sync_events WHERE status = 'error'"
+  );
+
+  return result?.count ?? 0;
+};
+
+export const retryErroredSyncEvents = async (): Promise<void> => {
+  const db = await getDatabase();
+  await db.runAsync(
+    `
+      UPDATE sync_events
+      SET status = 'pending'
+      WHERE status = 'error'
+    `
+  );
+};
+
+export const clearUnsyncedSyncEvents = async (): Promise<void> => {
+  const db = await getDatabase();
+  await db.runAsync(
+    `
+      DELETE FROM sync_events
+      WHERE status IN ('pending', 'error')
+    `
+  );
+};

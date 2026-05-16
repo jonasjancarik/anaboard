@@ -18,6 +18,8 @@ type SettingsRow = {
   preferred_voice?: string | null;
   high_contrast: number;
   show_labels: number;
+  phrase_bar_enabled: number;
+  suggestion_count: number;
   updated_at: string;
   revision: number;
 };
@@ -32,15 +34,21 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
   preferredVoice: row.preferred_voice ?? undefined,
   highContrast: row.high_contrast === 1,
   showLabels: row.show_labels === 1,
+  phraseBarEnabled: row.phrase_bar_enabled === 1,
+  suggestionCount: row.suggestion_count,
   updatedAt: row.updated_at,
   revision: row.revision,
 });
 
 export const ensureDefaultSettings = async (): Promise<void> => {
+  return ensureDefaultSettingsForProfile(DEFAULT_PROFILE_ID);
+};
+
+export const ensureDefaultSettingsForProfile = async (profileId: string): Promise<void> => {
   const db = await getDatabase();
   const existing = await db.getFirstAsync<{ count: number }>(
     'SELECT COUNT(*) AS count FROM profile_settings WHERE profile_id = ?',
-    DEFAULT_PROFILE_ID
+    profileId
   );
 
   if ((existing?.count ?? 0) > 0) {
@@ -54,10 +62,10 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     `
       INSERT INTO profile_settings (
         profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
-        high_contrast, show_labels, updated_at, revision, dirty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision, dirty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
-    defaults.profileId,
+    profileId,
     defaults.pinHash,
     defaults.lockEnabled ? 1 : 0,
     defaults.backupPinEnabled ? 1 : 0,
@@ -66,12 +74,14 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     defaults.preferredVoice ?? null,
     defaults.highContrast ? 1 : 0,
     defaults.showLabels ? 1 : 0,
+    defaults.phraseBarEnabled ? 1 : 0,
+    defaults.suggestionCount,
     defaults.updatedAt,
     defaults.revision
   );
 
-  await enqueueSyncEvent('profile_settings', defaults.profileId, 'upsert', {
-    profile_id: defaults.profileId,
+  await enqueueSyncEvent('profile_settings', profileId, 'upsert', {
+    profile_id: profileId,
     pin_hash: defaults.pinHash,
     lock_enabled: defaults.lockEnabled ? 1 : 0,
     backup_pin_enabled: defaults.backupPinEnabled ? 1 : 0,
@@ -80,27 +90,29 @@ export const ensureDefaultSettings = async (): Promise<void> => {
     preferred_voice: defaults.preferredVoice ?? null,
     high_contrast: defaults.highContrast ? 1 : 0,
     show_labels: defaults.showLabels ? 1 : 0,
+    phrase_bar_enabled: defaults.phraseBarEnabled ? 1 : 0,
+    suggestion_count: defaults.suggestionCount,
     updated_at: defaults.updatedAt,
     revision: defaults.revision,
   });
 };
 
-export const getProfileSettings = async (): Promise<ProfileSettings> => {
+export const getProfileSettings = async (profileId = DEFAULT_PROFILE_ID): Promise<ProfileSettings> => {
   const db = await getDatabase();
   const row = await db.getFirstAsync<SettingsRow>(
     `
       SELECT profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
-           , show_labels
+           , show_labels, phrase_bar_enabled, suggestion_count
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
     `,
-    DEFAULT_PROFILE_ID
+    profileId
   );
 
   if (!row) {
-    await ensureDefaultSettings();
-    return getProfileSettings();
+    await ensureDefaultSettingsForProfile(profileId);
+    return getProfileSettings(profileId);
   }
 
   return mapRow(row);
@@ -114,11 +126,16 @@ type SettingsUpdate = {
   preferredVoice?: string | null;
   highContrast?: boolean;
   showLabels?: boolean;
+  phraseBarEnabled?: boolean;
+  suggestionCount?: number;
   pinHash?: string;
 };
 
-export const updateProfileSettings = async (update: SettingsUpdate): Promise<void> => {
-  const current = await getProfileSettings();
+export const updateProfileSettings = async (
+  profileId: string,
+  update: SettingsUpdate
+): Promise<void> => {
+  const current = await getProfileSettings(profileId);
   const db = await getDatabase();
   const updatedAt = nowIso();
   const revision = current.revision + 1;
@@ -132,6 +149,8 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
       update.preferredVoice === undefined ? current.preferredVoice ?? null : update.preferredVoice,
     highContrast: update.highContrast ?? current.highContrast,
     showLabels: update.showLabels ?? current.showLabels,
+    phraseBarEnabled: update.phraseBarEnabled ?? current.phraseBarEnabled,
+    suggestionCount: update.suggestionCount ?? current.suggestionCount,
     pinHash: update.pinHash ?? current.pinHash,
   };
 
@@ -147,6 +166,8 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
         preferred_voice = ?,
         high_contrast = ?,
         show_labels = ?,
+        phrase_bar_enabled = ?,
+        suggestion_count = ?,
         updated_at = ?,
         revision = ?,
         dirty = 1
@@ -160,6 +181,8 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     next.preferredVoice,
     next.highContrast ? 1 : 0,
     next.showLabels ? 1 : 0,
+    next.phraseBarEnabled ? 1 : 0,
+    next.suggestionCount,
     updatedAt,
     revision,
     current.profileId
@@ -175,6 +198,8 @@ export const updateProfileSettings = async (update: SettingsUpdate): Promise<voi
     preferred_voice: next.preferredVoice,
     high_contrast: next.highContrast ? 1 : 0,
     show_labels: next.showLabels ? 1 : 0,
+    phrase_bar_enabled: next.phraseBarEnabled ? 1 : 0,
+    suggestion_count: next.suggestionCount,
     updated_at: updatedAt,
     revision,
   });

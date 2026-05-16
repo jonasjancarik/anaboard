@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 
 import { AppNavigator } from './AppNavigator';
 import { UnsupportedBrowserScreen } from './UnsupportedBrowserScreen';
@@ -43,16 +44,20 @@ export const AppRoot = () => {
   const isBoardLoading = useAppStore((state) => state.isBoardLoading);
   const isSettingsLoading = useAppStore((state) => state.isSettingsLoading);
   const refreshPendingSyncEvents = useAppStore((state) => state.refreshPendingSyncEvents);
+  const refreshBoard = useAppStore((state) => state.refreshBoard);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const refreshPhrases = useAppStore((state) => state.refreshPhrases);
   const setSyncStatus = useAppStore((state) => state.setSyncStatus);
   const settings = useAppStore((state) => state.settings);
 
   const canBootApp = webSupportState.status === 'supported';
+  const authCallbackUrl = Linking.useURL();
 
   useEffect(() => {
     let isMounted = true;
 
     const bootstrap = async () => {
-      initTelemetry();
+      await initTelemetry();
 
       if (isWebPlatform) {
         const support = await getWebStorageSupport();
@@ -104,6 +109,7 @@ export const AppRoot = () => {
     const applyAuthState = async (
       params: {
         status: AuthStatus;
+        isAnonymous: boolean;
         userId: string | null;
         email: string | null;
       },
@@ -160,6 +166,7 @@ export const AppRoot = () => {
       if (!authService.isEnabled()) {
         await applyAuthState({
           status: 'disabled',
+          isAnonymous: false,
           userId: null,
           email: null,
         });
@@ -172,22 +179,47 @@ export const AppRoot = () => {
         const user = session?.user ?? null;
 
         if (!user) {
-          await applyAuthState({
-            status: 'signed_out',
-            userId: null,
-            email: null,
-          });
+          const anonymousSession = await authService.signInAnonymously();
+          const anonymousUser = anonymousSession?.user ?? null;
+
+          if (!anonymousUser) {
+            await applyAuthState({
+              status: 'signed_out',
+              isAnonymous: false,
+              userId: null,
+              email: null,
+            });
+            return;
+          }
+
+          await applyAuthState(
+            {
+              status: 'signed_in',
+              isAnonymous: authService.isAnonymousUser(anonymousUser),
+              userId: anonymousUser.id,
+              email: anonymousUser.email ?? null,
+            },
+            { resolveBootstrap: true }
+          );
           return;
         }
 
         await applyAuthState(
           {
             status: 'signed_in',
+            isAnonymous: authService.isAnonymousUser(user),
             userId: user.id,
             email: user.email ?? null,
           },
           { resolveBootstrap: true }
         );
+      } catch {
+        await applyAuthState({
+          status: 'signed_out',
+          isAnonymous: false,
+          userId: null,
+          email: null,
+        });
       } finally {
         if (isMounted) {
           setAuthLoading(false);
@@ -209,6 +241,7 @@ export const AppRoot = () => {
           if (!user) {
             await applyAuthState({
               status: 'signed_out',
+              isAnonymous: false,
               userId: null,
               email: null,
             });
@@ -218,6 +251,7 @@ export const AppRoot = () => {
           await applyAuthState(
             {
               status: 'signed_in',
+              isAnonymous: authService.isAnonymousUser(user),
               userId: user.id,
               email: user.email ?? null,
             },
@@ -246,7 +280,25 @@ export const AppRoot = () => {
       isAuthenticated: authStatus === 'signed_in' && !requiresBootstrap,
       remoteContext,
     });
+
+    if (authStatus === 'signed_in' && !requiresBootstrap && remoteContext) {
+      void syncService.runOnce();
+    }
   }, [authStatus, canBootApp, remoteContext, requiresBootstrap]);
+
+  useEffect(() => {
+    if (!canBootApp || !authCallbackUrl || !authService.isEnabled()) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        await authService.consumeMagicLinkUrl(authCallbackUrl);
+      } catch {
+        // Auth screen handles the next retry; keep local app usable.
+      }
+    })();
+  }, [authCallbackUrl, canBootApp]);
 
   useEffect(() => {
     if (!canBootApp) {
@@ -258,12 +310,29 @@ export const AppRoot = () => {
       onPendingCountChange: () => {
         void refreshPendingSyncEvents();
       },
+      onDataChanged: () => {
+        void (async () => {
+          await Promise.all([
+            refreshBoard(),
+            refreshSettings(),
+            refreshPhrases(),
+            refreshPendingSyncEvents(),
+          ]);
+        })();
+      },
     });
 
     return () => {
       syncService.stop();
     };
-  }, [canBootApp, refreshPendingSyncEvents, setSyncStatus]);
+  }, [
+    canBootApp,
+    refreshBoard,
+    refreshPendingSyncEvents,
+    refreshPhrases,
+    refreshSettings,
+    setSyncStatus,
+  ]);
 
   useEffect(() => {
     if (!canBootApp || !settings) {
@@ -288,7 +357,7 @@ export const AppRoot = () => {
   const isLoading =
     webSupportState.status === 'checking' || isAuthLoading || isBoardLoading || isSettingsLoading;
   const loaderText =
-    webSupportState.status === 'checking' ? 'Ověřuji prohlížeč...' : 'Načítám AnaBoard...';
+    webSupportState.status === 'checking' ? 'Ověřuji prohlížeč...' : 'Načítám ÁňaBoard...';
 
   return (
     <SafeAreaProvider>

@@ -99,6 +99,10 @@ export const styles = StyleSheet.create({
     backgroundColor: APP_THEME.successSoft,
     borderColor: APP_THEME.success,
   },
+  savePhraseButton: {
+    backgroundColor: APP_THEME.warningSoft,
+    borderColor: APP_THEME.warning,
+  },
   clearButton: {
     backgroundColor: APP_THEME.dangerSoft,
     borderColor: APP_THEME.danger,
@@ -114,6 +118,9 @@ export const styles = StyleSheet.create({
   },
   speakText: {
     color: APP_THEME.successBorder,
+  },
+  savePhraseText: {
+    color: APP_THEME.warningBorder,
   },
   clearText: {
     color: APP_THEME.dangerBorder,
@@ -141,6 +148,15 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  editorHintSuccess: {
+    paddingHorizontal: LAYOUT_PADDING,
+    paddingBottom: 6,
+    marginTop: 4,
+    textAlign: 'center',
+    color: APP_THEME.successBorder,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   boardArea: {
     flex: 1,
     paddingHorizontal: 0,
@@ -162,6 +178,17 @@ export const styles = StyleSheet.create({
   page: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  spread: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  spreadPagesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pageSpacer: {
+    opacity: 0,
   },
   pageGrid: {
     flexDirection: 'row',
@@ -343,7 +370,6 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.14,
     shadowRadius: 14,
-    transform: [{ scale: 1.04 }],
   },
   dragOverlayTileHighContrast: {
     borderWidth: 2,

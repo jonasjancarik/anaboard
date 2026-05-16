@@ -189,6 +189,43 @@ export const persistManagedMedia = async (
   return targetUri;
 };
 
+export const persistManagedMediaFromRemoteUrl = async (
+  kind: ManagedMediaKind,
+  assetId: string,
+  sourceUrl: string,
+  extension?: string
+): Promise<string> => {
+  if (isWebPlatform) {
+    const blob = await loadBlobFromSourceUri(sourceUrl);
+    const uri = createManagedMediaUri(kind, assetId);
+    const key = getManagedMediaKey(uri);
+    if (!key) {
+      throw new Error('Nepovedlo se připravit klíč média pro prohlížeč.');
+    }
+
+    await withStore('readwrite', async (store) => {
+      await requestToPromise(
+        store.put({
+          key,
+          blob,
+          kind,
+          createdAt: new Date().toISOString(),
+        } satisfies StoredMediaRecord)
+      );
+    });
+
+    return uri;
+  }
+
+  const directoryUri = await ensureManagedDirectory(kind);
+  const fallbackExtension = kind === 'audio' ? 'm4a' : 'jpg';
+  const targetUri = `${directoryUri}${assetId}-${Date.now()}.${extension ?? fallbackExtension}`;
+
+  await FileSystem.downloadAsync(sourceUrl, targetUri);
+
+  return targetUri;
+};
+
 export const deleteManagedMedia = async (uri?: string | null): Promise<void> => {
   if (!uri || !isManagedMediaUri(uri)) {
     return;

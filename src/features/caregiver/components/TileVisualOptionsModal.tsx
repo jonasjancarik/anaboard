@@ -11,29 +11,50 @@ import { APP_THEME } from "../../../shared/constants/theme";
 type TileVisualOptionsModalProps = {
   visible: boolean;
   hasPreviewImage: boolean;
+  showGenerateImageAction: boolean;
+  canGenerateImage: boolean;
+  isGeneratingImage: boolean;
   onClose: () => void;
   onSelectEmoji: () => void;
   onSelectEmojiKeyboard: () => void;
   onSelectPhotoLibrary: () => void;
   onSelectCamera: () => void;
+  onGenerateImage: () => void;
   onRemoveImage: () => void;
 };
 
 export const TileVisualOptionsModal = ({
   visible,
   hasPreviewImage,
+  showGenerateImageAction,
+  canGenerateImage,
+  isGeneratingImage,
   onClose,
   onSelectEmoji,
   onSelectEmojiKeyboard,
   onSelectPhotoLibrary,
   onSelectCamera,
+  onGenerateImage,
   onRemoveImage,
 }: TileVisualOptionsModalProps) => {
   const actions = [
-    { label: "Emoji", onPress: onSelectEmoji },
-    { label: "Emoji/text z klávesnice", onPress: onSelectEmojiKeyboard },
-    { label: "Fotka z knihovny", onPress: onSelectPhotoLibrary },
-    { label: "Vyfotit", onPress: onSelectCamera },
+    { label: "Emoji", onPress: onSelectEmoji, disabled: false },
+    {
+      label: "Emoji/text z klávesnice",
+      onPress: onSelectEmojiKeyboard,
+      disabled: false,
+    },
+    { label: "Fotka z knihovny", onPress: onSelectPhotoLibrary, disabled: false },
+    { label: "Vyfotit", onPress: onSelectCamera, disabled: false },
+    ...(showGenerateImageAction
+      ? [
+          {
+            label: isGeneratingImage ? "Vytvářím obrázek..." : "Vygenerovat obrázek",
+            onPress: onGenerateImage,
+            disabled: !canGenerateImage || isGeneratingImage,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -57,8 +78,12 @@ export const TileVisualOptionsModal = ({
             {actions.map((action) => (
               <Pressable
                 key={action.label}
-                style={modalStyles.actionButton}
+                style={[
+                  modalStyles.actionButton,
+                  action.disabled && modalStyles.actionButtonDisabled,
+                ]}
                 onPress={action.onPress}
+                disabled={action.disabled}
               >
                 <Text style={modalStyles.actionText}>{action.label}</Text>
               </Pressable>
@@ -98,11 +123,7 @@ const modalStyles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: APP_THEME.surface,
     padding: 18,
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    elevation: 10,
+    boxShadow: '0px 14px 24px rgba(31, 26, 20, 0.16)',
   },
   title: {
     fontSize: 20,
@@ -126,6 +147,9 @@ const modalStyles = StyleSheet.create({
     backgroundColor: APP_THEME.surfaceTint,
     paddingHorizontal: 14,
     paddingVertical: 13,
+  },
+  actionButtonDisabled: {
+    opacity: 0.45,
   },
   actionText: {
     color: APP_THEME.text,

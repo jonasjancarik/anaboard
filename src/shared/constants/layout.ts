@@ -1,0 +1,2 @@
+export const SCREEN_CONTENT_PADDING = 12;
+export const HEADER_HORIZONTAL_PADDING = 8;

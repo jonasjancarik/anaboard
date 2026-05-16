@@ -57,6 +57,17 @@ find_java_home() {
   return 1
 }
 
+file_mtime() {
+  local file="$1"
+
+  if stat -f '%m' "${file}" >/dev/null 2>&1; then
+    stat -f '%m' "${file}"
+    return 0
+  fi
+
+  stat -c '%Y' "${file}"
+}
+
 setup_env() {
   local sdk_root=""
   local java_home=""
@@ -149,7 +160,7 @@ build_apk() {
 
   if [[ ${gradle_status} -ne 0 ]]; then
     if [[ -f "${apk_path}" ]]; then
-      apk_mtime="$(stat -f '%m' "${apk_path}")"
+      apk_mtime="$(file_mtime "${apk_path}")"
       if [[ "${apk_mtime}" -ge "${build_started_at}" ]]; then
         cat >&2 <<'EOF'
 Gradle reported a failure after the APK was written.

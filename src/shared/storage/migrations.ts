@@ -111,6 +111,8 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
       preferred_voice TEXT,
       high_contrast INTEGER NOT NULL DEFAULT 0,
       show_labels INTEGER NOT NULL DEFAULT 0,
+      phrase_bar_enabled INTEGER NOT NULL DEFAULT 1,
+      suggestion_count INTEGER NOT NULL DEFAULT 3,
       updated_at TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 1,
       dirty INTEGER NOT NULL DEFAULT 0
@@ -123,6 +125,18 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
       spoken_text TEXT NOT NULL,
       mode TEXT NOT NULL,
       spoken_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_phrases (
+      id TEXT PRIMARY KEY NOT NULL,
+      profile_id TEXT NOT NULL,
+      phrase_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      spoken_text TEXT NOT NULL,
+      tokens_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      usage_count INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS sync_events (
@@ -146,6 +160,9 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_tile_archive_board_deleted ON tile_archive(board_id, deleted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audio_clips_tile_id ON audio_clips(tile_id);
     CREATE INDEX IF NOT EXISTS idx_audio_clips_dirty ON audio_clips(dirty);
+    CREATE INDEX IF NOT EXISTS idx_phrase_events_profile_spoken ON phrase_events(profile_id, spoken_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_saved_phrases_profile_updated ON saved_phrases(profile_id, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_phrases_profile_key ON saved_phrases(profile_id, phrase_key);
     CREATE INDEX IF NOT EXISTS idx_sync_events_status_created ON sync_events(status, created_at);
   `);
 };
@@ -278,6 +295,45 @@ const resetLegacyBackupPinDefault = async (
   });
 };
 
+const ensurePhraseSchema = async (db: MigrationDatabase): Promise<void> => {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS saved_phrases (
+      id TEXT PRIMARY KEY NOT NULL,
+      profile_id TEXT NOT NULL,
+      phrase_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      spoken_text TEXT NOT NULL,
+      tokens_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      usage_count INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_phrase_events_profile_spoken
+      ON phrase_events(profile_id, spoken_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_saved_phrases_profile_updated
+      ON saved_phrases(profile_id, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_phrases_profile_key
+      ON saved_phrases(profile_id, phrase_key);
+  `);
+};
+
+const ensurePhraseBarSetting = async (db: MigrationDatabase): Promise<void> => {
+  if (!(await hasColumn(db, 'profile_settings', 'phrase_bar_enabled'))) {
+    await db.runAsync(
+      'ALTER TABLE profile_settings ADD COLUMN phrase_bar_enabled INTEGER NOT NULL DEFAULT 1'
+    );
+  }
+};
+
+const ensureSuggestionCountSetting = async (db: MigrationDatabase): Promise<void> => {
+  if (!(await hasColumn(db, 'profile_settings', 'suggestion_count'))) {
+    await db.runAsync(
+      'ALTER TABLE profile_settings ADD COLUMN suggestion_count INTEGER NOT NULL DEFAULT 3'
+    );
+  }
+};
+
 const migrationSteps: MigrationStep[] = [
   {
     version: 1,
@@ -362,6 +418,21 @@ const migrationSteps: MigrationStep[] = [
     version: 6,
     label: 'reset-legacy-backup-pin-default',
     run: resetLegacyBackupPinDefault,
+  },
+  {
+    version: 7,
+    label: 'phrase-schema',
+    run: ensurePhraseSchema,
+  },
+  {
+    version: 8,
+    label: 'profile-settings-phrase-bar',
+    run: ensurePhraseBarSetting,
+  },
+  {
+    version: 9,
+    label: 'profile-settings-suggestion-count',
+    run: ensureSuggestionCountSetting,
   },
 ];
 

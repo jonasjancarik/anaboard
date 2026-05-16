@@ -17,7 +17,9 @@ export type EntityType =
   | 'boards'
   | 'tiles'
   | 'audio_clips'
-  | 'profile_settings';
+  | 'profile_settings'
+  | 'saved_phrases'
+  | 'phrase_events';
 
 export interface Board {
   id: string;
@@ -90,6 +92,8 @@ export interface ProfileSettings {
   preferredVoice?: string;
   highContrast: boolean;
   showLabels: boolean;
+  phraseBarEnabled: boolean;
+  suggestionCount: number;
   updatedAt: string;
   revision: number;
 }
@@ -113,6 +117,38 @@ export interface SentenceToken {
   visualType: TileVisualType;
   imageLocalUri?: string;
   imageRemotePath?: string;
+}
+
+export interface PhraseTokenSnapshot {
+  tileId: string;
+  label: string;
+  emoji: string;
+  visualType: TileVisualType;
+  imageLocalUri?: string;
+  imageRemotePath?: string;
+}
+
+export type PhraseSource = 'manual' | 'saved' | 'recent' | 'composed';
+
+export interface SavedPhrase {
+  id: string;
+  profileId: string;
+  phraseKey: string;
+  label: string;
+  spokenText: string;
+  tokens: PhraseTokenSnapshot[];
+  createdAt: string;
+  updatedAt: string;
+  usageCount: number;
+}
+
+export interface PhraseEventRecord {
+  id: string;
+  profileId: string;
+  tokens: PhraseTokenSnapshot[];
+  spokenText: string;
+  source: PhraseSource;
+  spokenAt: string;
 }
 
 export interface SyncEvent {

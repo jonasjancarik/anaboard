@@ -14,10 +14,10 @@ export const UnsupportedBrowserScreen = ({
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.card}>
         <Text style={styles.kicker}>Web verze</Text>
-        <Text style={styles.title}>Tento prohlížeč teď AnaBoard neutáhne</Text>
+        <Text style={styles.title}>Tento prohlížeč teď ÁňaBoard neutáhne</Text>
         <Text style={styles.message}>{message}</Text>
         <Text style={styles.note}>
-          Zkus aktuální prohlížeč s HTTPS a trvalým úložištěm.
+          Na telefonu nestačí `http://192.168…`. Použij HTTPS nebo Expo tunnel.
         </Text>
       </View>
     </SafeAreaView>
@@ -39,11 +39,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 28,
     gap: 12,
-    shadowColor: APP_THEME.shadow,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 4,
+    boxShadow: '0px 12px 18px rgba(31, 26, 20, 0.08)',
   },
   kicker: {
     color: APP_THEME.primaryBorder,

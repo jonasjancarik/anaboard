@@ -39,7 +39,7 @@ export const getNativeCaregiverAuthLabel = async (): Promise<string> => {
 export const authenticateWithDeviceForCaregiver = async () => {
   return LocalAuthentication.authenticateAsync({
     promptMessage: 'Odemkni režim pečovatele',
-    promptSubtitle: 'AnaBoard',
+    promptSubtitle: 'ÁňaBoard',
     promptDescription: 'Použij biometriku nebo kód zařízení',
     cancelLabel: 'Zrušit',
     fallbackLabel: 'Použít kód zařízení',

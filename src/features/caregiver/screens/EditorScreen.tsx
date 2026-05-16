@@ -4,17 +4,22 @@ import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmojiKeyboardModal } from "../components/EmojiKeyboardModal";
+import { SmartIconSuggestionsModal } from "../components/SmartIconSuggestionsModal";
 import { TileAppearanceSection } from "../components/TileAppearanceSection";
 import { TileVisualOptionsModal } from "../components/TileVisualOptionsModal";
+import { useEmojiSuggestions } from "../hooks/useEmojiSuggestions";
+import { imageDraftService } from "../../ai/imageDraftService";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { useTileImageDraft } from "../hooks/useTileImageDraft";
 import { styles } from "./EditorScreen.styles";
 import { buildSpeechSegments, speechEngine } from "../../speech/speechEngine";
+import { AI_FEATURE_FLAGS } from "../../ai/featureFlags";
 import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
   SPEECH_MODE_LABELS,
 } from "../../../shared/constants/defaults";
+import { appHaptics } from "../../../shared/feedback/haptics";
 import type {
   Category,
   SpeechMode,
@@ -23,6 +28,7 @@ import type {
 import { useAppStore } from "../../../store/useAppStore";
 import { recordingService } from "../../speech/recordingService";
 import type { TileUpdateInput } from "../../../shared/storage/repositories/tileRepository";
+import { logError, logEvent } from "../../../shared/telemetry/logger";
 
 type EditorScreenProps = {
   onBack: () => void;
@@ -35,6 +41,10 @@ const speechModes: SpeechMode[] = [
 ];
 
 export const EditorScreen = ({ onBack }: EditorScreenProps) => {
+  const authStatus = useAppStore((state) => state.authStatus);
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
+  const remoteContext = useAppStore((state) => state.remoteContext);
+  const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
@@ -42,6 +52,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const deleteTile = useAppStore((state) => state.deleteTile);
   const saveClip = useAppStore((state) => state.saveClip);
   const deleteClip = useAppStore((state) => state.deleteClip);
+  const navigate = useAppStore((state) => state.navigate);
+  const setAuthReturnScreen = useAppStore((state) => state.setAuthReturnScreen);
   const editorTargetTileId = useAppStore((state) => state.editorTargetTileId);
   const setEditorTargetTileId = useAppStore(
     (state) => state.setEditorTargetTileId,
@@ -55,9 +67,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [isEmojiKeyboardModalOpen, setIsEmojiKeyboardModalOpen] =
     useState(false);
   const [isVisualMenuOpen, setIsVisualMenuOpen] = useState(false);
+  const [isSmartSuggestionsOpen, setIsSmartSuggestionsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTestingSpeech, setIsTestingSpeech] = useState(false);
+  const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
+  const [isApplyingAiImage, setIsApplyingAiImage] = useState(false);
+  const [hasExplicitCategoryChoice, setHasExplicitCategoryChoice] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [tileActionError, setTileActionError] = useState<string | null>(null);
 
@@ -87,7 +103,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setVisualType,
     imageLocalUri,
     imageRemotePath,
+    previewImageLocalUri,
+    previewImageRemotePath,
+    generatedDraft,
     hasPreviewImage,
+    setGeneratedDraftPreview,
+    clearGeneratedDraft,
+    applyGeneratedDraft,
     pickImageFromLibrary,
     takePhoto,
     removeImage,
@@ -112,6 +134,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setIsEmojiPickerOpen(false);
     setIsEmojiKeyboardModalOpen(false);
     setIsVisualMenuOpen(false);
+    setIsSmartSuggestionsOpen(false);
+    setIsGeneratingAiImage(false);
+    setIsApplyingAiImage(false);
+    setHasExplicitCategoryChoice(false);
     setRecordingError(null);
     setTileActionError(null);
   }, [selectedTileId]);
@@ -120,6 +146,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     ? clipsById[selectedTile.audioClipId]
     : undefined;
   const previewColors = CATEGORY_COLORS[category];
+  const promptCategory = hasExplicitCategoryChoice ? category : undefined;
   const highContrast = settings?.highContrast ?? false;
   const trimmedLabel = labelCs.trim();
   const effectiveLabel = selectedTile ? trimmedLabel || selectedTile.labelCs : "";
@@ -129,13 +156,46 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     visualType === "image" && hasPreviewImage ? "image" : "emoji";
   const visualSelectionIncomplete =
     visualType === "image" && !hasPreviewImage;
+  const aiEmojiSuggestionsEnabled =
+    AI_FEATURE_FLAGS.emojiSuggestions &&
+    authStatus === "signed_in";
+  const aiGeneratedTileImagesEnabled =
+    AI_FEATURE_FLAGS.generatedTileImages &&
+    authStatus === "signed_in";
+  const {
+    clearSuggestions: clearEmojiSuggestions,
+    error: emojiSuggestionError,
+    isLoading: isEmojiSuggestionsLoading,
+    requestSuggestions: requestEmojiSuggestions,
+    suggestions: emojiSuggestions,
+  } = useEmojiSuggestions({
+    enabled: aiEmojiSuggestionsEnabled,
+    label: effectiveLabel,
+    locale: board?.locale ?? "cs-CZ",
+    category,
+    existingEmoji: previewEmoji,
+  });
 
-  const buildTileUpdatePayload = (): TileUpdateInput | null => {
+  const buildTileUpdatePayload = (overrides?: {
+    visualType?: TileVisualType;
+    imageLocalUri?: string | null;
+    imageRemotePath?: string | null;
+  }): TileUpdateInput | null => {
     if (!selectedTile) {
       return null;
     }
 
-    if (visualSelectionIncomplete) {
+    const nextVisualType = overrides?.visualType ?? previewVisualType;
+    const nextImageLocalUri =
+      overrides?.imageLocalUri === undefined ? imageLocalUri : overrides.imageLocalUri;
+    const nextImageRemotePath =
+      overrides?.imageRemotePath === undefined ? imageRemotePath : overrides.imageRemotePath;
+    const nextVisualSelectionIncomplete =
+      nextVisualType === "image" &&
+      !nextImageLocalUri &&
+      !nextImageRemotePath;
+
+    if (nextVisualSelectionIncomplete) {
       setTileActionError("Nejdřív přidej fotku z foťáku nebo knihovny.");
       return null;
     }
@@ -143,9 +203,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     return {
       labelCs: trimmedLabel || selectedTile.labelCs,
       emoji: trimmedEmoji || selectedTile.emoji,
-      visualType: previewVisualType,
-      imageLocalUri: previewVisualType === "image" ? imageLocalUri : null,
-      imageRemotePath: previewVisualType === "image" ? imageRemotePath : null,
+      visualType: nextVisualType,
+      imageLocalUri: nextVisualType === "image" ? nextImageLocalUri : null,
+      imageRemotePath: nextVisualType === "image" ? nextImageRemotePath : null,
       category,
       speechMode,
     };
@@ -156,20 +216,52 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       return;
     }
 
-    const payload = buildTileUpdatePayload();
-    if (!payload) {
-      return;
-    }
-
     setIsSaving(true);
     setTileActionError(null);
 
     try {
+      let payloadOverrides:
+        | {
+            visualType: TileVisualType;
+            imageLocalUri: string | null;
+            imageRemotePath: string | null;
+          }
+        | undefined;
+
+      if (generatedDraft && previewVisualType === "image") {
+        const promoted = await imageDraftService.promoteDraft({
+          profileId: remoteContext?.profileId,
+          tileId: selectedTile.id,
+          draftId: generatedDraft.draftId,
+          draftStoragePath: generatedDraft.storagePath,
+          localUri: generatedDraft.localUri,
+        });
+
+        await applyGeneratedDraft({
+          localUri: promoted.localUri,
+          remotePath: promoted.storagePath,
+        });
+        setVisualType("image");
+        payloadOverrides = {
+          visualType: "image",
+          imageLocalUri: promoted.localUri,
+          imageRemotePath: promoted.storagePath,
+        };
+      }
+
+      const payload = buildTileUpdatePayload(payloadOverrides);
+      if (!payload) {
+        return;
+      }
+
       await updateTileDraft(selectedTile.id, payload);
       await commitDraft(
         payload.visualType === "image" && Boolean(payload.imageLocalUri),
+        payload.imageLocalUri,
       );
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : "Dlaždici nešlo uložit",
       );
@@ -180,6 +272,113 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const handleEditVisual = () => {
     setIsVisualMenuOpen(true);
+  };
+
+  const openSmartSuggestions = () => {
+    setIsVisualMenuOpen(false);
+    setIsEmojiPickerOpen(false);
+    setIsEmojiKeyboardModalOpen(false);
+    setIsSmartSuggestionsOpen(true);
+
+    if (effectiveLabel.trim()) {
+      if (!isEmojiSuggestionsLoading && emojiSuggestions.length === 0) {
+        void requestEmojiSuggestions();
+      }
+
+      if (!generatedDraft && !isGeneratingAiImage) {
+        void handleGenerateAiImage();
+      }
+    }
+  };
+
+  const handleGenerateAiImage = async () => {
+    if (!selectedTile) {
+      return;
+    }
+
+    const normalizedLabel = effectiveLabel.trim();
+    if (!normalizedLabel) {
+      setTileActionError("Nejdřív napiš text dlaždice.");
+      return;
+    }
+
+    setIsGeneratingAiImage(true);
+    setTileActionError(null);
+    const startedAtMs = Date.now();
+
+    try {
+      const draft = await imageDraftService.generateDraft({
+        profileId: remoteContext?.profileId,
+        tileId: selectedTile.id,
+        label: normalizedLabel,
+        locale: board?.locale ?? "cs-CZ",
+        category: promptCategory,
+      });
+
+      logEvent("ai_image_generate_success", {
+        duration_ms: Date.now() - startedAtMs,
+        anonymous: authIsAnonymous,
+        locale: board?.locale ?? "cs-CZ",
+        category: promptCategory ?? null,
+        label_length: normalizedLabel.length,
+        trial_remaining:
+          typeof draft.trialRemaining === "number" ? draft.trialRemaining : null,
+      });
+      setGeneratedDraftPreview({
+        draftId: draft.draftId,
+        storagePath: draft.storagePath,
+        previewUrl: draft.signedUrl,
+        localUri: draft.localUri,
+      });
+      void appHaptics.success();
+    } catch (error) {
+      logError("ai_image_generate_error", error, {
+        duration_ms: Date.now() - startedAtMs,
+        anonymous: authIsAnonymous,
+        locale: board?.locale ?? "cs-CZ",
+        category: promptCategory ?? null,
+        label_length: normalizedLabel.length,
+      });
+      void appHaptics.error();
+      setTileActionError(
+        error instanceof Error ? error.message : "AI obrázek nešel vytvořit",
+      );
+    } finally {
+      setIsGeneratingAiImage(false);
+    }
+  };
+
+  const handleApplyAiImage = async () => {
+    if (!selectedTile || !generatedDraft) {
+      return;
+    }
+
+    setIsApplyingAiImage(true);
+    setTileActionError(null);
+
+    try {
+      const promoted = await imageDraftService.promoteDraft({
+        profileId: remoteContext?.profileId,
+        tileId: selectedTile.id,
+        draftId: generatedDraft.draftId,
+        draftStoragePath: generatedDraft.storagePath,
+        localUri: generatedDraft.localUri,
+      });
+
+      await applyGeneratedDraft({
+        localUri: promoted.localUri,
+        remotePath: promoted.storagePath,
+      });
+      setVisualType("image");
+      void appHaptics.success();
+    } catch (error) {
+      void appHaptics.error();
+      setTileActionError(
+        error instanceof Error ? error.message : "AI obrázek nešel použít",
+      );
+    } finally {
+      setIsApplyingAiImage(false);
+    }
   };
 
   const handleRecordToggle = async () => {
@@ -193,7 +392,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       try {
         await recordingService.start();
         setIsRecording(true);
+        void appHaptics.tap();
       } catch (error) {
+        void appHaptics.error();
         setRecordingError(
           error instanceof Error ? error.message : "Nahrávání se nepovedlo",
         );
@@ -206,6 +407,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       setIsRecording(false);
 
       if (!recording) {
+        void appHaptics.error();
         setRecordingError("Nahrávka je prázdná");
         return;
       }
@@ -215,7 +417,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         durationMs: recording.durationMs,
         format: "m4a",
       });
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setRecordingError(
         error instanceof Error ? error.message : "Nahrávání se nepovedlo",
       );
@@ -247,8 +451,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       labelCs: effectiveLabel,
       emoji: previewEmoji,
       visualType: previewVisualType,
-      imageLocalUri: previewVisualType === "image" ? imageLocalUri ?? undefined : undefined,
-      imageRemotePath: previewVisualType === "image" ? imageRemotePath ?? undefined : undefined,
+      imageLocalUri:
+        previewVisualType === "image" ? previewImageLocalUri ?? undefined : undefined,
+      imageRemotePath:
+        previewVisualType === "image" ? previewImageRemotePath ?? undefined : undefined,
       category,
       speechMode,
     };
@@ -299,7 +505,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     try {
       await deleteClip(selectedTile.id);
+      void appHaptics.warning();
     } catch (error) {
+      void appHaptics.error();
       setRecordingError(
         error instanceof Error ? error.message : "Nahrávku nešlo smazat",
       );
@@ -316,8 +524,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     try {
       await deleteTile(selectedTile.id);
       setEditorTargetTileId(null);
+      void appHaptics.warning();
       onBack();
     } catch (error) {
+      void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : "Dlaždici nešlo smazat",
       );
@@ -362,6 +572,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     void handleRecordToggle();
   };
 
+  const showAuthCtaForTileError =
+    authIsAnonymous &&
+    Boolean(tileActionError && /bez účtu|přihlas/i.test(tileActionError));
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <ScreenHeader title="Upravit dlaždici" onBack={onBack} />
@@ -396,12 +610,16 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       <TileVisualOptionsModal
         visible={isVisualMenuOpen}
         hasPreviewImage={hasPreviewImage}
+        showGenerateImageAction={aiGeneratedTileImagesEnabled}
+        canGenerateImage={Boolean(effectiveLabel.trim())}
+        isGeneratingImage={isGeneratingAiImage}
         onClose={() => {
           setIsVisualMenuOpen(false);
         }}
         onSelectEmoji={() => {
           setIsVisualMenuOpen(false);
           setVisualType("emoji");
+          clearGeneratedDraft();
           setIsEmojiKeyboardModalOpen(false);
           setIsEmojiPickerOpen(true);
           setTileActionError(null);
@@ -409,6 +627,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         onSelectEmojiKeyboard={() => {
           setIsVisualMenuOpen(false);
           setVisualType("emoji");
+          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(true);
           setTileActionError(null);
@@ -416,6 +635,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         onSelectPhotoLibrary={() => {
           setIsVisualMenuOpen(false);
           setVisualType("image");
+          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(false);
           void pickImageFromLibrary();
@@ -423,13 +643,54 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         onSelectCamera={() => {
           setIsVisualMenuOpen(false);
           setVisualType("image");
+          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(false);
           void takePhoto();
         }}
+        onGenerateImage={() => {
+          openSmartSuggestions();
+        }}
         onRemoveImage={() => {
           setIsVisualMenuOpen(false);
+          clearGeneratedDraft();
           void removeImage();
+        }}
+      />
+
+      <SmartIconSuggestionsModal
+        visible={isSmartSuggestionsOpen}
+        label={effectiveLabel}
+        previewEmoji={previewEmoji}
+        previewVisualType={previewVisualType}
+        previewImageLocalUri={previewImageLocalUri}
+        previewImageRemotePath={previewImageRemotePath}
+        generatedImageLocalUri={generatedDraft?.localUri}
+        generatedImageRemotePath={generatedDraft?.previewUrl}
+        emojiSuggestions={emojiSuggestions}
+        isEmojiLoading={isEmojiSuggestionsLoading}
+        isImageLoading={isGeneratingAiImage}
+        hasGeneratedImage={Boolean(generatedDraft)}
+        error={tileActionError}
+        showAuthCta={showAuthCtaForTileError}
+        onClose={() => {
+          setIsSmartSuggestionsOpen(false);
+        }}
+        onSelectEmoji={(suggestedEmoji) => {
+          setEmoji(suggestedEmoji);
+          setVisualType("emoji");
+          setTileActionError(null);
+        }}
+        onUseGeneratedImage={() => {
+          setVisualType("image");
+          setTileActionError(null);
+        }}
+        onRegenerateImage={() => {
+          void handleGenerateAiImage();
+        }}
+        onAuth={() => {
+          setAuthReturnScreen("editor");
+          navigate("auth");
         }}
       />
 
@@ -448,8 +709,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                   onLabelChange={setLabelCs}
                   previewEmoji={previewEmoji}
                   previewVisualType={previewVisualType}
-                  imageLocalUri={imageLocalUri}
-                  imageRemotePath={imageRemotePath}
+                  imageLocalUri={previewImageLocalUri}
+                  imageRemotePath={previewImageRemotePath}
                   highContrast={highContrast}
                   previewBackgroundColor={previewColors.background}
                   onEditVisual={handleEditVisual}
@@ -465,7 +726,11 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                     return (
                       <Pressable
                         key={item}
-                        onPress={() => setCategory(item)}
+                        onPress={() => {
+                          void appHaptics.selection();
+                          setCategory(item);
+                          setHasExplicitCategoryChoice(true);
+                        }}
                         style={[
                           styles.chip,
                           styles.categoryChip,
@@ -500,7 +765,10 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                       return (
                         <Pressable
                           key={mode}
-                          onPress={() => setSpeechMode(mode)}
+                          onPress={() => {
+                            void appHaptics.selection();
+                            setSpeechMode(mode);
+                          }}
                           style={[
                             styles.chip,
                             styles.modeChip,
@@ -608,7 +876,22 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                 </View>
 
                 {tileActionError ? (
-                  <Text style={styles.error}>{tileActionError}</Text>
+                  <>
+                    <Text style={styles.error}>{tileActionError}</Text>
+                    {showAuthCtaForTileError ? (
+                      <Pressable
+                        style={styles.inlineAuthLink}
+                        onPress={() => {
+                          setAuthReturnScreen("editor");
+                          navigate("auth");
+                        }}
+                      >
+                        <Text style={styles.inlineAuthLinkText}>
+                          Přihlásit / založit účet
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             ) : (

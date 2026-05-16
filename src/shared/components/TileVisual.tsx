@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -9,7 +9,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { APP_THEME } from '../constants/theme';
 import { useResolvedMediaUri } from '../media/useResolvedMediaUri';
 import type { TileVisualType } from '../types/domain';
 
@@ -50,8 +49,8 @@ const getVisualTextMetrics = (value: string, size: number) => {
   if (length <= 2 && !hasWhitespace) {
     return {
       fontSize: baseSize,
-      lineHeight: baseSize + 2,
-      width: size * 0.72,
+      width: size,
+      numberOfLines: 1 as const,
     };
   }
 
@@ -59,8 +58,8 @@ const getVisualTextMetrics = (value: string, size: number) => {
     const nextSize = Math.max(16, Math.round(size * 0.46));
     return {
       fontSize: nextSize,
-      lineHeight: nextSize + 2,
-      width: size * 0.82,
+      width: size,
+      numberOfLines: 1 as const,
     };
   }
 
@@ -69,7 +68,8 @@ const getVisualTextMetrics = (value: string, size: number) => {
     return {
       fontSize: nextSize,
       lineHeight: nextSize + 2,
-      width: size * 0.88,
+      width: size * 0.94,
+      numberOfLines: 2 as const,
     };
   }
 
@@ -77,11 +77,12 @@ const getVisualTextMetrics = (value: string, size: number) => {
   return {
     fontSize: nextSize,
     lineHeight: nextSize + 2,
-    width: size * 0.9,
+    width: size * 0.96,
+    numberOfLines: 2 as const,
   };
 };
 
-export const TileVisual = ({
+const TileVisualComponent = ({
   emoji,
   visualType = 'emoji',
   imageLocalUri,
@@ -91,17 +92,61 @@ export const TileVisual = ({
   style,
   emojiStyle,
 }: TileVisualProps) => {
-  const [didImageFail, setDidImageFail] = useState(false);
   const resolvedImageLocalUri = useResolvedMediaUri(imageLocalUri);
   const imageUri = useMemo(
     () => getImageUri(resolvedImageLocalUri, imageRemotePath),
     [imageRemotePath, resolvedImageLocalUri]
   );
+  const contentKey =
+    visualType === 'image' && imageUri ? `image:${imageUri}` : `emoji:${emoji}:${size}`;
 
-  useEffect(() => {
-    setDidImageFail(false);
-  }, [imageUri]);
+  return (
+    <TileVisualFrame
+      key={contentKey}
+      emoji={emoji}
+      visualType={visualType}
+      imageUri={imageUri}
+      size={size}
+      cornerRadius={cornerRadius}
+      style={style}
+      emojiStyle={emojiStyle}
+    />
+  );
+};
 
+export const TileVisual = memo(TileVisualComponent, (previous, next) => {
+  return (
+    previous.emoji === next.emoji &&
+    previous.visualType === next.visualType &&
+    previous.imageLocalUri === next.imageLocalUri &&
+    previous.imageRemotePath === next.imageRemotePath &&
+    previous.size === next.size &&
+    previous.cornerRadius === next.cornerRadius &&
+    previous.style === next.style &&
+    previous.emojiStyle === next.emojiStyle
+  );
+});
+
+type TileVisualFrameProps = {
+  emoji: string;
+  visualType: TileVisualType;
+  imageUri: string | null;
+  size: number;
+  cornerRadius: number;
+  style?: StyleProp<ViewStyle>;
+  emojiStyle?: StyleProp<TextStyle>;
+};
+
+const TileVisualFrame = ({
+  emoji,
+  visualType,
+  imageUri,
+  size,
+  cornerRadius,
+  style,
+  emojiStyle,
+}: TileVisualFrameProps) => {
+  const [didImageFail, setDidImageFail] = useState(false);
   const showImage = visualType === 'image' && Boolean(imageUri) && !didImageFail;
   const textMetrics = getVisualTextMetrics(emoji || '⬜️', size);
 
@@ -113,7 +158,7 @@ export const TileVisual = ({
           width: size,
           height: size,
           borderRadius: cornerRadius,
-          backgroundColor: showImage ? APP_THEME.surfaceTint : 'transparent',
+          backgroundColor: 'transparent',
         },
         style,
       ]}
@@ -130,17 +175,19 @@ export const TileVisual = ({
       ) : (
         <Text
           allowFontScaling={false}
-          adjustsFontSizeToFit
-          minimumFontScale={0.35}
-          numberOfLines={2}
+          numberOfLines={textMetrics.numberOfLines}
           ellipsizeMode="clip"
           style={[
             styles.emoji,
             {
               fontSize: textMetrics.fontSize,
-              lineHeight: textMetrics.lineHeight,
               width: textMetrics.width,
             },
+            textMetrics.lineHeight
+              ? {
+                  lineHeight: textMetrics.lineHeight,
+                }
+              : null,
             emojiStyle,
           ]}
         >

@@ -7,6 +7,7 @@ export type WebStorageSupportResult = {
 
 const PROBE_DIRECTORY_NAME = 'anaboard-storage-probe';
 const PROBE_FILE_NAME = 'probe.bin';
+const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 const unsupported = (message: string): WebStorageSupportResult => ({
   supported: false,
@@ -22,11 +23,21 @@ export const getWebStorageSupport = async (): Promise<WebStorageSupportResult> =
   }
 
   if (!window.isSecureContext) {
-    return unsupported('AnaBoard v prohlížeči potřebuje bezpečné HTTPS úložiště.');
+    const { hostname, protocol } = window.location;
+    const isLoopbackHost =
+      LOCALHOST_HOSTNAMES.has(hostname) || hostname.endsWith('.localhost');
+
+    if (protocol === 'http:' && !isLoopbackHost) {
+      return unsupported(
+        'Tahle HTTP adresa mimo localhost není pro Chrome bezpečný kontext. Na telefonu otevři ÁňaBoard přes HTTPS nebo Expo tunnel.'
+      );
+    }
+
+    return unsupported('ÁňaBoard v prohlížeči potřebuje bezpečný HTTPS kontext.');
   }
 
   if (!navigator.storage?.getDirectory) {
-    return unsupported('Tento prohlížeč neumí trvalé úložiště potřebné pro AnaBoard.');
+    return unsupported('Tento prohlížeč neumí trvalé úložiště potřebné pro ÁňaBoard.');
   }
 
   try {
@@ -56,6 +67,6 @@ export const getWebStorageSupport = async (): Promise<WebStorageSupportResult> =
       message: '',
     };
   } catch {
-    return unsupported('Prohlížeč neotevřel trvalé úložiště AnaBoardu.');
+    return unsupported('Prohlížeč neotevřel trvalé úložiště ÁňaBoardu.');
   }
 };

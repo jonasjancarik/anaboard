@@ -1,4 +1,4 @@
-import { Alert, BackHandler } from 'react-native';
+import { Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { useCallback, useEffect } from 'react';
 
 import { BoardScreen } from '../features/board/screens/BoardScreen';
@@ -17,12 +17,16 @@ export const AppNavigator = () => {
   const currentScreen = useAppStore((state) => state.currentScreen);
   const requiresBootstrap = useAppStore((state) => state.requiresBootstrap);
   const authStatus = useAppStore((state) => state.authStatus);
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
+  const authReturnScreen = useAppStore((state) => state.authReturnScreen);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const settings = useAppStore((state) => state.settings);
 
   const navigate = useAppStore((state) => state.navigate);
+  const setAuthReturnScreen = useAppStore((state) => state.setAuthReturnScreen);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
+  const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
   const usesAppPin = isWebPlatform || Boolean(settings?.backupPinEnabled);
 
   const goBack = useCallback((): boolean => {
@@ -36,14 +40,22 @@ export const AppNavigator = () => {
       return true;
     }
 
+    if (currentScreen === 'auth') {
+      const nextScreen = authReturnScreen ?? 'settings';
+      setAuthReturnScreen(null);
+      navigate(nextScreen);
+      return true;
+    }
+
     if (currentScreen === 'caregiverGate') {
+      clearPendingCaregiverAction();
       setEditorTargetTileId(null);
       navigate('board');
       return true;
     }
 
     return false;
-  }, [currentScreen, navigate, setEditorTargetTileId]);
+  }, [authReturnScreen, clearPendingCaregiverAction, currentScreen, navigate, setAuthReturnScreen, setEditorTargetTileId]);
 
   useEffect(() => {
     if (
@@ -58,6 +70,19 @@ export const AppNavigator = () => {
   }, [caregiverUnlocked, currentScreen, navigate, usesAppPin]);
 
   useEffect(() => {
+    if (
+      currentScreen === 'auth' &&
+      authStatus === 'signed_in' &&
+      !authIsAnonymous &&
+      !requiresBootstrap
+    ) {
+      const nextScreen = authReturnScreen ?? 'settings';
+      setAuthReturnScreen(null);
+      navigate(nextScreen);
+    }
+  }, [authIsAnonymous, authReturnScreen, authStatus, currentScreen, navigate, requiresBootstrap, setAuthReturnScreen]);
+
+  useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       return goBack();
     });
@@ -67,20 +92,20 @@ export const AppNavigator = () => {
     };
   }, [goBack]);
 
-  const openCaregiver = async () => {
+  const openCaregiver = async (): Promise<boolean> => {
     if (!settings) {
-      return;
+      return false;
     }
 
     if (!settings.lockEnabled) {
       unlockCaregiver();
       navigate('board');
-      return;
+      return true;
     }
 
     if (usesAppPin) {
       navigate('caregiverGate');
-      return;
+      return true;
     }
 
     const nativeAvailable = await canUseNativeCaregiverAuth();
@@ -89,22 +114,46 @@ export const AppNavigator = () => {
         'Ověření není dostupné',
         'Telefon nemá dostupné systémové ověření. Zapni v nastavení volbu „Vlastní PIN v aplikaci“.'
       );
-      return;
+      return false;
     }
 
     const result = await authenticateWithDeviceForCaregiver();
     if (result.success) {
       unlockCaregiver();
       navigate('board');
+      return true;
     }
-  };
 
-  if (authStatus === 'signed_out') {
-    return <AuthScreen />;
-  }
+    return false;
+  };
 
   if (authStatus === 'signed_in' && requiresBootstrap) {
     return <BootstrapScreen />;
+  }
+
+  const editorScreen = <EditorScreen onBack={() => navigate('board')} />;
+
+  if (currentScreen === 'auth') {
+    const authScreen = (
+      <AuthScreen
+        onBack={() => {
+          const nextScreen = authReturnScreen ?? 'settings';
+          setAuthReturnScreen(null);
+          navigate(nextScreen);
+        }}
+      />
+    );
+
+    if (authReturnScreen === 'editor') {
+      return (
+        <>
+          {editorScreen}
+          <View style={styles.authOverlay}>{authScreen}</View>
+        </>
+      );
+    }
+
+    return authScreen;
   }
 
   if (currentScreen === 'caregiverGate') {
@@ -119,7 +168,7 @@ export const AppNavigator = () => {
   }
 
   if (currentScreen === 'editor') {
-    return <EditorScreen onBack={() => navigate('board')} />;
+    return editorScreen;
   }
 
   if (currentScreen === 'settings') {
@@ -128,6 +177,7 @@ export const AppNavigator = () => {
         onBack={() => navigate('board')}
         onOpenArchive={() => navigate('tileArchive')}
         onOpenPinSettings={() => navigate('pinSettings')}
+        onOpenAuth={() => navigate('auth')}
       />
     );
   }
@@ -140,5 +190,11 @@ export const AppNavigator = () => {
     return <TileArchiveScreen onBack={() => navigate('settings')} />;
   }
 
-  return <BoardScreen onOpenCaregiver={() => { void openCaregiver(); }} onOpenSettings={() => navigate('settings')} />;
+  return <BoardScreen onOpenCaregiver={openCaregiver} onOpenSettings={() => navigate('settings')} />;
 };
+
+const styles = StyleSheet.create({
+  authOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

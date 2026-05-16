@@ -22,6 +22,13 @@ type UseTileImageDraftParams = {
   onError: (message: string | null) => void;
 };
 
+export type GeneratedTileImageDraft = {
+  draftId: string;
+  storagePath: string;
+  previewUrl: string;
+  localUri?: string | null;
+};
+
 export const useTileImageDraft = ({
   tileId,
   initialVisualType,
@@ -38,6 +45,8 @@ export const useTileImageDraft = ({
   const [imageRemotePath, setImageRemotePath] = useState<string | null>(
     initialImageRemotePath ?? null
   );
+  const [generatedDraft, setGeneratedDraft] =
+    useState<GeneratedTileImageDraft | null>(null);
 
   const discardDraftImage = async (uri?: string | null) => {
     if (!uri || !draftImageUrisRef.current.has(uri)) {
@@ -59,6 +68,7 @@ export const useTileImageDraft = ({
     setVisualType(initialVisualType);
     setImageLocalUri(initialImageLocalUri ?? null);
     setImageRemotePath(initialImageRemotePath ?? null);
+    setGeneratedDraft(null);
   }, [tileId]);
 
   useEffect(() => {
@@ -140,16 +150,48 @@ export const useTileImageDraft = ({
     await discardDraftImage(imageLocalUri);
     setImageLocalUri(null);
     setImageRemotePath(null);
+    setGeneratedDraft(null);
     setVisualType("emoji");
   };
 
-  const commitDraft = async (persistCurrentImage: boolean) => {
-    if (persistCurrentImage && imageLocalUri) {
-      draftImageUrisRef.current.delete(imageLocalUri);
+  const setGeneratedDraftPreview = (draft: GeneratedTileImageDraft) => {
+    if (draft.localUri) {
+      draftImageUrisRef.current.add(draft.localUri);
+    }
+    setGeneratedDraft(draft);
+  };
+
+  const clearGeneratedDraft = () => {
+    setGeneratedDraft(null);
+  };
+
+  const applyGeneratedDraft = async (params: {
+    localUri: string;
+    remotePath: string;
+  }) => {
+    await discardDraftImage(imageLocalUri);
+    draftImageUrisRef.current.add(params.localUri);
+    setImageLocalUri(params.localUri);
+    setImageRemotePath(params.remotePath);
+    setGeneratedDraft(null);
+    setVisualType("image");
+  };
+
+  const commitDraft = async (
+    persistCurrentImage: boolean,
+    persistedImageLocalUri?: string | null
+  ) => {
+    const nextPersistedImageLocalUri =
+      persistedImageLocalUri === undefined ? imageLocalUri : persistedImageLocalUri;
+
+    if (persistCurrentImage && nextPersistedImageLocalUri) {
+      draftImageUrisRef.current.delete(nextPersistedImageLocalUri);
+      setGeneratedDraft(null);
       return;
     }
 
-    await discardDraftImage(imageLocalUri);
+    await discardDraftImage(nextPersistedImageLocalUri);
+    setGeneratedDraft(null);
   };
 
   return {
@@ -157,7 +199,14 @@ export const useTileImageDraft = ({
     setVisualType,
     imageLocalUri,
     imageRemotePath,
-    hasPreviewImage: Boolean(imageLocalUri || imageRemotePath),
+    previewImageLocalUri:
+      generatedDraft?.localUri ?? (generatedDraft ? null : imageLocalUri),
+    previewImageRemotePath: generatedDraft?.previewUrl ?? imageRemotePath,
+    generatedDraft,
+    hasPreviewImage: Boolean(imageLocalUri || generatedDraft?.previewUrl || imageRemotePath),
+    setGeneratedDraftPreview,
+    clearGeneratedDraft,
+    applyGeneratedDraft,
     pickImageFromLibrary,
     takePhoto,
     removeImage,

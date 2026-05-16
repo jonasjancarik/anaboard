@@ -5,6 +5,7 @@ import {
   type AudioStatus,
 } from 'expo-audio';
 import * as Speech from 'expo-speech';
+import { Platform } from 'react-native';
 
 import { mediaAssetExists, resolveManagedMediaUri } from '../../shared/media/mediaStorage';
 import { logError, logEvent } from '../../shared/telemetry/logger';
@@ -12,6 +13,16 @@ import type { AudioClip, ProfileSettings, SentenceToken, SpeechSegment, Tile } f
 import { sleep } from '../../shared/utils/time';
 
 const INTER_SEGMENT_PAUSE_MS = 120;
+const TTS_LANGUAGE = 'cs-CZ';
+const TTS_TIMEOUT_BUFFER_MS = 2_000;
+const TTS_TIMEOUT_MIN_MS = 4_000;
+const TTS_TIMEOUT_MAX_MS = 20_000;
+
+type SpeechSettings = Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>;
+type TtsVoiceSelection = {
+  language: string;
+  voice?: string;
+};
 
 type SegmentBuildInput = {
   tokens: SentenceToken[];
@@ -20,6 +31,42 @@ type SegmentBuildInput = {
 };
 
 const estimateTextDuration = (text: string): number => Math.max(500, text.length * 90);
+
+let voiceCache: Awaited<ReturnType<typeof Speech.getAvailableVoicesAsync>> | null = null;
+let voiceCachePromise: Promise<Awaited<ReturnType<typeof Speech.getAvailableVoicesAsync>>> | null = null;
+
+const getAvailableVoices = async (): Promise<Awaited<ReturnType<typeof Speech.getAvailableVoicesAsync>>> => {
+  if (voiceCache) {
+    return voiceCache;
+  }
+
+  if (!voiceCachePromise) {
+    voiceCachePromise = Speech.getAvailableVoicesAsync()
+      .then((voices) => {
+        voiceCache = voices;
+        return voices;
+      })
+      .catch((error) => {
+        voiceCachePromise = null;
+        throw error;
+      });
+  }
+
+  return await voiceCachePromise;
+};
+
+const findLanguageVoice = (
+  voices: Awaited<ReturnType<typeof Speech.getAvailableVoicesAsync>>,
+  language: string
+): string | undefined => {
+  const exactMatch = voices.find((voice) => voice.language === language);
+  if (exactMatch) {
+    return exactMatch.identifier;
+  }
+
+  const baseLanguage = language.split('-')[0];
+  return voices.find((voice) => voice.language.startsWith(`${baseLanguage}-`))?.identifier;
+};
 
 const getPlayableClipUri = async (clip?: AudioClip): Promise<string | null> => {
   if (!clip?.localUri) {
@@ -100,13 +147,13 @@ class SpeechEngine {
 
   private currentPlayer: AudioPlayer | null = null;
 
-  private settings: Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'> = {
+  private settings: SpeechSettings = {
     ttsRate: 0.86,
     ttsPitch: 1,
     preferredVoice: undefined,
   };
 
-  public setSettings(settings: Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>): void {
+  public setSettings(settings: SpeechSettings): void {
     this.settings = settings;
   }
 
@@ -187,7 +234,7 @@ class SpeechEngine {
 
   public previewTts = async (
     text: string,
-    settings: Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>
+    settings: SpeechSettings
   ): Promise<void> => {
     await this.cancel();
     this.jobId += 1;
@@ -195,35 +242,128 @@ class SpeechEngine {
     await this.playTts(text, activeJob, settings);
   };
 
+  private configureTtsAudioMode = async (): Promise<void> => {
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: 'duckOthers',
+    });
+  };
+
+  private resolveTtsVoice = async (settings: SpeechSettings): Promise<TtsVoiceSelection> => {
+    if (!settings.preferredVoice) {
+      return {
+        language: TTS_LANGUAGE,
+      };
+    }
+
+    try {
+      const voices = await getAvailableVoices();
+      const preferredVoice = voices.find((voice) => voice.identifier === settings.preferredVoice);
+      if (preferredVoice) {
+        return {
+          language: preferredVoice.language || TTS_LANGUAGE,
+          voice: preferredVoice.identifier,
+        };
+      }
+
+      const fallbackVoice = findLanguageVoice(voices, TTS_LANGUAGE);
+      logEvent('speech_voice_unavailable', {
+        preferred_voice: settings.preferredVoice,
+        platform: Platform.OS,
+        fallback_voice: fallbackVoice ?? null,
+      });
+
+      return {
+        language: TTS_LANGUAGE,
+        voice: fallbackVoice,
+      };
+    } catch (error) {
+      logError('speech_voice_lookup_error', error, {
+        platform: Platform.OS,
+      });
+
+      return {
+        language: TTS_LANGUAGE,
+      };
+    }
+  };
+
   private playTts = async (
     text: string,
     activeJob: number,
-    settingsOverride?: Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>
+    settingsOverride?: SpeechSettings
   ): Promise<void> => {
     if (!text.trim()) {
       return;
     }
 
     const settings = settingsOverride ?? this.settings;
+    const timeoutMs = Math.min(
+      TTS_TIMEOUT_MAX_MS,
+      Math.max(TTS_TIMEOUT_MIN_MS, estimateTextDuration(text) + TTS_TIMEOUT_BUFFER_MS)
+    );
+
+    await this.configureTtsAudioMode();
+    const voiceSelection = await this.resolveTtsVoice(settings);
 
     await new Promise<void>((resolve, reject) => {
-      Speech.speak(text, {
-        language: 'cs-CZ',
-        rate: settings.ttsRate,
-        pitch: settings.ttsPitch,
-        voice: settings.preferredVoice,
-        onDone: () => {
-          if (activeJob === this.jobId) {
-            resolve();
-          }
-        },
-        onStopped: () => {
-          resolve();
-        },
-        onError: (error) => {
-          reject(error);
-        },
+      let didSettle = false;
+
+      const finishResolve = () => {
+        if (didSettle) {
+          return;
+        }
+        didSettle = true;
+        clearTimeout(timeoutHandle);
+        resolve();
+      };
+
+      const finishReject = (error: unknown) => {
+        if (didSettle) {
+          return;
+        }
+        didSettle = true;
+        clearTimeout(timeoutHandle);
+        reject(error instanceof Error ? error : new Error('TTS playback failed'));
+      };
+
+      const timeoutHandle = setTimeout(() => {
+        void Speech.stop().catch(() => {
+          // Best effort stop for stuck TTS jobs.
+        });
+        finishReject(new Error('TTS playback timeout'));
+      }, timeoutMs);
+
+      try {
+        Speech.speak(text, {
+          language: voiceSelection.language,
+          rate: settings.ttsRate,
+          pitch: settings.ttsPitch,
+          voice: voiceSelection.voice,
+          useApplicationAudioSession: Platform.OS === 'ios',
+          onDone: () => {
+            if (activeJob === this.jobId) {
+              finishResolve();
+            }
+          },
+          onStopped: () => {
+            finishResolve();
+          },
+          onError: (error) => {
+            finishReject(error);
+          },
+        });
+      } catch (error) {
+        finishReject(error);
+      }
+    }).catch((error) => {
+      logError('speech_tts_error', error, {
+        platform: Platform.OS,
+        preferred_voice: settings.preferredVoice ?? null,
       });
+      throw error;
     });
   };
 

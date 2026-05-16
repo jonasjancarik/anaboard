@@ -1,9 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
-  LayoutAnimation,
   PanResponder,
   Pressable,
   ScrollView,
@@ -13,8 +13,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Reanimated, { LinearTransition } from 'react-native-reanimated';
 
 import { speechEngine, buildSpeechSegments } from '../../speech/speechEngine';
+import { BoardTile } from '../components/BoardTile';
+import { PhraseBar, type PhraseBarItem } from '../components/PhraseBar';
+import { buildPhrasePredictions } from '../utils/phraseSuggestions';
 import {
   GRID_COLUMNS,
   GRID_GAP,
@@ -25,15 +29,28 @@ import {
   MIN_TILE_SIZE,
   styles,
 } from './BoardScreen.styles';
+import {
+  BOARD_SPREAD_GAP,
+  getLogicalPageWidth,
+  getPageIndexForContentX,
+  getPageLeft,
+  getSpreadCount,
+  getSpreadIndexForPage,
+  getSpreadOffset,
+  normalizeBoardPageIndex,
+  WIDE_BOARD_BREAKPOINT,
+} from './boardPagerLayout';
 import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
+import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
-import type { SentenceToken, Tile } from '../../../shared/types/domain';
+import { appHaptics } from '../../../shared/feedback/haptics';
+import type { PhraseSource, PhraseTokenSnapshot, SentenceToken, Tile } from '../../../shared/types/domain';
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
 
 type BoardScreenProps = {
-  onOpenCaregiver: () => void;
+  onOpenCaregiver: () => Promise<boolean>;
   onOpenSettings: () => void;
 };
 
@@ -56,8 +73,31 @@ type PendingReorderTouch = {
   startPageY: number;
 };
 
+type RecentTileTap = {
+  tileId: string;
+  tokenId: string;
+  atMs: number;
+  compositionTimer: ReturnType<typeof setTimeout> | null;
+};
+
+type PagerScrollEvent = {
+  nativeEvent: {
+    contentOffset: {
+      x: number;
+    };
+  };
+};
+
+type LogicalBoardPage = {
+  pageIndex: number;
+  tiles: Tile[];
+};
+
 const REORDER_LONG_PRESS_MS = 180;
 const PAGE_SWITCH_EDGE_THRESHOLD = 44;
+const TILE_TAP_UNDO_WINDOW_MS = 550;
+const VISIBLE_SPREAD_WINDOW_RADIUS = 1;
+const REORDER_LAYOUT_TRANSITION = LinearTransition.duration(140);
 const ACTION_TEXT_PROPS = {
   allowFontScaling: false,
   numberOfLines: 1 as const,
@@ -82,21 +122,61 @@ const moveIdInArray = (ids: string[], fromIndex: number, toIndex: number): strin
   return next;
 };
 
+const toPhraseTokenSnapshot = (
+  token: Tile | SentenceToken | PhraseTokenSnapshot
+): PhraseTokenSnapshot => {
+  if ('id' in token) {
+    return {
+      tileId: token.id,
+      label: token.labelCs,
+      emoji: token.emoji,
+      visualType: token.visualType,
+      imageLocalUri: token.imageLocalUri,
+      imageRemotePath: token.imageRemotePath,
+    };
+  }
+
+  return {
+    tileId: token.tileId,
+    label: token.label,
+    emoji: token.emoji,
+    visualType: token.visualType,
+    imageLocalUri: token.imageLocalUri,
+    imageRemotePath: token.imageRemotePath,
+  };
+};
+
+const resolvePhraseTokens = (
+  tokens: PhraseTokenSnapshot[],
+  tilesById: Record<string, Tile>
+): PhraseTokenSnapshot[] => {
+  return tokens.map((token) => {
+    const tile = tilesById[token.tileId];
+    return tile ? toPhraseTokenSnapshot(tile) : token;
+  });
+};
+
 export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProps) => {
   const boardPagerRef = useRef<ScrollView>(null);
   const boardViewportRef = useRef<View>(null);
   const sentenceScrollRef = useRef<ScrollView>(null);
   const flashNewTileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pagerScrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAnimatedPageRef = useRef<number | null>(null);
   const suppressTapAfterLongPressRef = useRef(false);
+  const recentTileTapRef = useRef<RecentTileTap | null>(null);
+  const pendingCompositionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const dragStateRef = useRef<BoardDragState | null>(null);
   const reorderTileIdsRef = useRef<string[]>([]);
   const pendingReorderTouchRef = useRef<PendingReorderTouch | null>(null);
   const reorderLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boardViewportLeftRef = useRef(0);
+  const lastAppliedSpreadWidthRef = useRef(0);
   const pageSwitchArmedRef = useRef(true);
   const wiggleValue = useRef(new Animated.Value(0)).current;
   const newTileFlashValue = useRef(new Animated.Value(0)).current;
+  const dragOverlayTranslateX = useRef(new Animated.Value(0)).current;
+  const dragOverlayTranslateY = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomBarBottomPadding = Math.max(8, Math.min(insets.bottom, 16));
@@ -104,22 +184,36 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
   const sentence = useAppStore((state) => state.sentence);
+  const savedPhrases = useAppStore((state) => state.savedPhrases);
+  const recentPhrases = useAppStore((state) => state.recentPhrases);
+  const suggestionPhrases = useAppStore((state) => state.suggestionPhrases);
   const clipsById = useAppStore((state) => state.clipsById);
   const settings = useAppStore((state) => state.settings);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const boardPageIndex = useAppStore((state) => state.boardPageIndex);
+  const pendingCaregiverAction = useAppStore((state) => state.pendingCaregiverAction);
   const addTileToSentence = useAppStore((state) => state.addTileToSentence);
+  const appendPhraseTokens = useAppStore((state) => state.appendPhraseTokens);
+  const replaceSentenceWithTokens = useAppStore((state) => state.replaceSentenceWithTokens);
   const removeSentenceToken = useAppStore((state) => state.removeSentenceToken);
   const clearSentence = useAppStore((state) => state.clearSentence);
   const setSpeaking = useAppStore((state) => state.setSpeaking);
+  const saveCurrentSentenceAsPhrase = useAppStore((state) => state.saveCurrentSentenceAsPhrase);
+  const deleteSavedPhrase = useAppStore((state) => state.deleteSavedPhrase);
+  const recordPhraseComposition = useAppStore((state) => state.recordPhraseComposition);
+  const recordPhrasePlayback = useAppStore((state) => state.recordPhrasePlayback);
   const createTileAfter = useAppStore((state) => state.createTileAfter);
   const moveTile = useAppStore((state) => state.moveTile);
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
   const setBoardPageIndex = useAppStore((state) => state.setBoardPageIndex);
+  const setPendingCaregiverAction = useAppStore((state) => state.setPendingCaregiverAction);
+  const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
   const lockCaregiver = useAppStore((state) => state.lockCaregiver);
   const navigate = useAppStore((state) => state.navigate);
 
   const showLabels = settings?.showLabels ?? false;
+  const phraseBarEnabled = settings?.phraseBarEnabled ?? true;
+  const suggestionCount = settings?.suggestionCount ?? 3;
   const gridColumns = board?.columns ?? GRID_COLUMNS;
   const gridRows = board?.rows ?? GRID_ROWS;
   const pageSize = gridColumns * gridRows;
@@ -132,17 +226,88 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const [boardViewportWidth, setBoardViewportWidth] = useState(0);
   const [boardViewportHeight, setBoardViewportHeight] = useState(0);
   const [currentPage, setCurrentPage] = useState(boardPageIndex);
+  const [phraseFeedback, setPhraseFeedback] = useState<{
+    kind: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const currentPageRef = useRef(0);
 
   const tilesById = useMemo(() => selectTilesById(tiles), [tiles]);
+  const phrasePredictions = useMemo(() => {
+    return buildPhrasePredictions({
+      sentence,
+      savedPhrases,
+      recentPhrases: suggestionPhrases,
+      tilesById,
+      limit: suggestionCount,
+    });
+  }, [savedPhrases, sentence, suggestionCount, suggestionPhrases, tilesById]);
+  const idlePhraseItems = useMemo<PhraseBarItem[]>(() => {
+    const items: PhraseBarItem[] = [];
+    const seenPhraseKeys = new Set<string>();
+
+    for (const phrase of savedPhrases) {
+      if (phrase.tokens.length === 0 || seenPhraseKeys.has(phrase.phraseKey)) {
+        continue;
+      }
+
+      seenPhraseKeys.add(phrase.phraseKey);
+      items.push({
+        id: `saved:${phrase.id}`,
+        kind: 'saved',
+        label: phrase.spokenText,
+        tokens: resolvePhraseTokens(phrase.tokens, tilesById),
+      });
+    }
+
+    for (const phrase of recentPhrases) {
+      const phraseKey = phrase.tokens.map((token) => token.tileId).join('|');
+      if (phrase.tokens.length === 0 || seenPhraseKeys.has(phraseKey)) {
+        continue;
+      }
+
+      seenPhraseKeys.add(phraseKey);
+      items.push({
+        id: `recent:${phrase.id}`,
+        kind: 'recent',
+        label: phrase.spokenText,
+        tokens: resolvePhraseTokens(phrase.tokens, tilesById),
+      });
+    }
+
+    return items.slice(0, 8);
+  }, [recentPhrases, savedPhrases, tilesById]);
+  const phraseBarItems = useMemo<PhraseBarItem[]>(() => {
+    if (sentence.length === 0) {
+      return idlePhraseItems;
+    }
+
+    return phrasePredictions.map((prediction) => ({
+      id: `prediction:${prediction.id}`,
+      kind: 'prediction',
+      label: prediction.token.label,
+      tokens: [prediction.token],
+    }));
+  }, [idlePhraseItems, phrasePredictions, sentence.length]);
 
   useEffect(() => {
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  const pageWidth = boardViewportWidth > 0 ? boardViewportWidth : width;
-  const availableGridWidth = Math.min(pageWidth - LAYOUT_PADDING * 2, MAX_GRID_WIDTH);
+  const spreadWidth = boardViewportWidth > 0 ? boardViewportWidth : width;
+  const isSpreadMode = spreadWidth >= WIDE_BOARD_BREAKPOINT;
+  const visiblePagesPerSpread = isSpreadMode ? 2 : 1;
+  const spreadGap = isSpreadMode ? BOARD_SPREAD_GAP : 0;
+  const logicalPageWidth = getLogicalPageWidth(
+    spreadWidth,
+    visiblePagesPerSpread,
+    spreadGap
+  );
+  const availableGridWidth = Math.min(
+    Math.max(0, logicalPageWidth - LAYOUT_PADDING * 2),
+    MAX_GRID_WIDTH
+  );
   const tileSize = useMemo(() => {
     const widthBound = (availableGridWidth - GRID_GAP * (gridColumns - 1)) / gridColumns;
     const heightBound =
@@ -158,7 +323,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const pageGridWidth = tileSize * gridColumns + GRID_GAP * (gridColumns - 1);
   const pageGridHeight = tileSize * gridRows + GRID_GAP * (gridRows - 1);
   const effectivePageHeight = boardViewportHeight > 0 ? boardViewportHeight : pageGridHeight;
-  const horizontalGridOffset = Math.max(LAYOUT_PADDING, (pageWidth - pageGridWidth) / 2);
+  const horizontalGridOffset = Math.max(
+    LAYOUT_PADDING,
+    (logicalPageWidth - pageGridWidth) / 2
+  );
   const verticalGridOffset = Math.max(0, (effectivePageHeight - pageGridHeight) / 2);
   const tileVisualSize = showLabels
     ? Math.max(42, Math.min(tileSize - 26, 60))
@@ -240,93 +408,169 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return tiles;
     }
 
-    return reorderTileIds
+    const nextOrderedTiles = reorderTileIds
       .map((id) => tilesById[id])
       .filter((tile): tile is Tile => Boolean(tile));
+
+    if (nextOrderedTiles.length === tiles.length) {
+      return nextOrderedTiles;
+    }
+
+    const orderedTileIds = new Set(nextOrderedTiles.map((tile) => tile.id));
+    return [
+      ...nextOrderedTiles,
+      ...tiles.filter((tile) => !orderedTileIds.has(tile.id)),
+    ];
   }, [caregiverUnlocked, reorderTileIds, tiles, tilesById]);
 
   const pageCount = Math.max(1, Math.ceil(orderedTiles.length / pageSize));
-  const pagedTiles = useMemo(() => {
-    const pages: Tile[][] = [];
+  const logicalPages = useMemo<LogicalBoardPage[]>(() => {
+    const pages: LogicalBoardPage[] = [];
 
     for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
       const startIndex = pageIndex * pageSize;
-      pages.push(orderedTiles.slice(startIndex, startIndex + pageSize));
+      pages.push({
+        pageIndex,
+        tiles: orderedTiles.slice(startIndex, startIndex + pageSize),
+      });
     }
 
     return pages;
   }, [orderedTiles, pageCount, pageSize]);
+  const spreadCount = getSpreadCount(pageCount, visiblePagesPerSpread);
+  const pagedSpreads = useMemo(() => {
+    const spreads: Array<Array<LogicalBoardPage | null>> = [];
 
+    for (let spreadIndex = 0; spreadIndex < spreadCount; spreadIndex += 1) {
+      const startPageIndex = spreadIndex * visiblePagesPerSpread;
+      const spreadPages = Array.from({ length: visiblePagesPerSpread }, (_, pageOffset) => {
+        return logicalPages[startPageIndex + pageOffset] ?? null;
+      });
+
+      spreads.push(spreadPages);
+    }
+
+    return spreads;
+  }, [logicalPages, spreadCount, visiblePagesPerSpread]);
+
+  const currentSpreadIndex = getSpreadIndexForPage(currentPage, visiblePagesPerSpread);
   const draggedTile = activeDrag ? tilesById[activeDrag.tileId] : undefined;
 
-  const clampPageIndex = useCallback(
-    (nextPage: number) => Math.max(0, Math.min(pageCount - 1, nextPage)),
-    [pageCount]
+  const normalizeVisiblePageIndex = useCallback(
+    (nextPage: number) =>
+      normalizeBoardPageIndex(nextPage, pageCount, visiblePagesPerSpread),
+    [pageCount, visiblePagesPerSpread]
+  );
+
+  const setVisiblePage = useCallback(
+    (nextPage: number) => {
+      const clampedPage = normalizeVisiblePageIndex(nextPage);
+      if (clampedPage !== currentPageRef.current) {
+        currentPageRef.current = clampedPage;
+        setCurrentPage((page) => (page === clampedPage ? page : clampedPage));
+      }
+
+      return clampedPage;
+    },
+    [normalizeVisiblePageIndex]
+  );
+
+  const commitVisiblePage = useCallback(
+    (nextPage: number) => {
+      const clampedPage = setVisiblePage(nextPage);
+      setBoardPageIndex(clampedPage);
+      return clampedPage;
+    },
+    [setBoardPageIndex, setVisiblePage]
   );
 
   const scrollToPage = useCallback(
     (nextPage: number, animated: boolean) => {
-      const clampedPage = clampPageIndex(nextPage);
-      currentPageRef.current = clampedPage;
-      setCurrentPage((page) => (page === clampedPage ? page : clampedPage));
-      setBoardPageIndex(clampedPage);
+      if (pagerScrollIdleTimerRef.current) {
+        clearTimeout(pagerScrollIdleTimerRef.current);
+        pagerScrollIdleTimerRef.current = null;
+      }
 
-      if (pageWidth <= 0) {
+      const clampedPage = commitVisiblePage(nextPage);
+      const spreadIndex = getSpreadIndexForPage(clampedPage, visiblePagesPerSpread);
+
+      if (spreadWidth <= 0) {
         return;
       }
 
       boardPagerRef.current?.scrollTo({
-        x: clampedPage * pageWidth,
+        x: getSpreadOffset(spreadIndex, spreadWidth),
         animated,
       });
     },
-    [clampPageIndex, pageWidth, setBoardPageIndex]
+    [commitVisiblePage, spreadWidth, visiblePagesPerSpread]
   );
 
   useEffect(() => {
-    const nextPage = clampPageIndex(boardPageIndex);
+    const nextPage = normalizeVisiblePageIndex(boardPageIndex);
     if (nextPage !== boardPageIndex) {
       setBoardPageIndex(nextPage);
     }
 
-    if (nextPage !== currentPageRef.current) {
-      currentPageRef.current = nextPage;
-      setCurrentPage((page) => (page === nextPage ? page : nextPage));
-    }
+    const pageChanged = nextPage !== currentPageRef.current;
+    const spreadWidthChanged =
+      spreadWidth > 0 && Math.abs(lastAppliedSpreadWidthRef.current - spreadWidth) > 1;
+    setVisiblePage(nextPage);
 
-    if (pageWidth > 0) {
+    if (spreadWidth > 0 && (pageChanged || spreadWidthChanged)) {
       const shouldAnimate = pendingAnimatedPageRef.current === nextPage;
       boardPagerRef.current?.scrollTo({
-        x: nextPage * pageWidth,
+        x: getSpreadOffset(
+          getSpreadIndexForPage(nextPage, visiblePagesPerSpread),
+          spreadWidth
+        ),
         animated: shouldAnimate,
       });
       if (shouldAnimate) {
         pendingAnimatedPageRef.current = null;
       }
     }
-  }, [boardPageIndex, clampPageIndex, pageWidth, setBoardPageIndex]);
+
+    lastAppliedSpreadWidthRef.current = spreadWidth;
+  }, [
+    boardPageIndex,
+    normalizeVisiblePageIndex,
+    setBoardPageIndex,
+    setVisiblePage,
+    spreadWidth,
+    visiblePagesPerSpread,
+  ]);
 
   useEffect(() => {
     if (pageCount === 0) {
       return;
     }
 
-    const nextPage = clampPageIndex(currentPageRef.current);
+    const nextPage = normalizeVisiblePageIndex(currentPageRef.current);
     if (nextPage === currentPageRef.current) {
       return;
     }
 
-    currentPageRef.current = nextPage;
-    setCurrentPage((page) => (page === nextPage ? page : nextPage));
+    setVisiblePage(nextPage);
     setBoardPageIndex(nextPage);
 
-    if (pageWidth > 0) {
+    if (spreadWidth > 0) {
       boardPagerRef.current?.scrollTo({
-        x: nextPage * pageWidth,
+        x: getSpreadOffset(
+          getSpreadIndexForPage(nextPage, visiblePagesPerSpread),
+          spreadWidth
+        ),
         animated: false,
       });
     }
-  }, [clampPageIndex, pageCount, pageWidth, setBoardPageIndex]);
+  }, [
+    normalizeVisiblePageIndex,
+    pageCount,
+    setBoardPageIndex,
+    setVisiblePage,
+    spreadWidth,
+    visiblePagesPerSpread,
+  ]);
 
   const getSlotPosition = useCallback(
     (index: number) => {
@@ -336,11 +580,30 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       const column = localIndex % gridColumns;
 
       return {
-        left: pageIndex * pageWidth + horizontalGridOffset + column * tileStep,
+        left:
+          getPageLeft(
+            pageIndex,
+            visiblePagesPerSpread,
+            spreadWidth,
+            logicalPageWidth,
+            spreadGap
+          ) +
+          horizontalGridOffset +
+          column * tileStep,
         top: verticalGridOffset + row * tileStep,
       };
     },
-    [gridColumns, horizontalGridOffset, pageSize, pageWidth, tileStep, verticalGridOffset]
+    [
+      gridColumns,
+      horizontalGridOffset,
+      logicalPageWidth,
+      pageSize,
+      spreadGap,
+      spreadWidth,
+      tileStep,
+      verticalGridOffset,
+      visiblePagesPerSpread,
+    ]
   );
 
   const getTargetIndexFromPosition = useCallback(
@@ -350,8 +613,24 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
 
       const tileCenterLeft = left + tileSize / 2;
-      const pageIndex = clampPageIndex(Math.floor(tileCenterLeft / pageWidth));
-      const normalizedLeft = left - pageIndex * pageWidth - horizontalGridOffset;
+      const pageIndex = getPageIndexForContentX(
+        tileCenterLeft,
+        pageCount,
+        visiblePagesPerSpread,
+        spreadWidth,
+        logicalPageWidth,
+        spreadGap
+      );
+      const normalizedLeft =
+        left -
+        getPageLeft(
+          pageIndex,
+          visiblePagesPerSpread,
+          spreadWidth,
+          logicalPageWidth,
+          spreadGap
+        ) -
+        horizontalGridOffset;
       const normalizedTop = top - verticalGridOffset;
       const column = Math.max(0, Math.min(gridColumns - 1, Math.round(normalizedLeft / tileStep)));
       const row = Math.max(0, Math.min(gridRows - 1, Math.round(normalizedTop / tileStep)));
@@ -362,37 +641,113 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return Math.max(0, Math.min(totalTiles - 1, pageIndex * pageSize + localIndex));
     },
     [
-      clampPageIndex,
       gridColumns,
       gridRows,
       horizontalGridOffset,
+      logicalPageWidth,
+      pageCount,
       pageSize,
-      pageWidth,
+      spreadGap,
+      spreadWidth,
       tileSize,
       tileStep,
       verticalGridOffset,
+      visiblePagesPerSpread,
     ]
   );
 
   const clearBoardDragState = useCallback(() => {
     pageSwitchArmedRef.current = true;
     dragStateRef.current = null;
+    dragOverlayTranslateX.stopAnimation();
+    dragOverlayTranslateY.stopAnimation();
+    dragOverlayTranslateX.setValue(0);
+    dragOverlayTranslateY.setValue(0);
     setActiveDrag(null);
+  }, [dragOverlayTranslateX, dragOverlayTranslateY]);
+
+  const clearAllPendingCompositionRecords = useCallback(() => {
+    pendingCompositionTimersRef.current.forEach((timer) => {
+      clearTimeout(timer);
+    });
+    pendingCompositionTimersRef.current.clear();
+    recentTileTapRef.current = null;
   }, []);
 
-  const playTokens = async (tokens: SentenceToken[]) => {
+  const clearRecentTileTap = useCallback((cancelPendingComposition: boolean) => {
+    const recentTileTap = recentTileTapRef.current;
+    if (cancelPendingComposition && recentTileTap?.compositionTimer) {
+      clearTimeout(recentTileTap.compositionTimer);
+      pendingCompositionTimersRef.current.delete(recentTileTap.compositionTimer);
+    }
+
+    recentTileTapRef.current = null;
+  }, []);
+
+  const schedulePhraseCompositionRecord = useCallback(
+    (tokens: PhraseTokenSnapshot[]) => {
+      if (tokens.length < 2) {
+        return null;
+      }
+
+      const timer = setTimeout(() => {
+        pendingCompositionTimersRef.current.delete(timer);
+        void recordPhraseComposition(tokens).catch(() => {
+          // Suggestions should still work even if composition history fails to persist.
+        });
+      }, TILE_TAP_UNDO_WINDOW_MS);
+
+      pendingCompositionTimersRef.current.add(timer);
+      return timer;
+    },
+    [recordPhraseComposition]
+  );
+
+  const playTokens = async (
+    tokens: Array<SentenceToken | PhraseTokenSnapshot>,
+    options?: {
+      recordSource?: PhraseSource;
+      savedPhraseId?: string;
+    }
+  ) => {
     if (tokens.length === 0 || !settings) {
       return;
     }
 
+    const playbackTokens = tokens.map((token) =>
+      'tokenId' in token
+        ? token
+        : {
+            tokenId: createId('phrase-token'),
+            tileId: token.tileId,
+            label: token.label,
+            emoji: token.emoji,
+            visualType: token.visualType,
+            imageLocalUri: token.imageLocalUri,
+            imageRemotePath: token.imageRemotePath,
+          }
+    );
+
     const segments = await buildSpeechSegments({
-      tokens,
+      tokens: playbackTokens,
       tilesById,
       clipsById,
     });
 
     if (segments.length === 0) {
       return;
+    }
+
+    if (options?.recordSource) {
+      try {
+        await recordPhrasePlayback({
+          tokens: playbackTokens,
+          source: options.recordSource,
+          savedPhraseId: options.savedPhraseId,
+        });
+      } catch {
+        // Phrase playback should continue even if history persistence fails.
+      }
     }
 
     speechEngine.setSettings({
@@ -415,38 +770,233 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
+    setPhraseFeedback(null);
+
     if (caregiverUnlocked) {
+      clearRecentTileTap(false);
+      void appHaptics.tileTap();
       setEditorTargetTileId(tileId);
       navigate('editor');
       return;
     }
 
-    const tile = tilesById[tileId];
-    if (!tile) {
+    const lastSentenceToken = sentence[sentence.length - 1];
+    const recentTileTap = recentTileTapRef.current;
+    const now = Date.now();
+    const shouldUndoRecentTileTap =
+      Boolean(lastSentenceToken) &&
+      lastSentenceToken?.tileId === tileId &&
+      recentTileTap?.tileId === tileId &&
+      recentTileTap?.tokenId === lastSentenceToken?.tokenId &&
+      now - recentTileTap.atMs <= TILE_TAP_UNDO_WINDOW_MS;
+
+    if (lastSentenceToken && shouldUndoRecentTileTap) {
+      clearRecentTileTap(true);
+      void appHaptics.selection();
+      removeSentenceToken(lastSentenceToken.tokenId);
+      setSpeaking(false);
+      void speechEngine.cancel().catch(() => {
+        // Undo should still work even if speech does not stop cleanly.
+      });
       return;
     }
 
-    addTileToSentence(tileId);
+    const tile = tilesById[tileId];
+    if (!tile) {
+      clearRecentTileTap(false);
+      return;
+    }
 
-    void playTokens([
-      {
-        tokenId: createId('tap'),
-        tileId,
-        label: tile.labelCs,
-        emoji: tile.emoji,
-        visualType: tile.visualType,
-        imageLocalUri: tile.imageLocalUri,
-        imageRemotePath: tile.imageRemotePath,
-      },
-    ]);
+    void appHaptics.tileTap();
+    const phraseToken = toPhraseTokenSnapshot(tile);
+    const nextSentenceTokens = [...sentence, phraseToken].map((token) =>
+      'tokenId' in token ? toPhraseTokenSnapshot(token) : token
+    );
+
+    addTileToSentence(tileId);
+    const nextSentence = useAppStore.getState().sentence;
+    const nextSentenceToken = nextSentence[nextSentence.length - 1];
+    const compositionTimer = schedulePhraseCompositionRecord(nextSentenceTokens);
+    recentTileTapRef.current =
+      nextSentenceToken?.tileId === tileId
+        ? {
+            tileId,
+            tokenId: nextSentenceToken.tokenId,
+            atMs: now,
+            compositionTimer,
+          }
+        : null;
+
+    void playTokens([phraseToken]);
   };
 
   const onSpeakSentence = () => {
-    void playTokens(sentence);
+    void appHaptics.tap();
+    setPhraseFeedback(null);
+    void playTokens(sentence, {
+      recordSource: 'manual',
+    });
   };
 
+  const onSavePhrase = useCallback(async () => {
+    if (sentence.length === 0) {
+      return;
+    }
+
+    if (!caregiverUnlocked) {
+      setPendingCaregiverAction('savePhrase');
+      const didStartUnlock = await onOpenCaregiver();
+      if (!didStartUnlock) {
+        clearPendingCaregiverAction();
+      }
+      return;
+    }
+
+    setPhraseFeedback(null);
+
+    try {
+      await saveCurrentSentenceAsPhrase();
+      void appHaptics.success();
+      setPhraseFeedback({
+        kind: 'success',
+        text: 'Věta uložená',
+      });
+    } catch (error) {
+      void appHaptics.error();
+      setPhraseFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Větu nešlo uložit',
+      });
+    }
+  }, [
+    caregiverUnlocked,
+    onOpenCaregiver,
+    saveCurrentSentenceAsPhrase,
+    sentence.length,
+    clearPendingCaregiverAction,
+    setPendingCaregiverAction,
+  ]);
+
+  useEffect(() => {
+    if (pendingCaregiverAction !== 'savePhrase' || !caregiverUnlocked) {
+      return;
+    }
+
+    clearPendingCaregiverAction();
+
+    if (sentence.length === 0) {
+      return;
+    }
+
+    void onSavePhrase();
+  }, [
+    caregiverUnlocked,
+    clearPendingCaregiverAction,
+    onSavePhrase,
+    pendingCaregiverAction,
+    sentence.length,
+  ]);
+
+  const onPhraseBarItemPress = useCallback(
+    (item: PhraseBarItem) => {
+      clearRecentTileTap(false);
+      setPhraseFeedback(null);
+
+      if (item.kind === 'prediction') {
+        const nextToken = item.tokens[0];
+        if (!nextToken) {
+          return;
+        }
+
+        const nextSentenceTokens = [...sentence.map(toPhraseTokenSnapshot), nextToken];
+        appendPhraseTokens([nextToken]);
+        void recordPhraseComposition(nextSentenceTokens).catch(() => {
+          // Suggestions should still work even if composition history fails to persist.
+        });
+        void playTokens([nextToken]);
+        return;
+      }
+
+      const phrase =
+        item.kind === 'saved'
+          ? savedPhrases.find((candidate) => `saved:${candidate.id}` === item.id)
+          : recentPhrases.find((candidate) => `recent:${candidate.id}` === item.id);
+
+      if (!phrase) {
+        return;
+      }
+
+      clearAllPendingCompositionRecords();
+      replaceSentenceWithTokens(phrase.tokens);
+      void playTokens(phrase.tokens, {
+        recordSource: item.kind,
+        savedPhraseId: item.kind === 'saved' ? phrase.id : undefined,
+      });
+    },
+    [
+      appendPhraseTokens,
+      clearAllPendingCompositionRecords,
+      clearRecentTileTap,
+      playTokens,
+      recentPhrases,
+      recordPhraseComposition,
+      sentence,
+      replaceSentenceWithTokens,
+      savedPhrases,
+    ]
+  );
+
+  const onPhraseBarItemLongPress = useCallback(
+    (item: PhraseBarItem) => {
+      if (!caregiverUnlocked || item.kind !== 'saved') {
+        return;
+      }
+
+      const phrase = savedPhrases.find((candidate) => `saved:${candidate.id}` === item.id);
+      if (!phrase) {
+        return;
+      }
+
+      Alert.alert('Smazat uloženou větu?', phrase.spokenText, [
+        {
+          text: 'Nechat',
+          style: 'cancel',
+        },
+        {
+          text: 'Smazat',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await deleteSavedPhrase(phrase.id);
+                void appHaptics.warning();
+                setPhraseFeedback({
+                  kind: 'success',
+                  text: 'Uložená věta smazaná',
+                });
+              } catch (error) {
+                void appHaptics.error();
+                setPhraseFeedback({
+                  kind: 'error',
+                  text:
+                    error instanceof Error
+                      ? error.message
+                      : 'Uloženou větu nešlo smazat',
+                });
+              }
+            })();
+          },
+        },
+      ]);
+    },
+    [caregiverUnlocked, deleteSavedPhrase, savedPhrases]
+  );
+
   const onClearSentence = () => {
+    clearAllPendingCompositionRecords();
+    void appHaptics.tap();
     clearSentence();
+    setPhraseFeedback(null);
     setSpeaking(false);
     void speechEngine.cancel().catch(() => {
       // Clear should still work even if the speech engine fails to stop cleanly.
@@ -462,16 +1012,19 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
       const nextDrag = { ...drag, dx, dy };
       dragStateRef.current = nextDrag;
-      setActiveDrag(nextDrag);
+      dragOverlayTranslateX.setValue(dx);
+      dragOverlayTranslateY.setValue(dy);
 
       const viewportLeft = drag.startViewportLeft + dx;
       const localFingerX =
         pageX !== null ? pageX - boardViewportLeftRef.current : viewportLeft + tileSize / 2;
       let targetPage = currentPageRef.current;
 
-      if (localFingerX >= pageWidth - PAGE_SWITCH_EDGE_THRESHOLD) {
+      if (localFingerX >= spreadWidth - PAGE_SWITCH_EDGE_THRESHOLD) {
         if (pageSwitchArmedRef.current) {
-          const nextPage = clampPageIndex(currentPageRef.current + 1);
+          const nextPage = normalizeVisiblePageIndex(
+            currentPageRef.current + visiblePagesPerSpread
+          );
           if (nextPage !== currentPageRef.current) {
             targetPage = nextPage;
             pageSwitchArmedRef.current = false;
@@ -479,7 +1032,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         }
       } else if (localFingerX <= PAGE_SWITCH_EDGE_THRESHOLD) {
         if (pageSwitchArmedRef.current) {
-          const nextPage = clampPageIndex(currentPageRef.current - 1);
+          const nextPage = normalizeVisiblePageIndex(
+            currentPageRef.current - visiblePagesPerSpread
+          );
           if (nextPage !== currentPageRef.current) {
             targetPage = nextPage;
             pageSwitchArmedRef.current = false;
@@ -490,6 +1045,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }
 
       if (targetPage !== currentPageRef.current) {
+        void appHaptics.page();
         scrollToPage(targetPage, false);
       }
 
@@ -499,7 +1055,14 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           return currentIds;
         }
 
-        const contentLeft = targetPage * pageWidth + viewportLeft;
+        const contentLeft =
+          getPageLeft(
+            targetPage,
+            visiblePagesPerSpread,
+            spreadWidth,
+            logicalPageWidth,
+            spreadGap
+          ) + viewportLeft;
         const targetIndex = getTargetIndexFromPosition(
           contentLeft,
           drag.startTop + dy,
@@ -509,13 +1072,23 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           return currentIds;
         }
 
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         const nextIds = moveIdInArray(currentIds, currentIndex, targetIndex);
         reorderTileIdsRef.current = nextIds;
         return nextIds;
       });
     },
-    [clampPageIndex, getTargetIndexFromPosition, pageWidth, scrollToPage, tileSize]
+    [
+      getTargetIndexFromPosition,
+      logicalPageWidth,
+      normalizeVisiblePageIndex,
+      scrollToPage,
+      spreadGap,
+      spreadWidth,
+      tileSize,
+      dragOverlayTranslateX,
+      dragOverlayTranslateY,
+      visiblePagesPerSpread,
+    ]
   );
 
   const commitDrag = useCallback(async () => {
@@ -537,7 +1110,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       await moveTile(drag.tileId, finalIndex);
+      void appHaptics.success();
     } catch (error) {
+      void appHaptics.error();
       setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
     }
   }, [clearBoardDragState, moveTile]);
@@ -553,13 +1128,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   useEffect(() => {
     return () => {
+      clearAllPendingCompositionRecords();
       clearPendingReorderTouch();
       if (flashNewTileTimerRef.current) {
         clearTimeout(flashNewTileTimerRef.current);
       }
+      if (pagerScrollIdleTimerRef.current) {
+        clearTimeout(pagerScrollIdleTimerRef.current);
+      }
       newTileFlashValue.stopAnimation();
     };
-  }, [clearPendingReorderTouch, newTileFlashValue]);
+  }, [clearAllPendingCompositionRecords, clearPendingReorderTouch, newTileFlashValue]);
 
   const startReorderDrag = useCallback(
     (pendingTouch: PendingReorderTouch) => {
@@ -569,7 +1148,15 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         startIndex: pendingTouch.startIndex,
         startLeft: left,
         startTop: top,
-        startViewportLeft: left - currentPageRef.current * pageWidth,
+        startViewportLeft:
+          left -
+          getPageLeft(
+            currentPageRef.current,
+            visiblePagesPerSpread,
+            spreadWidth,
+            logicalPageWidth,
+            spreadGap
+          ),
         startPageX: pendingTouch.startPageX,
         startPageY: pendingTouch.startPageY,
         dx: 0,
@@ -581,9 +1168,19 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       pageSwitchArmedRef.current = true;
       suppressTapAfterLongPressRef.current = true;
       dragStateRef.current = nextDrag;
+      dragOverlayTranslateX.setValue(0);
+      dragOverlayTranslateY.setValue(0);
       setActiveDrag(nextDrag);
     },
-    [getSlotPosition, pageWidth]
+    [
+      dragOverlayTranslateX,
+      dragOverlayTranslateY,
+      getSlotPosition,
+      logicalPageWidth,
+      spreadGap,
+      spreadWidth,
+      visiblePagesPerSpread,
+    ]
   );
 
   const beginReorderTouch = useCallback(
@@ -664,6 +1261,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   );
 
   const onLockButtonPress = () => {
+    void appHaptics.tap();
     clearBoardDragState();
     clearPendingReorderTouch();
     setTileDragError(null);
@@ -682,6 +1280,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
+    void appHaptics.tap();
     clearBoardDragState();
     clearPendingReorderTouch();
     setTileDragError(null);
@@ -706,13 +1305,20 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
     try {
       const newTileId = await createTileAfter(anchorTile.id);
-      const nextPage = Math.floor((useAppStore.getState().tiles.length - 1) / pageSize);
-      const resolvedPage = Math.max(0, nextPage);
+      const nextTileCount = useAppStore.getState().tiles.length;
+      const nextPageCount = Math.max(1, Math.ceil(nextTileCount / pageSize));
+      const nextPage = Math.max(0, Math.floor((nextTileCount - 1) / pageSize));
+      const resolvedPage = normalizeBoardPageIndex(
+        nextPage,
+        nextPageCount,
+        visiblePagesPerSpread
+      );
+      const shouldAnimatePageChange = resolvedPage !== currentPageRef.current;
 
-      currentPageRef.current = resolvedPage;
-      setCurrentPage(resolvedPage);
-      pendingAnimatedPageRef.current = resolvedPage;
+      // Let the boardPageIndex effect drive the visible-page update so it still performs scrollTo.
+      pendingAnimatedPageRef.current = shouldAnimatePageChange ? resolvedPage : null;
       setBoardPageIndex(resolvedPage);
+      void appHaptics.success();
 
       if (flashNewTileTimerRef.current) {
         clearTimeout(flashNewTileTimerRef.current);
@@ -756,6 +1362,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         });
       }, 260);
     } catch (error) {
+      void appHaptics.error();
       setTileDragError(error instanceof Error ? error.message : 'Novou dlaždici nešlo přidat');
     } finally {
       setIsAddingTile(false);
@@ -769,6 +1376,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     orderedTiles,
     pageSize,
     setBoardPageIndex,
+    visiblePagesPerSpread,
   ]);
 
   const getTileWiggleStyle = useCallback(
@@ -806,16 +1414,56 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     }
   };
 
-  const onPagerMomentumScrollEnd = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
-    if (pageWidth <= 0) {
+  const settlePagerFromOffset = useCallback(
+    (offsetX: number) => {
+      if (spreadWidth <= 0) {
+        return;
+      }
+
+      const spreadIndex = Math.round(offsetX / spreadWidth);
+      commitVisiblePage(spreadIndex * visiblePagesPerSpread);
+    },
+    [commitVisiblePage, spreadWidth, visiblePagesPerSpread]
+  );
+
+  const onPagerScroll = useCallback(
+    (event: PagerScrollEvent) => {
+      const offsetX = event.nativeEvent.contentOffset.x;
+      if (spreadWidth <= 0) {
+        return;
+      }
+
+      const spreadIndex = Math.round(offsetX / spreadWidth);
+      setVisiblePage(spreadIndex * visiblePagesPerSpread);
+
+      if (!isWebPlatform) {
+        return;
+      }
+
+      if (pagerScrollIdleTimerRef.current) {
+        clearTimeout(pagerScrollIdleTimerRef.current);
+      }
+
+      pagerScrollIdleTimerRef.current = setTimeout(() => {
+        settlePagerFromOffset(offsetX);
+        pagerScrollIdleTimerRef.current = null;
+      }, 120);
+    },
+    [setVisiblePage, settlePagerFromOffset, spreadWidth, visiblePagesPerSpread]
+  );
+
+  const onPagerMomentumScrollEnd = useCallback((event: PagerScrollEvent) => {
+    if (pagerScrollIdleTimerRef.current) {
+      clearTimeout(pagerScrollIdleTimerRef.current);
+      pagerScrollIdleTimerRef.current = null;
+    }
+
+    if (spreadWidth <= 0) {
       return;
     }
 
-    const nextPage = clampPageIndex(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
-    currentPageRef.current = nextPage;
-    setCurrentPage((page) => (page === nextPage ? page : nextPage));
-    setBoardPageIndex(nextPage);
-  };
+    settlePagerFromOffset(event.nativeEvent.contentOffset.x);
+  }, [settlePagerFromOffset, spreadWidth]);
 
   const getTileLabelStyle = useCallback(
     (label: string) => {
@@ -865,7 +1513,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               sentence.map((token) => (
                 <Pressable
                   key={token.tokenId}
-                  onPress={() => removeSentenceToken(token.tokenId)}
+                  onPress={() => {
+                    clearAllPendingCompositionRecords();
+                    removeSentenceToken(token.tokenId);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={`Odebrat ${token.label}`}
                   style={({ pressed }) => [
@@ -912,6 +1563,28 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Uložit větu"
+            onPress={() => {
+              void onSavePhrase();
+            }}
+            disabled={sentence.length === 0}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.savePhraseButton,
+              sentence.length === 0 && styles.actionButtonDisabled,
+              pressed && styles.actionButtonPressed,
+            ]}
+          >
+            <Text style={styles.actionIcon} allowFontScaling={false}>
+              ⭐
+            </Text>
+            <Text style={[styles.actionText, styles.savePhraseText]} {...ACTION_TEXT_PROPS}>
+              Uložit
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Smazat větu"
             onPress={onClearSentence}
             disabled={sentence.length === 0}
@@ -930,9 +1603,28 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             </Text>
           </Pressable>
         </View>
+
+        {phraseBarEnabled ? (
+          <PhraseBar
+            items={phraseBarItems}
+            onPressItem={onPhraseBarItemPress}
+            onLongPressItem={caregiverUnlocked ? onPhraseBarItemLongPress : undefined}
+          />
+        ) : null}
       </View>
 
       {tileDragError ? <Text style={styles.editorHintError}>{tileDragError}</Text> : null}
+      {phraseFeedback ? (
+        <Text
+          style={
+            phraseFeedback.kind === 'error'
+              ? styles.editorHintError
+              : styles.editorHintSuccess
+          }
+        >
+          {phraseFeedback.text}
+        </Text>
+      ) : null}
 
       <View style={styles.boardArea}>
         <View
@@ -945,133 +1637,135 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             ref={boardPagerRef}
             horizontal
             pagingEnabled
-            scrollEnabled={pageCount > 1}
+            scrollEnabled={spreadCount > 1}
             style={styles.boardPagerScroll}
             showsHorizontalScrollIndicator={false}
+            onScroll={onPagerScroll}
             onMomentumScrollEnd={onPagerMomentumScrollEnd}
+            scrollEventThrottle={16}
             decelerationRate="fast"
           >
             <View
               style={[
                 styles.pagesStrip,
                 {
-                  width: pageWidth * pageCount,
+                  width: spreadWidth * spreadCount,
                   minHeight: effectivePageHeight,
                 },
               ]}
             >
-              {pagedTiles.map((pageTiles, pageIndex) => (
+              {pagedSpreads.map((spreadPages, spreadIndex) => (
                 <View
-                  key={`page-${pageIndex}`}
+                  key={`spread-${spreadIndex}`}
                   style={[
-                    styles.page,
+                    styles.spread,
                     {
-                      width: pageWidth,
+                      width: spreadWidth,
                       height: effectivePageHeight,
                     },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.pageGrid,
-                      {
-                        width: pageGridWidth,
-                        minHeight: pageGridHeight,
-                      },
-                    ]}
-                  >
-                    {pageTiles.map((tile, localIndex) => {
-                      const colors = CATEGORY_COLORS[tile.category];
-                      const highContrast = settings?.highContrast ?? false;
-                      const globalIndex = pageIndex * pageSize + localIndex;
-                      const isDraggedTile = activeDrag?.tileId === tile.id;
+                  {Math.abs(spreadIndex - currentSpreadIndex) <= VISIBLE_SPREAD_WINDOW_RADIUS ? (
+                    <View
+                      style={[
+                        styles.spreadPagesRow,
+                        {
+                          width: spreadWidth,
+                          minHeight: effectivePageHeight,
+                          gap: spreadGap,
+                        },
+                      ]}
+                    >
+                      {spreadPages.map((page, pageOffset) => {
+                        if (!page) {
+                          return (
+                            <View
+                              key={`spread-${spreadIndex}-spacer-${pageOffset}`}
+                              style={[
+                                styles.page,
+                                styles.pageSpacer,
+                                {
+                                  width: logicalPageWidth,
+                                  height: effectivePageHeight,
+                                },
+                              ]}
+                            />
+                          );
+                        }
 
-                      return (
-                        <Animated.View
-                          key={tile.id}
-                          style={
-                            caregiverUnlocked && wiggleActive && !isDraggedTile
-                              ? getTileWiggleStyle(globalIndex)
-                              : undefined
-                          }
-                        >
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={
-                              caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`
-                            }
-                            onPress={() => onTilePress(tile.id)}
-                            onLongPress={
-                              caregiverUnlocked
-                                ? (event) => {
-                                    beginReorderTouch(
-                                      tile.id,
-                                      globalIndex,
-                                      event.nativeEvent.pageX,
-                                      event.nativeEvent.pageY
-                                    );
-                                  }
-                                : undefined
-                            }
-                            delayLongPress={caregiverUnlocked ? REORDER_LONG_PRESS_MS : undefined}
-                            onTouchEnd={
-                              caregiverUnlocked
-                                ? () => {
-                                    endReorderTouch();
-                                  }
-                                : undefined
-                            }
-                            onTouchCancel={
-                              caregiverUnlocked
-                                ? () => {
-                                    endReorderTouch();
-                                  }
-                                : undefined
-                            }
-                            style={({ pressed }) => [
-                              styles.tile,
-                              highContrast && styles.tileHighContrast,
+                        return (
+                          <View
+                            key={`page-${page.pageIndex}`}
+                            style={[
+                              styles.page,
                               {
-                                width: tileSize,
-                                height: tileSize,
-                                backgroundColor: highContrast ? '#FFFFFF' : colors.background,
-                                borderColor: highContrast ? '#111827' : 'transparent',
+                                width: logicalPageWidth,
+                                height: effectivePageHeight,
                               },
-                              isDraggedTile && styles.tilePlaceholder,
-                              pressed && styles.tilePressed,
                             ]}
                           >
-                            {flashTileId === tile.id ? (
-                              <Animated.View
-                                pointerEvents="none"
-                                style={[
-                                  styles.newTileFlashOverlay,
-                                  {
-                                    opacity: newTileFlashValue,
-                                  },
-                                ]}
-                              />
-                            ) : null}
-                            <TileVisual
-                              emoji={tile.emoji}
-                              visualType={tile.visualType}
-                              imageLocalUri={tile.imageLocalUri}
-                              imageRemotePath={tile.imageRemotePath}
-                              size={tileVisualSize}
-                            />
-                            {showLabels ? (
-                              <Text
-                                style={[styles.tileLabel, getTileLabelStyle(tile.labelCs)]}
-                                {...FITTED_TILE_LABEL_PROPS}
-                              >
-                                {tile.labelCs}
-                              </Text>
-                            ) : null}
-                          </Pressable>
-                        </Animated.View>
-                      );
-                    })}
-                  </View>
+                            <View
+                              style={[
+                                styles.pageGrid,
+                                {
+                                  width: pageGridWidth,
+                                  minHeight: pageGridHeight,
+                                },
+                              ]}
+                            >
+                              {page.tiles.map((tile, localIndex) => {
+                                const highContrast = settings?.highContrast ?? false;
+                                const globalIndex = page.pageIndex * pageSize + localIndex;
+                                const isDraggedTile = activeDrag?.tileId === tile.id;
+                                const wiggleStyle =
+                                  caregiverUnlocked && wiggleActive && !isDraggedTile
+                                    ? getTileWiggleStyle(globalIndex)
+                                    : undefined;
+
+                                return (
+                                  <Reanimated.View
+                                    key={tile.id}
+                                    layout={REORDER_LAYOUT_TRANSITION}
+                                  >
+                                    <Animated.View style={wiggleStyle}>
+                                      <BoardTile
+                                        tile={tile}
+                                        tileSize={tileSize}
+                                        tileVisualSize={tileVisualSize}
+                                        showLabels={showLabels}
+                                        highContrast={highContrast}
+                                        isDraggedTile={isDraggedTile}
+                                        flashVisible={flashTileId === tile.id}
+                                        newTileFlashValue={newTileFlashValue}
+                                        labelStyle={getTileLabelStyle(tile.labelCs)}
+                                        caregiverUnlocked={caregiverUnlocked}
+                                        longPressDelayMs={REORDER_LONG_PRESS_MS}
+                                        globalIndex={globalIndex}
+                                        onTilePress={onTilePress}
+                                        onBeginReorderTouch={beginReorderTouch}
+                                        onEndReorderTouch={endReorderTouch}
+                                      />
+                                    </Animated.View>
+                                  </Reanimated.View>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.spreadPagesRow,
+                        {
+                          width: spreadWidth,
+                          minHeight: effectivePageHeight,
+                          gap: spreadGap,
+                        },
+                      ]}
+                    />
+                  )}
                 </View>
               ))}
 
@@ -1079,15 +1773,15 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           </ScrollView>
 
           {activeDrag && draggedTile ? (
-            <View
+            <Animated.View
               pointerEvents="none"
               style={[
                 styles.dragOverlayTile,
                 {
                   width: tileSize,
                   height: tileSize,
-                  left: activeDrag.startViewportLeft + activeDrag.dx,
-                  top: activeDrag.startTop + activeDrag.dy,
+                  left: activeDrag.startViewportLeft,
+                  top: activeDrag.startTop,
                   backgroundColor:
                     settings?.highContrast ?? false
                       ? '#FFFFFF'
@@ -1096,6 +1790,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                     settings?.highContrast ?? false
                       ? '#111827'
                       : 'transparent',
+                  transform: [
+                    {
+                      translateX: dragOverlayTranslateX,
+                    },
+                    {
+                      translateY: dragOverlayTranslateY,
+                    },
+                    {
+                      scale: 1.04,
+                    },
+                  ],
                 },
                 settings?.highContrast ?? false ? styles.dragOverlayTileHighContrast : null,
               ]}
@@ -1115,7 +1820,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                   {draggedTile.labelCs}
                 </Text>
               ) : null}
-            </View>
+            </Animated.View>
           ) : null}
         </View>
 
@@ -1163,7 +1868,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={caregiverUnlocked ? 'Zamknout režim pečovatele' : 'Odemknout režim pečovatele'}
-              onPress={onLockButtonPress}
+                onPress={onLockButtonPress}
               style={({ pressed }) => [
                 styles.lockButton,
                 caregiverUnlocked && styles.lockButtonUnlocked,
@@ -1179,31 +1884,41 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             </Pressable>
           </View>
 
-          {pageCount > 1 ? (
+          {spreadCount > 1 ? (
             <View style={styles.pageControls}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Předchozí stránka"
-                onPress={() => scrollToPage(currentPage - 1, true)}
-                disabled={currentPage === 0}
+                accessibilityLabel={isSpreadMode ? 'Předchozí dvojstrana' : 'Předchozí stránka'}
+                onPress={() => {
+                  void appHaptics.page();
+                  scrollToPage(currentPage - visiblePagesPerSpread, true);
+                }}
+                disabled={currentSpreadIndex === 0}
                 style={[
                   styles.pageControlButton,
-                  currentPage === 0 && styles.pageControlButtonDisabled,
+                  currentSpreadIndex === 0 && styles.pageControlButtonDisabled,
                 ]}
               >
                 <Text style={styles.pageControlText}>{'<'}</Text>
               </Pressable>
 
               <View style={styles.pageIndicatorWrap}>
-                {Array.from({ length: pageCount }, (_, pageIndex) => (
+                {Array.from({ length: spreadCount }, (_, spreadIndex) => (
                   <Pressable
-                    key={`page-dot-${pageIndex}`}
+                    key={`page-dot-${spreadIndex}`}
                     accessibilityRole="button"
-                    accessibilityLabel={`Otevřít stránku ${pageIndex + 1}`}
-                    onPress={() => scrollToPage(pageIndex, true)}
+                    accessibilityLabel={
+                      isSpreadMode
+                        ? `Otevřít dvojstranu ${spreadIndex + 1}`
+                        : `Otevřít stránku ${spreadIndex + 1}`
+                    }
+                    onPress={() => {
+                      void appHaptics.page();
+                      scrollToPage(spreadIndex * visiblePagesPerSpread, true);
+                    }}
                     style={[
                       styles.pageDot,
-                      currentPage === pageIndex && styles.pageDotActive,
+                      currentSpreadIndex === spreadIndex && styles.pageDotActive,
                     ]}
                   />
                 ))}
@@ -1211,12 +1926,15 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Další stránka"
-                onPress={() => scrollToPage(currentPage + 1, true)}
-                disabled={currentPage >= pageCount - 1}
+                accessibilityLabel={isSpreadMode ? 'Další dvojstrana' : 'Další stránka'}
+                onPress={() => {
+                  void appHaptics.page();
+                  scrollToPage(currentPage + visiblePagesPerSpread, true);
+                }}
+                disabled={currentSpreadIndex >= spreadCount - 1}
                 style={[
                   styles.pageControlButton,
-                  currentPage >= pageCount - 1 && styles.pageControlButtonDisabled,
+                  currentSpreadIndex >= spreadCount - 1 && styles.pageControlButtonDisabled,
                 ]}
               >
                 <Text style={styles.pageControlText}>{'>'}</Text>

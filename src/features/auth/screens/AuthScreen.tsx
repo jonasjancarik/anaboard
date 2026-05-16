@@ -1,23 +1,38 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import * as Linking from 'expo-linking';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../authService';
+import { getOriginalEmailAddress } from '../emailAddress';
+import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { isWebPlatform } from '../../../shared/platform/runtime';
+import { useAppStore } from '../../../store/useAppStore';
+import { ScreenHeader } from '../../caregiver/components/ScreenHeader';
 
-type AuthMode = 'signin' | 'signup';
+type AuthScreenProps = {
+  onBack: () => void;
+};
 
-export const AuthScreen = () => {
-  const [mode, setMode] = useState<AuthMode>('signin');
+export const AuthScreen = ({ onBack }: AuthScreenProps) => {
+  const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || password.length < 6) {
-      setError('Zadej e-mail a heslo (min 6 znaků)');
+    const originalEmail = getOriginalEmailAddress(email);
+    if (!originalEmail) {
+      setError('Zadej e-mail');
       return;
     }
 
@@ -26,15 +41,13 @@ export const AuthScreen = () => {
     setMessage(null);
 
     try {
-      if (mode === 'signin') {
-        await authService.signIn(normalizedEmail, password);
-        setMessage('Přihlášení proběhlo');
-      } else {
-        await authService.signUp(normalizedEmail, password);
-        setMessage('Účet vytvořen. Pokud máš potvrzení e-mailu zapnuté, potvrď ho.');
-      }
+      const emailRedirectTo = isWebPlatform
+        ? window.location.origin
+        : Linking.createURL('auth');
+      await authService.sendMagicLink(originalEmail, emailRedirectTo);
+      setMessage('Odkaz jsme poslali do e-mailu. Otevři ho na tomto zařízení.');
     } catch (submitError) {
-      const nextError = submitError instanceof Error ? submitError.message : 'Přihlášení selhalo';
+      const nextError = submitError instanceof Error ? submitError.message : 'Odeslání odkazu selhalo';
       setError(nextError);
     } finally {
       setIsSubmitting(false);
@@ -42,64 +55,65 @@ export const AuthScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>AnaBoard účet</Text>
-      <Text style={styles.subtitle}>Cloud sync a rodinné profily</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={24}
+      >
+        <View style={styles.header}>
+          <ScreenHeader title="" onBack={onBack} />
+        </View>
 
-      <View style={styles.modeRow}>
-        <Pressable
-          style={[styles.modeButton, mode === 'signin' && styles.modeButtonActive]}
-          onPress={() => setMode('signin')}
-        >
-          <Text style={[styles.modeButtonText, mode === 'signin' && styles.modeButtonTextActive]}>
-            Přihlásit
+        <View style={styles.form}>
+          <Text style={styles.title}>Cloud sync</Text>
+          <Text style={styles.subtitle}>
+            {authIsAnonymous
+              ? 'Zadej e-mail. Pošleme jednorázový odkaz a po návratu se vrátíš k rozpracované dlaždici.'
+              : 'Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.'}
           </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
-          onPress={() => setMode('signup')}
-        >
-          <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>
-            Vytvořit účet
-          </Text>
-        </Pressable>
-      </View>
 
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        placeholder="email@example.com"
-        placeholderTextColor="#7C8DA7"
-      />
+          <TextInput
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="email"
+            textContentType="emailAddress"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="email@example.com"
+            placeholderTextColor="#7C8DA7"
+          />
 
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Heslo"
-        placeholderTextColor="#7C8DA7"
-      />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {message ? <Text style={styles.message}>{message}</Text> : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-
-      <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
-        <Text style={styles.submitText}>{isSubmitting ? 'Pracuju...' : 'Pokračovat'}</Text>
-      </Pressable>
-    </View>
+          <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
+            <Text style={styles.submitText}>{isSubmitting ? 'Posílám...' : 'Poslat odkaz do e-mailu'}</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: APP_THEME.background,
+  },
   container: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  header: {
+    paddingTop: SCREEN_CONTENT_PADDING,
+    paddingHorizontal: SCREEN_CONTENT_PADDING,
+  },
+  form: {
+    paddingTop: 56,
     paddingHorizontal: 24,
-    backgroundColor: APP_THEME.background,
   },
   title: {
     fontSize: 30,
@@ -111,30 +125,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: APP_THEME.textMuted,
     fontSize: 16,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: APP_THEME.border,
-    backgroundColor: APP_THEME.surface,
-    marginBottom: 12,
-  },
-  modeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  modeButtonActive: {
-    backgroundColor: APP_THEME.primarySoft,
-  },
-  modeButtonText: {
-    color: APP_THEME.textMuted,
-    fontWeight: '700',
-  },
-  modeButtonTextActive: {
-    color: APP_THEME.primaryBorder,
-    fontWeight: '800',
   },
   input: {
     height: 48,

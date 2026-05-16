@@ -143,6 +143,60 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  aiSection: {
+    gap: 8,
+  },
+  aiSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  aiActionButton: {
+    minHeight: 34,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: APP_THEME.borderStrong,
+    backgroundColor: APP_THEME.surfaceTint,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  aiActionButtonText: {
+    color: APP_THEME.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  aiImageActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  aiSuggestionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  aiSuggestionChip: {
+    minWidth: 52,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: APP_THEME.surfaceTint,
+  },
+  aiSuggestionChipText: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  aiSecondaryButton: {
+    borderColor: APP_THEME.border,
+    backgroundColor: APP_THEME.surface,
+  },
+  aiSecondaryButtonText: {
+    color: APP_THEME.textMuted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   visualPanel: {
     gap: 10,
     borderRadius: 20,
@@ -269,6 +323,16 @@ export const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
     lineHeight: 16,
+  },
+  inlineAuthLink: {
+    alignSelf: "flex-start",
+    marginTop: 2,
+    paddingVertical: 2,
+  },
+  inlineAuthLinkText: {
+    color: APP_THEME.primaryBorder,
+    fontSize: 13,
+    fontWeight: "800",
   },
   actionButton: {
     minHeight: 44,
