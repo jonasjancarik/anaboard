@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CATEGORY_COLORS, SPEECH_MODE_LABELS } from '../../../shared/constants/defaults';
+import { CATEGORY_COLORS } from '../../../shared/constants/defaults';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { appHaptics } from '../../../shared/feedback/haptics';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
+import { normalizeSupportedLocale, type SupportedLocale } from '../../../shared/i18n/profileLanguage';
 import { getArchivedTilesForBoard, restoreArchivedTileToBoard } from '../../../shared/storage/repositories/tileArchiveRepository';
 import type { ArchivedTile } from '../../../shared/types/domain';
 import { useAppStore } from '../../../store/useAppStore';
@@ -15,13 +17,13 @@ type TileArchiveScreenProps = {
   onBack: () => void;
 };
 
-const formatDeletedAt = (value: string): string => {
+const formatDeletedAt = (value: string, locale: SupportedLocale): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return 'nedávno';
+    return getAppCopy(locale).tileArchive.recently;
   }
 
-  return date.toLocaleString('cs-CZ', {
+  return date.toLocaleString(locale, {
     day: 'numeric',
     month: 'numeric',
     hour: '2-digit',
@@ -31,6 +33,8 @@ const formatDeletedAt = (value: string): string => {
 
 export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
   const board = useAppStore((state) => state.board);
+  const locale = normalizeSupportedLocale(board?.locale);
+  const copy = getAppCopy(locale);
   const refreshBoard = useAppStore((state) => state.refreshBoard);
   const refreshPendingSyncEvents = useAppStore((state) => state.refreshPendingSyncEvents);
 
@@ -59,7 +63,7 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
         }
       } catch (error) {
         if (!isCancelled) {
-          setMessage(error instanceof Error ? error.message : 'Archiv se nepovedlo načíst');
+          setMessage(error instanceof Error ? error.message : copy.tileArchive.loadError);
         }
       } finally {
         if (!isCancelled) {
@@ -87,10 +91,10 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
         setArchivedTiles(await getArchivedTilesForBoard(board.id));
       }
       void appHaptics.success();
-      setMessage('Dlaždice vrácena na konec tabule');
+      setMessage(copy.tileArchive.restored);
     } catch (error) {
       void appHaptics.error();
-      setMessage(error instanceof Error ? error.message : 'Vrácení dlaždice selhalo');
+      setMessage(error instanceof Error ? error.message : copy.tileArchive.restoreError);
     } finally {
       setRestoringArchiveId(null);
     }
@@ -98,17 +102,17 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScreenHeader title="Archiv dlaždic" onBack={onBack} />
+      <ScreenHeader title={copy.tileArchive.title} onBack={onBack} backLabel={copy.common.back} />
 
       <Text style={styles.helperText}>
-        Smazané dlaždice vrátíš jedním klepnutím. Obnovená dlaždice se přidá na konec tabule, pak ji přesuň přes režim PŘESUN.
+        {copy.tileArchive.helper}
       </Text>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {isLoading ? <Text style={styles.infoText}>Načítám archiv…</Text> : null}
+        {isLoading ? <Text style={styles.infoText}>{copy.tileArchive.loading}</Text> : null}
 
         {!isLoading && archivedTiles.length === 0 ? (
-          <Text style={styles.infoText}>Archiv je zatím prázdný.</Text>
+          <Text style={styles.infoText}>{copy.tileArchive.empty}</Text>
         ) : null}
 
         {!isLoading
@@ -139,10 +143,12 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
                     <View style={styles.cardTextWrap}>
                       <Text style={styles.cardTitle}>{tile.labelCs}</Text>
                       <Text style={styles.cardMeta}>
-                        {SPEECH_MODE_LABELS[tile.speechMode]} · původně #{tile.originalPosition + 1}
+                        {copy.speechModes[tile.speechMode]} · {copy.tileArchive.originally} #{tile.originalPosition + 1}
                       </Text>
-                      <Text style={styles.cardMeta}>Smazáno {formatDeletedAt(tile.deletedAt)}</Text>
-                      {tile.audioClip ? <Text style={styles.cardMeta}>Obsahuje nahrávku</Text> : null}
+                      <Text style={styles.cardMeta}>
+                        {copy.tileArchive.deletedAt(formatDeletedAt(tile.deletedAt, locale))}
+                      </Text>
+                      {tile.audioClip ? <Text style={styles.cardMeta}>{copy.tileArchive.hasRecording}</Text> : null}
                     </View>
                   </View>
 
@@ -153,7 +159,9 @@ export const TileArchiveScreen = ({ onBack }: TileArchiveScreenProps) => {
                     }}
                     disabled={isRestoring}
                   >
-                    <Text style={styles.restoreButtonText}>{isRestoring ? 'Vrací se…' : 'Vrátit na tabuli'}</Text>
+                    <Text style={styles.restoreButtonText}>
+                      {isRestoring ? copy.tileArchive.restoring : copy.tileArchive.restore}
+                    </Text>
                   </Pressable>
                 </View>
               );

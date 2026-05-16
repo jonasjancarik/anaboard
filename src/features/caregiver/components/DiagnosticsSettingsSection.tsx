@@ -13,6 +13,7 @@ import {
 } from '../../../shared/diagnostics/shareDiagnostics';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { appHaptics } from '../../../shared/feedback/haptics';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
 import {
   getTelemetryUploadEnabled,
   isTelemetryUploadAvailable,
@@ -23,28 +24,32 @@ import {
 type DiagnosticsSettingsSectionProps = {
   diagnosticsInput: CollectDiagnosticsInput;
   onMessage: (message: string | null) => void;
+  locale?: unknown;
 };
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error ? error.message : fallback;
 };
 
-const diagnosticsResultMessage = (result: DiagnosticsShareResult): string => {
+const diagnosticsResultMessage = (result: DiagnosticsShareResult, locale: unknown): string => {
+  const copy = getAppCopy(locale).diagnostics;
   if (result === 'download') {
-    return 'Diagnostika stažena jako JSON';
+    return copy.downloaded;
   }
 
   if (result === 'mail') {
-    return 'E-mail s diagnostikou je připravený';
+    return copy.mailReady;
   }
 
-  return 'Diagnostika je připravená k odeslání';
+  return copy.shareReady;
 };
 
 export const DiagnosticsSettingsSection = ({
   diagnosticsInput,
   onMessage,
+  locale,
 }: DiagnosticsSettingsSectionProps) => {
+  const copy = getAppCopy(locale).diagnostics;
   const [telemetryUploadEnabledState, setTelemetryUploadEnabledState] = useState(false);
   const [isTelemetryPreferenceLoading, setIsTelemetryPreferenceLoading] = useState(true);
   const [isDiagnosticsSharing, setIsDiagnosticsSharing] = useState(false);
@@ -76,7 +81,7 @@ export const DiagnosticsSettingsSection = ({
   const updateTelemetryUpload = async (nextValue: boolean) => {
     if (!telemetryUploadAvailable) {
       setTelemetryUploadEnabledState(false);
-      onMessage('V této verzi není nastavené vzdálené hlášení chyb.');
+      onMessage(copy.unavailable);
       return;
     }
 
@@ -87,11 +92,11 @@ export const DiagnosticsSettingsSection = ({
     try {
       const persistedValue = await setTelemetryUploadEnabled(nextValue);
       setTelemetryUploadEnabledState(persistedValue);
-      onMessage(persistedValue ? 'Odesílání chyb zapnuto' : 'Odesílání chyb vypnuto');
+      onMessage(persistedValue ? copy.uploadEnabled : copy.uploadDisabled);
     } catch (error) {
       void appHaptics.error();
       setTelemetryUploadEnabledState(previousValue);
-      onMessage(getErrorMessage(error, 'Volba diagnostiky nešla uložit'));
+      onMessage(getErrorMessage(error, copy.saveError));
     }
   };
 
@@ -103,28 +108,28 @@ export const DiagnosticsSettingsSection = ({
       const payload = await collectDiagnosticsPayload(diagnosticsInput);
       const result = await shareDiagnosticsPayload(payload);
       void appHaptics.success();
-      onMessage(diagnosticsResultMessage(result));
+      onMessage(diagnosticsResultMessage(result, locale));
     } catch (error) {
       logError('diagnostics_share_failed', error, {
         platform: Platform.OS,
       });
       void appHaptics.error();
-      onMessage(getErrorMessage(error, 'Diagnostiku se nepodařilo připravit'));
+      onMessage(getErrorMessage(error, copy.shareError));
     } finally {
       setIsDiagnosticsSharing(false);
     }
   };
 
   const telemetryUploadDetail = telemetryUploadAvailable
-    ? 'Odešle jen chyby aplikace bez obsahu tabule.'
-    : 'V této verzi není nastavené vzdálené hlášení chyb.';
+    ? copy.uploadDetail
+    : copy.unavailable;
 
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionTitle}>Diagnostika</Text>
+      <Text style={styles.sectionTitle}>{copy.sectionTitle}</Text>
       <View style={styles.cardStack}>
         <SettingToggleRow
-          title="Odesílat chyby"
+          title={copy.uploadErrors}
           detail={telemetryUploadDetail}
           value={telemetryUploadEnabledState && telemetryUploadAvailable}
           disabled={!telemetryUploadAvailable || isTelemetryPreferenceLoading}
@@ -134,8 +139,8 @@ export const DiagnosticsSettingsSection = ({
         />
         <View style={styles.divider} />
         <SettingRowButton
-          title={isDiagnosticsSharing ? 'Připravuji diagnostiku…' : 'Poslat diagnostiku e-mailem'}
-          detail="Připraví bezpečný JSON bez textů, účtů a cest k médiím."
+          title={isDiagnosticsSharing ? copy.sendingTitle : copy.sendTitle}
+          detail={copy.sendDetail}
           disabled={isDiagnosticsSharing}
           onPress={() => {
             void sendDiagnostics();

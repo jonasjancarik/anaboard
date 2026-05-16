@@ -11,6 +11,7 @@ import { SettingsScreen } from '../features/caregiver/screens/SettingsScreen';
 import { TileArchiveScreen } from '../features/caregiver/screens/TileArchiveScreen';
 import { isWebPlatform } from '../shared/platform/runtime';
 import { authenticateWithDeviceForCaregiver, canUseNativeCaregiverAuth } from '../shared/utils/deviceAuth';
+import { getAppCopy } from '../shared/i18n/appCopy';
 import { useAppStore } from '../store/useAppStore';
 
 export const AppNavigator = () => {
@@ -21,6 +22,7 @@ export const AppNavigator = () => {
   const authReturnScreen = useAppStore((state) => state.authReturnScreen);
   const caregiverUnlocked = useAppStore((state) => state.caregiverUnlocked);
   const settings = useAppStore((state) => state.settings);
+  const board = useAppStore((state) => state.board);
 
   const navigate = useAppStore((state) => state.navigate);
   const setAuthReturnScreen = useAppStore((state) => state.setAuthReturnScreen);
@@ -28,6 +30,7 @@ export const AppNavigator = () => {
   const setEditorTargetTileId = useAppStore((state) => state.setEditorTargetTileId);
   const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
   const usesAppPin = isWebPlatform || Boolean(settings?.backupPinEnabled);
+  const copy = getAppCopy(board?.locale);
 
   const goBack = useCallback((): boolean => {
     if (currentScreen === 'pinSettings' || currentScreen === 'tileArchive') {
@@ -111,13 +114,13 @@ export const AppNavigator = () => {
     const nativeAvailable = await canUseNativeCaregiverAuth();
     if (!nativeAvailable) {
       Alert.alert(
-        'Ověření není dostupné',
-        'Telefon nemá dostupné systémové ověření. Zapni v nastavení volbu „Vlastní PIN v aplikaci“.'
+        copy.screen.deviceAuthUnavailableTitle,
+        copy.screen.deviceAuthUnavailableBody
       );
       return false;
     }
 
-    const result = await authenticateWithDeviceForCaregiver();
+    const result = await authenticateWithDeviceForCaregiver(board?.locale);
     if (result.success) {
       unlockCaregiver();
       navigate('board');

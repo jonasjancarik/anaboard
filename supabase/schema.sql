@@ -135,6 +135,7 @@ create table if not exists profile_settings (
   board_layout_mode text not null default 'manual',
   category_order text not null default '["needs","feelings","social","food"]',
   categories_start_new_page boolean not null default true,
+  child_gender text not null default 'masculine',
   updated_at timestamptz not null,
   revision int not null default 1,
   created_at timestamptz not null default now()
@@ -160,6 +161,9 @@ add column if not exists category_order text not null default '["needs","feeling
 
 alter table profile_settings
 add column if not exists categories_start_new_page boolean not null default true;
+
+alter table profile_settings
+add column if not exists child_gender text not null default 'masculine';
 
 create table if not exists phrase_events (
   id uuid primary key default gen_random_uuid(),

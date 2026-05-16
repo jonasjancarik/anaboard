@@ -8,12 +8,14 @@ import {
 } from "react-native";
 
 import { APP_THEME } from "../../../shared/constants/theme";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 
 type EmojiKeyboardModalProps = {
   visible: boolean;
   value: string;
   onChange: (value: string) => void;
   onClose: () => void;
+  locale?: unknown;
 };
 
 export const EmojiKeyboardModal = ({
@@ -21,7 +23,9 @@ export const EmojiKeyboardModal = ({
   value,
   onChange,
   onClose,
+  locale,
 }: EmojiKeyboardModalProps) => {
+  const copy = getAppCopy(locale);
   return (
     <Modal
       visible={visible}
@@ -34,9 +38,9 @@ export const EmojiKeyboardModal = ({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={modalStyles.sheet}>
-          <Text style={modalStyles.title}>Emoji/text z klávesnice</Text>
+          <Text style={modalStyles.title}>{copy.emojiKeyboard.title}</Text>
           <Text style={modalStyles.subtitle}>
-            Vlož emoji nebo krátký text přímo z normální klávesnice telefonu.
+            {copy.emojiKeyboard.subtitle}
           </Text>
 
           <TextInput
@@ -49,7 +53,7 @@ export const EmojiKeyboardModal = ({
           />
 
           <Pressable style={modalStyles.doneButton} onPress={onClose}>
-            <Text style={modalStyles.doneText}>Hotovo</Text>
+            <Text style={modalStyles.doneText}>{copy.common.done}</Text>
           </Pressable>
         </View>
       </View>

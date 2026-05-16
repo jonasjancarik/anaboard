@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
 import { TileVisual } from "../../../shared/components/TileVisual";
 import { APP_THEME } from "../../../shared/constants/theme";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 import type { TileVisualType } from "../../../shared/types/domain";
 
 type SmartIconSuggestionsModalProps = {
@@ -25,6 +26,7 @@ type SmartIconSuggestionsModalProps = {
   onUseGeneratedImage: () => void;
   onRegenerateImage: () => void;
   onAuth: () => void;
+  locale?: unknown;
 };
 
 export const SmartIconSuggestionsModal = ({
@@ -47,7 +49,9 @@ export const SmartIconSuggestionsModal = ({
   onUseGeneratedImage,
   onRegenerateImage,
   onAuth,
+  locale,
 }: SmartIconSuggestionsModalProps) => {
+  const copy = getAppCopy(locale);
   return (
     <Modal
       visible={visible}
@@ -60,9 +64,9 @@ export const SmartIconSuggestionsModal = ({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={styles.sheet}>
-          <Text style={styles.title}>Návrh ikony</Text>
+          <Text style={styles.title}>{copy.smartIcon.title}</Text>
           <Text style={styles.subtitle}>
-            Vyber emoji nebo obrázek pro dlaždici {label ? `„${label}“` : ""}.
+            {copy.smartIcon.subtitle(label)}
           </Text>
 
           <View style={styles.previewCard}>
@@ -73,14 +77,14 @@ export const SmartIconSuggestionsModal = ({
               imageRemotePath={previewImageRemotePath}
               size={92}
             />
-            <Text style={styles.previewLabel}>Aktuální návrh</Text>
+            <Text style={styles.previewLabel}>{copy.smartIcon.currentPreview}</Text>
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Emoji návrhy</Text>
+              <Text style={styles.sectionTitle}>{copy.smartIcon.emojiSuggestions}</Text>
               {isEmojiLoading ? (
-                <Text style={styles.sectionHint}>Hledám…</Text>
+                <Text style={styles.sectionHint}>{copy.smartIcon.searching}</Text>
               ) : null}
             </View>
 
@@ -97,15 +101,15 @@ export const SmartIconSuggestionsModal = ({
                 ))}
               </View>
             ) : !isEmojiLoading ? (
-              <Text style={styles.emptyText}>Zatím bez emoji návrhu.</Text>
+              <Text style={styles.emptyText}>{copy.smartIcon.noEmoji}</Text>
             ) : null}
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Obrázkový návrh</Text>
+              <Text style={styles.sectionTitle}>{copy.smartIcon.imageSuggestion}</Text>
               {isImageLoading ? (
-                <Text style={styles.sectionHint}>Vytvářím…</Text>
+                <Text style={styles.sectionHint}>{copy.smartIcon.generating}</Text>
               ) : null}
             </View>
 
@@ -120,18 +124,18 @@ export const SmartIconSuggestionsModal = ({
                 />
                 <View style={styles.imageActions}>
                   <Pressable style={styles.primaryButton} onPress={onUseGeneratedImage}>
-                    <Text style={styles.primaryButtonText}>Použít obrázek</Text>
+                    <Text style={styles.primaryButtonText}>{copy.smartIcon.useImage}</Text>
                   </Pressable>
                   <Pressable style={styles.secondaryButton} onPress={onRegenerateImage}>
-                    <Text style={styles.secondaryButtonText}>Zkusit nový obrázek</Text>
+                    <Text style={styles.secondaryButtonText}>{copy.smartIcon.retryImage}</Text>
                   </Pressable>
                 </View>
               </View>
             ) : isImageLoading ? null : (
               <View style={styles.imageActions}>
-                <Text style={styles.emptyText}>Zatím bez obrázkového návrhu.</Text>
+                <Text style={styles.emptyText}>{copy.smartIcon.noImage}</Text>
                 <Pressable style={styles.secondaryButton} onPress={onRegenerateImage}>
-                  <Text style={styles.secondaryButtonText}>Navrhnout obrázek</Text>
+                  <Text style={styles.secondaryButtonText}>{copy.smartIcon.suggestImage}</Text>
                 </Pressable>
               </View>
             )}
@@ -142,14 +146,14 @@ export const SmartIconSuggestionsModal = ({
               <Text style={styles.error}>{error}</Text>
               {showAuthCta ? (
                 <Pressable style={styles.authLink} onPress={onAuth}>
-                  <Text style={styles.authLinkText}>Přihlásit / založit účet</Text>
+                  <Text style={styles.authLinkText}>{copy.editor.signInCta}</Text>
                 </Pressable>
               ) : null}
             </View>
           ) : null}
 
           <Pressable style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Hotovo</Text>
+            <Text style={styles.closeButtonText}>{copy.common.done}</Text>
           </Pressable>
         </View>
       </View>

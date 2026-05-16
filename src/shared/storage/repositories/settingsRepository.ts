@@ -2,6 +2,10 @@ import {
   DEFAULT_PROFILE_ID,
   DEFAULT_PROFILE_SETTINGS,
 } from '../../constants/defaults';
+import {
+  normalizeChildGender,
+  type ChildGender,
+} from '../../i18n/profileLanguage';
 import type { BoardLayoutMode, Category, ProfileSettings } from '../../types/domain';
 import {
   normalizeBoardLayoutMode,
@@ -28,6 +32,7 @@ type SettingsRow = {
   board_layout_mode: string;
   category_order: string;
   categories_start_new_page: number;
+  child_gender: string;
   updated_at: string;
   revision: number;
 };
@@ -47,6 +52,7 @@ const mapRow = (row: SettingsRow): ProfileSettings => ({
   boardLayoutMode: normalizeBoardLayoutMode(row.board_layout_mode),
   categoryOrder: normalizeCategoryOrder(row.category_order),
   categoriesStartNewPage: row.categories_start_new_page === 1,
+  childGender: normalizeChildGender(row.child_gender),
   updatedAt: row.updated_at,
   revision: row.revision,
 });
@@ -74,8 +80,8 @@ export const ensureDefaultSettingsForProfile = async (profileId: string): Promis
       INSERT INTO profile_settings (
         profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
         high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order,
-        categories_start_new_page, updated_at, revision, dirty
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        categories_start_new_page, child_gender, updated_at, revision, dirty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
     profileId,
     defaults.pinHash,
@@ -91,6 +97,7 @@ export const ensureDefaultSettingsForProfile = async (profileId: string): Promis
     defaults.boardLayoutMode,
     serializeCategoryOrder(defaults.categoryOrder),
     defaults.categoriesStartNewPage ? 1 : 0,
+    defaults.childGender,
     defaults.updatedAt,
     defaults.revision
   );
@@ -110,6 +117,7 @@ export const ensureDefaultSettingsForProfile = async (profileId: string): Promis
     board_layout_mode: defaults.boardLayoutMode,
     category_order: serializeCategoryOrder(defaults.categoryOrder),
     categories_start_new_page: defaults.categoriesStartNewPage ? 1 : 0,
+    child_gender: defaults.childGender,
     updated_at: defaults.updatedAt,
     revision: defaults.revision,
   });
@@ -120,7 +128,7 @@ export const getProfileSettings = async (profileId = DEFAULT_PROFILE_ID): Promis
   const row = await db.getFirstAsync<SettingsRow>(
     `
       SELECT profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, updated_at, revision
-           , show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page
+           , show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page, child_gender
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
@@ -149,6 +157,7 @@ type SettingsUpdate = {
   boardLayoutMode?: BoardLayoutMode;
   categoryOrder?: Category[];
   categoriesStartNewPage?: boolean;
+  childGender?: ChildGender;
   pinHash?: string;
 };
 
@@ -179,6 +188,7 @@ export const updateProfileSettings = async (
         : normalizeCategoryOrder(update.categoryOrder),
     categoriesStartNewPage:
       update.categoriesStartNewPage ?? current.categoriesStartNewPage,
+    childGender: normalizeChildGender(update.childGender ?? current.childGender),
     pinHash: update.pinHash ?? current.pinHash,
   };
 
@@ -199,6 +209,7 @@ export const updateProfileSettings = async (
         board_layout_mode = ?,
         category_order = ?,
         categories_start_new_page = ?,
+        child_gender = ?,
         updated_at = ?,
         revision = ?,
         dirty = 1
@@ -217,6 +228,7 @@ export const updateProfileSettings = async (
     next.boardLayoutMode,
     serializeCategoryOrder(next.categoryOrder),
     next.categoriesStartNewPage ? 1 : 0,
+    next.childGender,
     updatedAt,
     revision,
     current.profileId
@@ -237,6 +249,7 @@ export const updateProfileSettings = async (
     board_layout_mode: next.boardLayoutMode,
     category_order: serializeCategoryOrder(next.categoryOrder),
     categories_start_new_page: next.categoriesStartNewPage ? 1 : 0,
+    child_gender: next.childGender,
     updated_at: updatedAt,
     revision,
   });

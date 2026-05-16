@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../components/ScreenHeader';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hashPin, isValidPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
@@ -18,7 +19,9 @@ const normalizePin = (value: string): string => {
 
 export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
   const settings = useAppStore((state) => state.settings);
+  const board = useAppStore((state) => state.board);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const copy = getAppCopy(board?.locale);
 
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -27,20 +30,20 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
 
   const title = useMemo(() => {
     return isWebPlatform || settings?.backupPinEnabled
-      ? 'Změnit PIN v aplikaci'
-      : 'Nastavit PIN v aplikaci';
-  }, [settings?.backupPinEnabled]);
+      ? copy.pinSettings.changeTitle
+      : copy.pinSettings.setTitle;
+  }, [copy, settings?.backupPinEnabled]);
 
   const savePin = async () => {
     setMessage(null);
 
     if (!isValidPin(newPin) || !isValidPin(confirmPin)) {
-      setMessage('PIN musí mít 4 číslice');
+      setMessage(copy.pinSettings.invalidPin);
       return;
     }
 
     if (newPin !== confirmPin) {
-      setMessage('PINy se neshodují');
+      setMessage(copy.pinSettings.mismatch);
       return;
     }
 
@@ -55,9 +58,9 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
 
       setNewPin('');
       setConfirmPin('');
-      setMessage('PIN uložen');
+      setMessage(copy.pinSettings.saved);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'PIN nešel uložit');
+      setMessage(error instanceof Error ? error.message : copy.pinSettings.saveError);
     } finally {
       setIsSaving(false);
     }
@@ -65,17 +68,17 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScreenHeader title="PIN" onBack={onBack} />
+      <ScreenHeader title={copy.pinSettings.title} onBack={onBack} backLabel={copy.common.back} />
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>{title}</Text>
         <Text style={styles.helperText}>
           {isWebPlatform
-            ? 'V prohlížeči se tento PIN používá vždy pro odemknutí úprav.'
-            : 'Aktuální PIN tady nepotřebuješ. Tento screen je už chráněný.'}
+            ? copy.pinSettings.webHelper
+            : copy.pinSettings.nativeHelper}
         </Text>
 
-        <Text style={styles.label}>Nový PIN</Text>
+        <Text style={styles.label}>{copy.pinSettings.newPin}</Text>
         <TextInput
           value={newPin}
           onChangeText={(value) => setNewPin(normalizePin(value))}
@@ -85,7 +88,7 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
           maxLength={4}
         />
 
-        <Text style={styles.label}>Potvrdit nový PIN</Text>
+        <Text style={styles.label}>{copy.pinSettings.confirmPin}</Text>
         <TextInput
           value={confirmPin}
           onChangeText={(value) => setConfirmPin(normalizePin(value))}
@@ -106,7 +109,9 @@ export const PinSettingsScreen = ({ onBack }: PinSettingsScreenProps) => {
             pressed && !isSaving && styles.saveButtonPressed,
           ]}
         >
-          <Text style={styles.saveButtonText}>{isSaving ? 'Ukládám…' : 'Uložit PIN'}</Text>
+          <Text style={styles.saveButtonText}>
+            {isSaving ? copy.common.saving : copy.pinSettings.saveButton}
+          </Text>
         </Pressable>
 
         {message ? <Text style={styles.message}>{message}</Text> : null}

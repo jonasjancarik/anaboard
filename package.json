@@ -1,6 +1,6 @@
 {
   "name": "anaboard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -9,7 +9,7 @@
     "android:prebuild": "bash ./scripts/android-local-build.sh prebuild",
     "android:apk": "bash ./scripts/android-local-build.sh apk",
     "admin:ai-trial": "node ./scripts/admin-ai-trial.mjs",
-    "check": "npm run typecheck && npm run migrations:test && npm run board-ordering:test && npm run email:test && npm run telemetry:test && npm run functions:check",
+    "check": "npm run typecheck && npm run migrations:test && npm run board-ordering:test && npm run defaults:test && npm run email:test && npm run telemetry:test && npm run functions:check",
     "email:test": "node --experimental-strip-types ./scripts/test-email-normalization.mjs",
     "telemetry:test": "node --experimental-strip-types ./scripts/test-telemetry-privacy.mjs",
     "ios": "expo run:ios",
@@ -17,6 +17,7 @@
     "web": "expo start --web",
     "migrations:test": "node --experimental-strip-types scripts/test-db-migrations.mjs",
     "board-ordering:test": "node --experimental-strip-types scripts/test-board-ordering.mjs",
+    "defaults:test": "node --experimental-strip-types scripts/test-default-tiles.mjs",
     "functions:check": "deno check --no-lock --config supabase/functions/deno.json supabase/functions/ai-emoji-suggest/index.ts supabase/functions/ai-image-draft-generate/index.ts supabase/functions/ai-image-draft-promote/index.ts",
     "functions:env": "bash ./scripts/supabase-functions.sh check-env",
     "functions:serve": "bash ./scripts/supabase-functions.sh serve",

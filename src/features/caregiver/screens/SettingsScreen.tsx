@@ -14,9 +14,22 @@ import { SettingStepper, type SettingStepperOption } from '../components/Setting
 import { SettingToggleRow } from '../components/SettingToggleRow';
 import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
 import {
-  BOARD_LAYOUT_MODE_LABELS,
   DEFAULT_CATEGORY_ORDER,
 } from '../../../shared/constants/defaults';
+import {
+  DEFAULT_CHILD_GENDER,
+  getSupportedLanguage,
+  isGenderedLocale,
+  normalizeChildGender,
+  normalizeSupportedLocale,
+  type ChildGender,
+  type SupportedLocale,
+} from '../../../shared/i18n/profileLanguage';
+import {
+  getAppCopy,
+  getChildGenderOptions,
+  getLanguageOptions,
+} from '../../../shared/i18n/appCopy';
 import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { appHaptics } from '../../../shared/feedback/haptics';
@@ -37,50 +50,11 @@ type SettingsScreenProps = {
   onOpenAuth: () => void;
 };
 
-const RATE_OPTIONS: SettingStepperOption[] = [
-  { value: 0.6, label: 'Velmi pomalu' },
-  { value: 0.75, label: 'Pomaleji' },
-  { value: 0.86, label: 'Běžně' },
-  { value: 1, label: 'Rychleji' },
-  { value: 1.15, label: 'Velmi rychle' },
-];
-
-const PITCH_OPTIONS: SettingStepperOption[] = [
-  { value: 0.8, label: 'Hlubší' },
-  { value: 0.9, label: 'Spíš hlubší' },
-  { value: 1, label: 'Běžný' },
-  { value: 1.15, label: 'Spíš vyšší' },
-  { value: 1.3, label: 'Vyšší' },
-];
-
-const SUGGESTION_COUNT_OPTIONS = [
-  { value: '1', label: '1 tip', detail: 'Jen nejsilnější nápověda.' },
-  { value: '2', label: '2 tipy', detail: 'Méně rušivé.' },
-  { value: '3', label: '3 tipy', detail: 'Vyvážené.' },
-  { value: '4', label: '4 tipy', detail: 'Širší výběr.' },
-  { value: '5', label: '5 tipů', detail: 'Nejvíc možností.' },
-] as const;
-
-const BOARD_LAYOUT_OPTIONS = [
-  {
-    value: 'manual',
-    label: BOARD_LAYOUT_MODE_LABELS.manual,
-    detail: 'Dlaždice zůstanou tam, kam je přesuneš.',
-  },
-  {
-    value: 'category',
-    label: BOARD_LAYOUT_MODE_LABELS.category,
-    detail: 'Kategorie za sebou, uvnitř abecedně.',
-  },
-] as const;
-
-const VOICE_PREVIEW_TEXT = 'Tohle je ukázka hlasu.';
-
 const getErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error ? error.message : fallback;
 };
 
-const formatTimestamp = (value: string | null): string | null => {
+const formatTimestamp = (value: string | null, locale: SupportedLocale): string | null => {
   if (!value) {
     return null;
   }
@@ -90,7 +64,7 @@ const formatTimestamp = (value: string | null): string | null => {
     return null;
   }
 
-  return new Intl.DateTimeFormat('cs-CZ', {
+  return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'numeric',
     hour: '2-digit',
@@ -98,13 +72,14 @@ const formatTimestamp = (value: string | null): string | null => {
   }).format(date);
 };
 
-const formatSyncIssue = (issueCode: SyncIssueCode | null): string | null => {
+const formatSyncIssue = (issueCode: SyncIssueCode | null, locale: SupportedLocale): string | null => {
+  const copy = getAppCopy(locale).settings;
   if (issueCode === 'initial_bind_requires_review') {
-    return 'Tento telefon už má vlastní místní data. Bez potvrzení je cloud nepřepíše.';
+    return copy.syncIssueInitialBind;
   }
 
   if (issueCode === 'profile_switch_requires_review') {
-    return 'Tento telefon byl dřív připojený k jiné cloud tabuli. Automatický přenos jsem zablokoval.';
+    return copy.syncIssueProfileSwitch;
   }
 
   return null;
@@ -124,6 +99,7 @@ export const SettingsScreen = ({
   const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const remoteContext = useAppStore((state) => state.remoteContext);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const applyLanguagePreferences = useAppStore((state) => state.applyLanguagePreferences);
   const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
   const refreshPendingSyncEvents = useAppStore((state) => state.refreshPendingSyncEvents);
   const syncStatus = useAppStore((state) => state.syncStatus);
@@ -133,7 +109,29 @@ export const SettingsScreen = ({
   const lastSyncPullAt = useAppStore((state) => state.lastSyncPullAt);
   const syncLastIssue = useAppStore((state) => state.syncLastIssue);
   const setBoardPageIndex = useAppStore((state) => state.setBoardPageIndex);
-  const { voiceOptions, isVoiceOptionsLoading } = useSpeechVoiceOptions();
+  const locale = normalizeSupportedLocale(board?.locale);
+  const copy = getAppCopy(locale);
+  const settingsCopy = copy.settings;
+  const rateOptions: SettingStepperOption[] = settingsCopy.rateOptions.map((option) => ({
+    value: Number(option.value),
+    label: option.label,
+  }));
+  const pitchOptions: SettingStepperOption[] = settingsCopy.pitchOptions.map((option) => ({
+    value: Number(option.value),
+    label: option.label,
+  }));
+  const boardLayoutOptions = (['manual', 'category'] as const).map((mode) => ({
+    value: mode,
+    label: settingsCopy.layoutOptions[mode].label,
+    detail: settingsCopy.layoutOptions[mode].detail,
+  }));
+  const choicePreviousLabel = locale === 'en-US' ? 'previous' : 'předchozí';
+  const choiceNextLabel = locale === 'en-US' ? 'next' : 'další';
+  const stepperDecreaseLabel = locale === 'en-US' ? 'decrease' : 'snížit';
+  const stepperIncreaseLabel = locale === 'en-US' ? 'increase' : 'zvýšit';
+  const languageOptions = getLanguageOptions(locale);
+  const childGenderOptions = getChildGenderOptions(locale);
+  const { voiceOptions, isVoiceOptionsLoading } = useSpeechVoiceOptions(locale);
 
   const [ttsRate, setTtsRate] = useState(0.86);
   const [ttsPitch, setTtsPitch] = useState(1);
@@ -144,6 +142,8 @@ export const SettingsScreen = ({
   const [boardLayoutMode, setBoardLayoutMode] = useState<BoardLayoutMode>('manual');
   const [categoryOrder, setCategoryOrder] = useState<Category[]>([...DEFAULT_CATEGORY_ORDER]);
   const [categoriesStartNewPage, setCategoriesStartNewPage] = useState(true);
+  const [boardLocale, setBoardLocale] = useState<SupportedLocale>(locale);
+  const [childGender, setChildGender] = useState<ChildGender>('masculine');
   const [lockEnabled, setLockEnabled] = useState(true);
   const [backupPinEnabled, setBackupPinEnabled] = useState(true);
   const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
@@ -167,10 +167,12 @@ export const SettingsScreen = ({
     setBoardLayoutMode(settings.boardLayoutMode);
     setCategoryOrder(settings.categoryOrder);
     setCategoriesStartNewPage(settings.categoriesStartNewPage);
+    setBoardLocale(locale);
+    setChildGender(settings.childGender);
     setLockEnabled(settings.lockEnabled);
     setBackupPinEnabled(settings.backupPinEnabled);
     setSelectedVoiceValue(settings.preferredVoice ?? DEFAULT_VOICE_VALUE);
-  }, [settings]);
+  }, [locale, settings]);
 
   useEffect(() => {
     if (selectedVoiceValue === DEFAULT_VOICE_VALUE) {
@@ -235,22 +237,45 @@ export const SettingsScreen = ({
     }
   };
 
+  const updateLanguagePreference = async (
+    previousLocale: SupportedLocale,
+    nextLocale: SupportedLocale,
+  ) => {
+    const nextGender = isGenderedLocale(nextLocale) ? childGender : DEFAULT_CHILD_GENDER;
+    setMessage(null);
+    setBoardLocale(nextLocale);
+
+    try {
+      await applyLanguagePreferences({
+        locale: nextLocale,
+        childGender: nextGender,
+      });
+      setChildGender(nextGender);
+      setBoardPageIndex(0);
+    } catch (error) {
+      void appHaptics.error();
+      setBoardLocale(previousLocale);
+      setMessage(getErrorMessage(error, copy.languageOptions.saveLocaleError));
+    }
+  };
+
   const previewVoice = async (
     nextRate: number,
     nextPitch: number,
     nextVoiceValue: string = selectedVoiceValue
   ) => {
     try {
-      await speechEngine.previewTts(VOICE_PREVIEW_TEXT, {
+      await speechEngine.previewTts(settingsCopy.voicePreviewText, {
         ttsRate: nextRate,
         ttsPitch: nextPitch,
         preferredVoice: nextVoiceValue === DEFAULT_VOICE_VALUE ? undefined : nextVoiceValue,
+        locale,
       });
     } catch {
       setMessage(
         isWebPlatform
-          ? 'Ukázka hlasu se nepřehrála.'
-          : 'Ukázka hlasu se nepřehrála. Na iPadu/iPhonu zkontroluj tichý režim.'
+          ? settingsCopy.voicePreviewFailedWeb
+          : settingsCopy.voicePreviewFailedNative
       );
     }
   };
@@ -261,10 +286,10 @@ export const SettingsScreen = ({
     try {
       await authService.signOut();
       void appHaptics.success();
-      setMessage('Odhlášeno');
+      setMessage(settingsCopy.signOutSuccess);
     } catch (error) {
       void appHaptics.error();
-      setMessage(getErrorMessage(error, 'Odhlášení selhalo'));
+      setMessage(getErrorMessage(error, settingsCopy.signOutError));
     }
   };
 
@@ -275,10 +300,10 @@ export const SettingsScreen = ({
     try {
       await resetBoardToDefaults();
       void appHaptics.success();
-      setMessage('Tabule vrácena na výchozí stav');
+      setMessage(settingsCopy.boardResetSuccess);
     } catch (error) {
       void appHaptics.error();
-      setMessage(getErrorMessage(error, 'Obnovení tabule selhalo'));
+      setMessage(getErrorMessage(error, settingsCopy.boardResetError));
     } finally {
       setIsResettingBoard(false);
     }
@@ -295,23 +320,33 @@ export const SettingsScreen = ({
       setMessage(successMessage);
     } catch (error) {
       void appHaptics.error();
-      setMessage(getErrorMessage(error, 'Cloud sync selhal'));
+      setMessage(getErrorMessage(error, settingsCopy.cloudSyncError));
     } finally {
       setIsSyncActionRunning(false);
     }
   };
 
   const confirmBoardReset = () => {
+    if (isWebPlatform && typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        `${settingsCopy.boardResetConfirmTitle}\n\n${settingsCopy.boardResetConfirmBody}`
+      );
+      if (confirmed) {
+        void performBoardReset();
+      }
+      return;
+    }
+
     Alert.alert(
-      'Obnovit výchozí dlaždice?',
-      'Vrátí původní pořadí a smaže vlastní nahrávky na tabuli.',
+      settingsCopy.boardResetConfirmTitle,
+      settingsCopy.boardResetConfirmBody,
       [
         {
-          text: 'Zrušit',
+          text: copy.common.cancel,
           style: 'cancel',
         },
         {
-          text: 'Obnovit',
+          text: settingsCopy.resetConfirmAction,
           style: 'destructive',
           onPress: () => {
             void performBoardReset();
@@ -322,40 +357,40 @@ export const SettingsScreen = ({
   };
 
   const pinDetail = !lockEnabled
-    ? 'Použije se, až znovu zapneš ochranu nastavení.'
+    ? settingsCopy.pinDetailOff
     : isWebPlatform
-      ? 'V prohlížeči se používá vždy pro odemknutí úprav.'
+      ? settingsCopy.pinDetailWeb
       : backupPinEnabled
-        ? '4 číslice pro vstup do nastavení.'
-        : 'Po uložení se tato volba automaticky zapne.';
+        ? settingsCopy.pinDetailBackup
+        : settingsCopy.pinDetailEnable;
 
   const webStorageDetail =
     webPersistenceSummary === null
-      ? 'Kontroluji, jestli data přežijí obnovení stránky.'
+      ? settingsCopy.webStorageChecking
       : webPersistenceSummary.status === 'passed'
-        ? 'Ověřeno po obnovení stránky. Data zůstávají v tomto prohlížeči.'
-        : 'První kontrola hotová. Obnov stránku ještě jednou a ÁňaBoard potvrdí trvalé uložení.';
+        ? settingsCopy.webStoragePassed
+        : settingsCopy.webStoragePending;
 
   const availableVoiceOptions = voiceOptions.filter((option) => option.value !== DEFAULT_VOICE_VALUE);
   const availableVoiceCount = availableVoiceOptions.length;
   const shouldShowVoicePicker = availableVoiceCount > 1;
-  const voiceRowTitle = 'Vybraný hlas';
+  const voiceRowTitle = settingsCopy.selectedVoice;
   const voiceSetupInstruction =
     Platform.OS === 'ios'
-      ? 'Další hlasy přidáš v Nastavení > Zpřístupnění > Mluvený obsah > Hlasy.'
+      ? settingsCopy.voiceSetupIos
       : Platform.OS === 'android'
-        ? 'Další hlasy přidáš v Nastavení > Zpřístupnění > Výstup převodu textu na řeč. U zvoleného enginu otevři jeho nastavení a nainstaluj hlasová data.'
-        : 'Další hlasy přidej v nastavení tohoto zařízení.';
+        ? settingsCopy.voiceSetupAndroid
+        : settingsCopy.voiceSetupOther;
   const voiceAvailabilityTitle = isVoiceOptionsLoading
-    ? 'Načítám hlasy…'
+    ? settingsCopy.loadingVoices
     : availableVoiceCount === 0
-      ? 'Český hlas'
-      : 'Dostupný hlas';
+      ? settingsCopy.languageVoiceTitle
+      : settingsCopy.availableVoiceTitle;
   const voiceAvailabilityDetail = isVoiceOptionsLoading
-    ? 'Zjišťuji dostupné české hlasy v tomto zařízení.'
+    ? settingsCopy.languageVoiceChecking
     : availableVoiceCount === 0
-      ? `Na tomto zařízení není dostupný samostatný český hlas. Použije se výchozí hlas zařízení. ${voiceSetupInstruction}`
-      : `Na tomto zařízení je dostupný jen jeden český hlas: ${availableVoiceOptions[0].label}. ${voiceSetupInstruction}`;
+      ? settingsCopy.noLanguageVoice(voiceSetupInstruction)
+      : settingsCopy.oneLanguageVoice(availableVoiceOptions[0].label, voiceSetupInstruction);
 
   const handleVoiceChange = (nextVoiceValue: string) => {
     void updateSetting(
@@ -365,71 +400,83 @@ export const SettingsScreen = ({
       {
         preferredVoice: nextVoiceValue === DEFAULT_VOICE_VALUE ? null : nextVoiceValue,
       },
-      'Hlas nešel uložit',
+      settingsCopy.saveVoiceError,
       () => previewVoice(ttsRate, ttsPitch, nextVoiceValue)
     );
   };
 
-  const lastSuccessfulSyncLabel = formatTimestamp(lastSuccessfulSyncAt);
-  const lastPullLabel = formatTimestamp(lastSyncPullAt);
-  const syncIssueDetail = formatSyncIssue(syncLastIssue);
+  const lastSuccessfulSyncLabel = formatTimestamp(lastSuccessfulSyncAt, locale);
+  const lastPullLabel = formatTimestamp(lastSyncPullAt, locale);
+  const syncIssueDetail = formatSyncIssue(syncLastIssue, locale);
+  const language = getSupportedLanguage(boardLocale);
+  const languageLabel =
+    locale === 'en-US' ? language.labelEn : language.label;
+  const languageDetail = isGenderedLocale(language.locale)
+    ? copy.languageOptions.genderedSettingsDetail
+    : copy.languageOptions.nongenderedSettingsDetail;
   const syncUnavailable = !hasSupabaseConfig || authStatus === 'disabled';
   const syncSignedOut = !syncUnavailable && authStatus === 'signed_out';
   const syncAnonymous = !syncUnavailable && authStatus === 'signed_in' && authIsAnonymous;
   const syncStatusTitle = syncUnavailable
-    ? 'Cloud sync není nastavený'
+    ? settingsCopy.syncStatus.unavailable
     : syncSignedOut
-      ? 'Cloud sync je připravený'
+      ? settingsCopy.syncStatus.signedOut
       : syncAnonymous
-      ? 'Zkušební režim bez účtu'
+      ? settingsCopy.syncStatus.anonymous
       : syncStatus === 'offline'
-      ? 'Zařízení je offline'
+      ? settingsCopy.syncStatus.offline
       : syncStatus === 'syncing'
-        ? 'Probíhá sync'
+        ? settingsCopy.syncStatus.syncing
         : syncStatus === 'error'
-          ? 'Sync potřebuje zásah'
+          ? settingsCopy.syncStatus.error
           : pendingSyncEvents > 0
-            ? 'Čekají změny'
-            : 'Cloud sync běží';
+            ? settingsCopy.syncStatus.pending
+            : settingsCopy.syncStatus.running;
   const syncStatusDetailParts = syncUnavailable
     ? [
-        'V této verzi aplikace chybí Supabase konfigurace.',
+        settingsCopy.syncDetail.missingConfig,
         pendingSyncEvents > 0
-          ? `Místní změny čekají: ${pendingSyncEvents}`
-          : 'Místní změny čekají: 0',
-        syncErrorEvents > 0 ? `Dřívější chyby syncu: ${syncErrorEvents}` : null,
-        'Přihlášení ani cloud sync tu teď nepoběží.',
+          ? settingsCopy.syncDetail.localChanges(pendingSyncEvents)
+          : settingsCopy.syncDetail.localChanges(0),
+        syncErrorEvents > 0 ? settingsCopy.syncDetail.previousErrors(syncErrorEvents) : null,
+        settingsCopy.syncDetail.noAuthSync,
       ]
     : syncSignedOut
       ? [
-          'Aplikace běží dál lokálně i bez přihlášení.',
+          settingsCopy.syncDetail.localWithoutSignIn,
           pendingSyncEvents > 0
-            ? `Místní změny čekají: ${pendingSyncEvents}`
-            : 'Místní změny čekají: 0',
-          'Přihlas se, až budeš chtít zapnout cloud sync mezi zařízeními.',
+            ? settingsCopy.syncDetail.localChanges(pendingSyncEvents)
+            : settingsCopy.syncDetail.localChanges(0),
+          settingsCopy.syncDetail.signInForSync,
         ]
     : syncAnonymous
       ? [
-          'Teď běžíš bez účtu v rychlém zkušebním režimu.',
-          'AI můžeš vyzkoušet hned, ale cloud sync a trvalé propojení zařízení zatím neběží.',
-          'Přihlas se, až budeš chtít trial převést na běžný účet.',
+          settingsCopy.syncDetail.anonymousMode,
+          settingsCopy.syncDetail.anonymousAi,
+          settingsCopy.syncDetail.anonymousConvert,
         ]
     : [
-        remoteContext?.caregiverEmail ? `Účet: ${remoteContext.caregiverEmail}` : null,
+        remoteContext?.caregiverEmail
+          ? settingsCopy.syncDetail.account(remoteContext.caregiverEmail)
+          : null,
         syncIssueDetail,
-        pendingSyncEvents > 0 ? `Ve frontě: ${pendingSyncEvents}` : 'Ve frontě: 0',
-        syncErrorEvents > 0 ? `Chyby: ${syncErrorEvents}` : 'Chyby: 0',
-        lastSuccessfulSyncLabel ? `Poslední hotovo: ${lastSuccessfulSyncLabel}` : null,
-        lastPullLabel ? `Naposledy staženo: ${lastPullLabel}` : null,
+        pendingSyncEvents > 0
+          ? settingsCopy.syncDetail.queue(pendingSyncEvents)
+          : settingsCopy.syncDetail.queue(0),
+        syncErrorEvents > 0
+          ? settingsCopy.syncDetail.errors(syncErrorEvents)
+          : settingsCopy.syncDetail.errors(0),
+        lastSuccessfulSyncLabel ? settingsCopy.syncDetail.lastDone(lastSuccessfulSyncLabel) : null,
+        lastPullLabel ? settingsCopy.syncDetail.lastPulled(lastPullLabel) : null,
       ];
   const syncStatusDetail = syncStatusDetailParts.filter(Boolean).join('\n');
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ScreenHeader title="Nastavení" onBack={onBack} />
+        <ScreenHeader title={settingsCopy.title} onBack={onBack} backLabel={copy.common.back} />
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Cloud sync</Text>
+          <Text style={styles.sectionTitle}>{settingsCopy.sections.cloud}</Text>
           <View style={styles.cardStack}>
             <View style={styles.statusBlock}>
               <Text style={styles.statusTitle}>{syncStatusTitle}</Text>
@@ -439,8 +486,8 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <SettingRowButton
-                  title={syncAnonymous ? 'Zaregistrovat / přihlásit' : 'Přihlásit ke cloud syncu'}
-                  detail="Otevře přihlášení a pak propojí tuto tabuli s cloudem."
+                  title={syncAnonymous ? settingsCopy.registerTitle : settingsCopy.signInTitle}
+                  detail={settingsCopy.signInDetail}
                   onPress={onOpenAuth}
                 />
               </>
@@ -449,24 +496,24 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <SettingRowButton
-                  title={isSyncActionRunning ? 'Synchronizuji…' : 'Synchronizovat teď'}
-                  detail="Odešle čekající změny a stáhne novější data z cloudu."
+                  title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
+                  detail={settingsCopy.syncNowDetail}
                   disabled={isSyncActionRunning}
                   onPress={() => {
-                    void runSyncAction(() => syncService.runOnce(), 'Sync zkontrolován');
+                    void runSyncAction(() => syncService.runOnce(), settingsCopy.syncChecked);
                   }}
                 />
                 {syncErrorEvents > 0 ? (
                   <>
                     <View style={styles.divider} />
                     <SettingRowButton
-                      title="Zkusit znovu chybné položky"
-                      detail="Vrátí chybné změny do fronty a hned je zkusí znovu."
+                      title={settingsCopy.retryFailedTitle}
+                      detail={settingsCopy.retryFailedDetail}
                       disabled={isSyncActionRunning}
                       onPress={() => {
                         void runSyncAction(
                           () => syncService.retryFailed(),
-                          'Chybné položky vráceny do syncu'
+                          settingsCopy.retryQueued
                         );
                       }}
                     />
@@ -477,35 +524,84 @@ export const SettingsScreen = ({
           </View>
         </View>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Hlas</Text>
+          <Text style={styles.sectionTitle}>{settingsCopy.sections.language}</Text>
+          <View style={styles.cardStack}>
+            <View style={styles.statusBlock}>
+              <Text style={styles.statusTitle}>
+                {copy.languageOptions.boardLanguage}: {languageLabel}
+              </Text>
+              <Text style={styles.statusDetail}>{languageDetail}</Text>
+            </View>
+            <View style={styles.divider} />
+            <SettingChoiceStepper
+              title={copy.languageOptions.boardLanguage}
+              value={boardLocale}
+              options={languageOptions}
+              previousLabel={choicePreviousLabel}
+              nextLabel={choiceNextLabel}
+              onChange={(nextValue) => {
+                const nextLocale = normalizeSupportedLocale(nextValue);
+                void updateLanguagePreference(boardLocale, nextLocale);
+              }}
+            />
+            {isGenderedLocale(language.locale) ? (
+              <>
+                <View style={styles.divider} />
+                <SettingChoiceStepper
+                  title={copy.languageOptions.userGender}
+                  value={childGender}
+                  options={childGenderOptions}
+                  previousLabel={choicePreviousLabel}
+                  nextLabel={choiceNextLabel}
+                  onChange={(nextValue) => {
+                    const nextGender = normalizeChildGender(nextValue);
+                    void updateSetting(
+                      childGender,
+                      nextGender,
+                      setChildGender,
+                      { childGender: nextGender },
+                      copy.languageOptions.saveGenderError
+                    );
+                  }}
+                />
+              </>
+            ) : null}
+          </View>
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{settingsCopy.sections.voice}</Text>
           <View style={styles.cardStack}>
             <SettingStepper
-              title="Rychlost hlasu"
+              title={settingsCopy.speechRate}
               value={ttsRate}
-              options={RATE_OPTIONS}
+              options={rateOptions}
+              decreaseLabel={stepperDecreaseLabel}
+              increaseLabel={stepperIncreaseLabel}
               onChange={(nextValue) => {
                 void updateSetting(
                   ttsRate,
                   nextValue,
                   setTtsRate,
                   { ttsRate: nextValue },
-                  'Rychlost hlasu nešla uložit',
+                  settingsCopy.saveRateError,
                   () => previewVoice(nextValue, ttsPitch)
                 );
               }}
             />
             <View style={styles.divider} />
             <SettingStepper
-              title="Tón hlasu"
+              title={settingsCopy.speechPitch}
               value={ttsPitch}
-              options={PITCH_OPTIONS}
+              options={pitchOptions}
+              decreaseLabel={stepperDecreaseLabel}
+              increaseLabel={stepperIncreaseLabel}
               onChange={(nextValue) => {
                 void updateSetting(
                   ttsPitch,
                   nextValue,
                   setTtsPitch,
                   { ttsPitch: nextValue },
-                  'Tón hlasu nešel uložit',
+                  settingsCopy.savePitchError,
                   () => previewVoice(ttsRate, nextValue)
                 );
               }}
@@ -517,6 +613,8 @@ export const SettingsScreen = ({
                 value={selectedVoiceValue}
                 options={voiceOptions}
                 disabled={isVoiceOptionsLoading}
+                previousLabel={choicePreviousLabel}
+                nextLabel={choiceNextLabel}
                 onChange={handleVoiceChange}
               />
             ) : (
@@ -529,9 +627,9 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <View style={styles.statusBlock}>
-                  <Text style={styles.statusTitle}>iPad / iPhone</Text>
+                  <Text style={styles.statusTitle}>{settingsCopy.iosSilentTitle}</Text>
                   <Text style={styles.statusDetail}>
-                    Když je zařízení v tichém režimu, robotický hlas se nemusí ozvat.
+                    {settingsCopy.iosSilentDetail}
                   </Text>
                 </View>
               </>
@@ -539,10 +637,10 @@ export const SettingsScreen = ({
           </View>
         </View>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Vzhled a ochrana</Text>
+          <Text style={styles.sectionTitle}>{settingsCopy.sections.appearanceSecurity}</Text>
           <View style={styles.cardStack}>
             <SettingToggleRow
-              title="Silnější kontrast"
+              title={settingsCopy.highContrast}
               value={highContrast}
               onValueChange={(nextValue) => {
                 void updateSetting(
@@ -550,13 +648,13 @@ export const SettingsScreen = ({
                   nextValue,
                   setHighContrast,
                   { highContrast: nextValue },
-                  'Kontrast nešel uložit'
+                  settingsCopy.saveContrastError
                 );
               }}
             />
             <View style={styles.divider} />
             <SettingToggleRow
-              title="Zobrazit názvy na dlaždicích"
+              title={settingsCopy.showLabels}
               value={showLabels}
               onValueChange={(nextValue) => {
                 void updateSetting(
@@ -564,15 +662,17 @@ export const SettingsScreen = ({
                   nextValue,
                   setShowLabels,
                   { showLabels: nextValue },
-                  'Zobrazení názvů nešlo uložit'
+                  settingsCopy.saveLabelsError
                 );
               }}
             />
             <View style={styles.divider} />
             <SettingChoiceStepper
-              title="Řazení dlaždic"
+              title={settingsCopy.boardOrdering}
               value={boardLayoutMode}
-              options={[...BOARD_LAYOUT_OPTIONS]}
+              options={boardLayoutOptions}
+              previousLabel={choicePreviousLabel}
+              nextLabel={choiceNextLabel}
               onChange={(nextValue) => {
                 const nextMode = nextValue as BoardLayoutMode;
                 void updateSetting(
@@ -580,7 +680,7 @@ export const SettingsScreen = ({
                   nextMode,
                   setBoardLayoutMode,
                   { boardLayoutMode: nextMode },
-                  'Řazení dlaždic nešlo uložit',
+                  settingsCopy.saveOrderingError,
                   () => setBoardPageIndex(0)
                 );
               }}
@@ -589,8 +689,8 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <SettingToggleRow
-                  title="Kategorie na nové stránce"
-                  detail="Každá kategorie začne zvlášť a nahoře ukáže název."
+                  title={settingsCopy.categoriesNewPage}
+                  detail={settingsCopy.categoriesNewPageDetail}
                   value={categoriesStartNewPage}
                   onValueChange={(nextValue) => {
                     void updateSetting(
@@ -598,7 +698,7 @@ export const SettingsScreen = ({
                       nextValue,
                       setCategoriesStartNewPage,
                       { categoriesStartNewPage: nextValue },
-                      'Stránky kategorií nešly uložit',
+                      settingsCopy.saveCategoryPagesError,
                       () => setBoardPageIndex(0)
                     );
                   }}
@@ -606,13 +706,14 @@ export const SettingsScreen = ({
                 <View style={styles.divider} />
                 <CategoryOrderControl
                   value={categoryOrder}
+                  locale={locale}
                   onChange={(nextOrder) => {
                     void updateSetting(
                       categoryOrder,
                       nextOrder,
                       setCategoryOrder,
                       { categoryOrder: nextOrder },
-                      'Pořadí kategorií nešlo uložit',
+                      settingsCopy.saveCategoryOrderError,
                       () => setBoardPageIndex(0)
                     );
                   }}
@@ -621,8 +722,8 @@ export const SettingsScreen = ({
             ) : null}
             <View style={styles.divider} />
             <SettingToggleRow
-              title="Rychlé věty a tipy"
-              detail="Na tabuli ukáže uložené věty, poslední věty a návrhy."
+              title={settingsCopy.quickPhrases}
+              detail={settingsCopy.quickPhrasesDetail}
               value={phraseBarEnabled}
               onValueChange={(nextValue) => {
                 void updateSetting(
@@ -630,7 +731,7 @@ export const SettingsScreen = ({
                   nextValue,
                   setPhraseBarEnabled,
                   { phraseBarEnabled: nextValue },
-                  'Rychlé věty a tipy nešly uložit'
+                  settingsCopy.saveQuickPhrasesError
                 );
               }}
             />
@@ -638,16 +739,18 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <SettingChoiceStepper
-                  title="Počet tipů"
+                  title={settingsCopy.suggestionCount}
                   value={suggestionCount}
-                  options={[...SUGGESTION_COUNT_OPTIONS]}
+                  options={settingsCopy.suggestionCountOptions}
+                  previousLabel={choicePreviousLabel}
+                  nextLabel={choiceNextLabel}
                   onChange={(nextValue) => {
                     void updateSetting(
                       suggestionCount,
                       nextValue,
                       setSuggestionCount,
                       { suggestionCount: Number(nextValue) },
-                      'Počet tipů nešel uložit'
+                      settingsCopy.saveSuggestionCountError
                     );
                   }}
                 />
@@ -655,11 +758,11 @@ export const SettingsScreen = ({
             ) : null}
             <View style={styles.divider} />
             <SettingToggleRow
-              title="Chránit nastavení"
+              title={settingsCopy.protectSettings}
               detail={
                 isWebPlatform
-                  ? 'Před úpravami se zadá PIN v aplikaci.'
-                  : 'Před úpravami se ověří pečovatel.'
+                  ? settingsCopy.protectSettingsWebDetail
+                  : settingsCopy.protectSettingsNativeDetail
               }
               value={lockEnabled}
               onValueChange={(nextValue) => {
@@ -668,7 +771,7 @@ export const SettingsScreen = ({
                   nextValue,
                   setLockEnabled,
                   { lockEnabled: nextValue },
-                  'Ochrana nastavení nešla uložit'
+                  settingsCopy.saveProtectionError
                 );
               }}
             />
@@ -676,10 +779,10 @@ export const SettingsScreen = ({
             <SettingRowButton
               title={
                 isWebPlatform
-                  ? 'PIN v aplikaci'
+                  ? settingsCopy.appPin
                   : backupPinEnabled
-                    ? 'Změnit PIN v aplikaci'
-                    : 'Nastavit PIN v aplikaci'
+                    ? settingsCopy.changeAppPin
+                    : settingsCopy.setAppPin
               }
               detail={pinDetail}
               onPress={onOpenPinSettings}
@@ -688,8 +791,8 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <SettingToggleRow
-                  title="PIN přímo v aplikaci"
-                  detail="Použij, když nechceš spoléhat jen na zámek telefonu."
+                  title={settingsCopy.appPinToggle}
+                  detail={settingsCopy.appPinToggleDetail}
                   value={backupPinEnabled}
                   onValueChange={(nextValue) => {
                     void updateSetting(
@@ -697,7 +800,7 @@ export const SettingsScreen = ({
                       nextValue,
                       setBackupPinEnabled,
                       { backupPinEnabled: nextValue },
-                      'Volba PINu nešla uložit'
+                      settingsCopy.savePinChoiceError
                     );
                   }}
                 />
@@ -706,7 +809,7 @@ export const SettingsScreen = ({
               <>
                 <View style={styles.divider} />
                 <View style={styles.statusBlock}>
-                  <Text style={styles.statusTitle}>Úložiště prohlížeče</Text>
+                  <Text style={styles.statusTitle}>{settingsCopy.webStorage}</Text>
                   <Text style={styles.statusDetail}>{webStorageDetail}</Text>
                 </View>
               </>
@@ -714,6 +817,7 @@ export const SettingsScreen = ({
           </View>
         </View>
         <DiagnosticsSettingsSection
+          locale={locale}
           diagnosticsInput={{
             authStatus,
             authIsAnonymous,
@@ -732,16 +836,16 @@ export const SettingsScreen = ({
           onMessage={setMessage}
         />
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Správa tabule</Text>
+          <Text style={styles.sectionTitle}>{settingsCopy.sections.boardManagement}</Text>
           <View style={styles.cardStack}>
             <SettingRowButton
-              title="Archiv smazaných dlaždic"
-              detail="Vrátit dříve smazané položky."
+              title={settingsCopy.archive}
+              detail={settingsCopy.archiveDetail}
               onPress={onOpenArchive}
             />
             <SettingRowButton
-              title={isResettingBoard ? 'Obnovuji výchozí dlaždice…' : 'Obnovit výchozí dlaždice'}
-              detail="Vrátí původní pořadí a smaže vlastní nahrávky."
+              title={isResettingBoard ? settingsCopy.resettingDefaults : settingsCopy.resetDefaults}
+              detail={settingsCopy.resetDefaultsDetail}
               tone="danger"
               disabled={isResettingBoard}
               onPress={confirmBoardReset}
@@ -750,10 +854,10 @@ export const SettingsScreen = ({
         </View>
         {authStatus === 'signed_in' && !authIsAnonymous ? (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Účet</Text>
+            <Text style={styles.sectionTitle}>{settingsCopy.sections.account}</Text>
             <SettingRowButton
-              title="Odhlásit"
-              detail="Odhlásí tento telefon od cloud syncu."
+              title={settingsCopy.signOut}
+              detail={settingsCopy.signOutDetail}
               tone="danger"
               onPress={() => {
                 void signOut();

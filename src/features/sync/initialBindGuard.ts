@@ -1,9 +1,11 @@
 import {
   DEFAULT_BOARD_ID,
+  DEFAULT_BOARD_NAME,
   DEFAULT_PROFILE_ID,
   DEFAULT_PROFILE_SETTINGS,
   DEFAULT_TILES,
 } from '../../shared/constants/defaults';
+import { SUPPORTED_CHILD_GENDERS, SUPPORTED_LANGUAGES } from '../../shared/i18n/profileLanguage';
 import { getDatabase } from '../../shared/storage/db';
 import { hashPin } from '../../shared/utils/security';
 import type { SyncIssueCode } from './types';
@@ -51,6 +53,7 @@ type SettingsRow = {
   board_layout_mode: string;
   category_order: string;
   categories_start_new_page: number;
+  child_gender: string;
 };
 
 const countRows = async (tableName: string): Promise<number> => {
@@ -58,6 +61,14 @@ const countRows = async (tableName: string): Promise<number> => {
   const result = await db.getFirstAsync<CountRow>(`SELECT COUNT(*) AS count FROM ${tableName}`);
   return result?.count ?? 0;
 };
+
+const SUPPORTED_DEFAULT_BOARD_NAMES = new Set([
+  DEFAULT_BOARD_NAME,
+  ...SUPPORTED_LANGUAGES.map((language) => language.defaultBoardName),
+]);
+const SUPPORTED_DEFAULT_BOARD_LOCALES = new Set<string>(
+  SUPPORTED_LANGUAGES.map((language) => language.locale),
+);
 
 const matchesDefaultBoard = async (): Promise<boolean> => {
   const db = await getDatabase();
@@ -77,8 +88,8 @@ const matchesDefaultBoard = async (): Promise<boolean> => {
   if (
     board.id !== DEFAULT_BOARD_ID ||
     board.profile_id !== DEFAULT_PROFILE_ID ||
-    board.name !== 'Moje tabule' ||
-    board.locale !== 'cs-CZ' ||
+    !SUPPORTED_DEFAULT_BOARD_NAMES.has(board.name) ||
+    !SUPPORTED_DEFAULT_BOARD_LOCALES.has(board.locale) ||
     board.columns_count !== 4 ||
     board.rows_count !== 4 ||
     board.is_active !== 1
@@ -107,26 +118,31 @@ const matchesDefaultBoard = async (): Promise<boolean> => {
     DEFAULT_BOARD_ID
   );
 
-  const defaultTiles = DEFAULT_TILES('default');
-  if (tiles.length !== defaultTiles.length) {
-    return false;
-  }
+  return SUPPORTED_CHILD_GENDERS.some((childGender) => {
+    const defaultTiles = DEFAULT_TILES('default', {
+      locale: board.locale,
+      childGender,
+    });
+    if (tiles.length !== defaultTiles.length) {
+      return false;
+    }
 
-  return tiles.every((tile, index) => {
-    const expected = defaultTiles[index];
-    return (
-      tile.id === expected.id &&
-      tile.board_id === expected.boardId &&
-      tile.position === expected.position &&
-      tile.label_cs === expected.labelCs &&
-      tile.emoji === expected.emoji &&
-      tile.visual_type === expected.visualType &&
-      tile.category === expected.category &&
-      tile.speech_mode === expected.speechMode &&
-      !tile.image_local_uri &&
-      !tile.image_remote_path &&
-      !tile.audio_clip_id
-    );
+    return tiles.every((tile, index) => {
+      const expected = defaultTiles[index];
+      return (
+        tile.id === expected.id &&
+        tile.board_id === expected.boardId &&
+        tile.position === expected.position &&
+        tile.label_cs === expected.labelCs &&
+        tile.emoji === expected.emoji &&
+        tile.visual_type === expected.visualType &&
+        tile.category === expected.category &&
+        tile.speech_mode === expected.speechMode &&
+        !tile.image_local_uri &&
+        !tile.image_remote_path &&
+        !tile.audio_clip_id
+      );
+    });
   });
 };
 
@@ -148,7 +164,8 @@ const matchesDefaultSettings = async (): Promise<boolean> => {
         suggestion_count,
         board_layout_mode,
         category_order,
-        categories_start_new_page
+        categories_start_new_page,
+        child_gender
       FROM profile_settings
       WHERE profile_id = ?
       LIMIT 1
@@ -177,7 +194,8 @@ const matchesDefaultSettings = async (): Promise<boolean> => {
     settings.suggestion_count === expected.suggestionCount &&
     settings.board_layout_mode === expected.boardLayoutMode &&
     settings.category_order === JSON.stringify(expected.categoryOrder) &&
-    settings.categories_start_new_page === (expected.categoriesStartNewPage ? 1 : 0)
+    settings.categories_start_new_page === (expected.categoriesStartNewPage ? 1 : 0) &&
+    (settings.child_gender === 'masculine' || settings.child_gender === 'feminine')
   );
 };
 

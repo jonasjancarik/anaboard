@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 import { styles } from "../screens/EditorScreen.styles";
 
 type GeneratedImageDraftSectionProps = {
@@ -9,6 +10,7 @@ type GeneratedImageDraftSectionProps = {
   onApply: () => void;
   onRetry: () => void;
   onDiscard: () => void;
+  locale?: unknown;
 };
 
 export const GeneratedImageDraftSection = ({
@@ -18,18 +20,21 @@ export const GeneratedImageDraftSection = ({
   onApply,
   onRetry,
   onDiscard,
+  locale,
 }: GeneratedImageDraftSectionProps) => {
   if (!visible) {
     return null;
   }
 
+  const copy = getAppCopy(locale).imageDraft;
+
   return (
     <View style={styles.aiSection}>
-      <Text style={styles.inputLabel}>AI obrázek</Text>
+      <Text style={styles.inputLabel}>{copy.title}</Text>
       <Text style={styles.helperText}>
         {isGenerating
-          ? "Vytvářím náhled obrázku..."
-          : "AI náhled ještě není uložený do dlaždice."}
+          ? copy.generating
+          : copy.draftReady}
       </Text>
 
       {!isGenerating ? (
@@ -43,7 +48,7 @@ export const GeneratedImageDraftSection = ({
             disabled={isApplying}
           >
             <Text style={styles.aiActionButtonText}>
-              {isApplying ? "Používám..." : "Použít"}
+              {isApplying ? copy.applying : copy.apply}
             </Text>
           </Pressable>
 
@@ -55,7 +60,7 @@ export const GeneratedImageDraftSection = ({
             onPress={onRetry}
             disabled={isApplying}
           >
-            <Text style={styles.aiActionButtonText}>Zkusit znovu</Text>
+            <Text style={styles.aiActionButtonText}>{copy.retry}</Text>
           </Pressable>
 
           <Pressable
@@ -67,7 +72,7 @@ export const GeneratedImageDraftSection = ({
             onPress={onDiscard}
             disabled={isApplying}
           >
-            <Text style={styles.aiSecondaryButtonText}>Zahodit</Text>
+            <Text style={styles.aiSecondaryButtonText}>{copy.discard}</Text>
           </Pressable>
         </View>
       ) : null}

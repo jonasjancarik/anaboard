@@ -319,6 +319,7 @@ try {
   assert.equal(hasColumn(database, 'profile_settings', 'board_layout_mode'), true);
   assert.equal(hasColumn(database, 'profile_settings', 'category_order'), true);
   assert.equal(hasColumn(database, 'profile_settings', 'categories_start_new_page'), true);
+  assert.equal(hasColumn(database, 'profile_settings', 'child_gender'), true);
   assert.equal(hasColumn(database, 'tiles', 'visual_type'), true);
   assert.equal(hasColumn(database, 'tile_archive', 'image_remote_path'), true);
   assert.equal(hasColumn(database, 'saved_phrases', 'tokens_json'), true);
@@ -340,7 +341,7 @@ try {
   assert.equal(pendingPayload.speech_mode, 'recording_only');
 
   const settingsRow = database
-    .prepare('SELECT show_labels, backup_pin_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page FROM profile_settings WHERE profile_id = ?')
+    .prepare('SELECT show_labels, backup_pin_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page, child_gender FROM profile_settings WHERE profile_id = ?')
     .get('default-profile');
   assert.equal(settingsRow.show_labels, 0);
   assert.equal(settingsRow.backup_pin_enabled, 0);
@@ -348,6 +349,7 @@ try {
   assert.equal(settingsRow.board_layout_mode, 'manual');
   assert.equal(settingsRow.category_order, '["needs","feelings","social","food"]');
   assert.equal(settingsRow.categories_start_new_page, 1);
+  assert.equal(settingsRow.child_gender, 'masculine');
 
   const pendingSettingsEvent = database
     .prepare('SELECT payload FROM sync_events WHERE entity_type = ? AND entity_id = ?')
@@ -356,6 +358,7 @@ try {
   assert.equal(pendingSettingsPayload.board_layout_mode, 'manual');
   assert.equal(pendingSettingsPayload.category_order, '["needs","feelings","social","food"]');
   assert.equal(pendingSettingsPayload.categories_start_new_page, 1);
+  assert.equal(pendingSettingsPayload.child_gender, 'masculine');
 
   const phraseEventsIndex = database
     .prepare(`

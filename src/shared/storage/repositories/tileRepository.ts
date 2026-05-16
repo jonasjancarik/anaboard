@@ -1,4 +1,5 @@
 import type { Category, SpeechMode, TileVisualType } from "../../types/domain";
+import { normalizeSupportedLocale } from "../../i18n/profileLanguage";
 import { createId } from "../../utils/id";
 import { nowIso } from "../../utils/time";
 import { getDatabase } from "../db";
@@ -276,9 +277,15 @@ export const createTileAfter = async (
   const insertPosition = anchor.position + 1;
   const tilesToShift = tiles.filter((tile) => tile.position >= insertPosition);
 
+  const boardRow = await db.getFirstAsync<{ locale: string | null }>(
+    "SELECT locale FROM boards WHERE id = ? LIMIT 1",
+    anchor.board_id,
+  );
+  const locale = normalizeSupportedLocale(boardRow?.locale);
+  const newTileLabel = locale === "en-US" ? "New" : "Nová";
   const newTileId = createId("tile");
   const updatedAt = nowIso();
-  const labelCs = input?.labelCs ?? "Nová";
+  const labelCs = input?.labelCs ?? newTileLabel;
   const emoji = input?.emoji ?? "⭐";
   const visualType = input?.visualType ?? "emoji";
   const imageLocalUri = input?.imageLocalUri ?? null;

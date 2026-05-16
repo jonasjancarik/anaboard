@@ -64,6 +64,7 @@ export type RemoteSettingsRow = {
   board_layout_mode?: string | null;
   category_order?: string | null;
   categories_start_new_page?: boolean | null;
+  child_gender?: string | null;
   updated_at: string;
   revision: number;
 };

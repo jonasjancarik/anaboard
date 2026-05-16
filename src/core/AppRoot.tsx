@@ -10,6 +10,7 @@ import { speechEngine } from '../features/speech/speechEngine';
 import { syncService } from '../features/sync/syncService';
 import type { AuthStatus } from '../features/auth/types';
 import { APP_THEME } from '../shared/constants/theme';
+import { getAppCopy } from '../shared/i18n/appCopy';
 import { isWebPlatform } from '../shared/platform/runtime';
 import { getWebStorageSupport } from '../shared/platform/webStorageSupport';
 import { runWebPersistenceSmokeTest } from '../shared/storage/webPersistenceSmoke';
@@ -49,6 +50,7 @@ export const AppRoot = () => {
   const refreshPhrases = useAppStore((state) => state.refreshPhrases);
   const setSyncStatus = useAppStore((state) => state.setSyncStatus);
   const settings = useAppStore((state) => state.settings);
+  const board = useAppStore((state) => state.board);
 
   const canBootApp = webSupportState.status === 'supported';
   const authCallbackUrl = Linking.useURL();
@@ -343,8 +345,9 @@ export const AppRoot = () => {
       ttsRate: settings.ttsRate,
       ttsPitch: settings.ttsPitch,
       preferredVoice: settings.preferredVoice,
+      locale: board?.locale,
     });
-  }, [canBootApp, settings]);
+  }, [board?.locale, canBootApp, settings]);
 
   if (webSupportState.status === 'unsupported') {
     return (
@@ -356,8 +359,9 @@ export const AppRoot = () => {
 
   const isLoading =
     webSupportState.status === 'checking' || isAuthLoading || isBoardLoading || isSettingsLoading;
+  const screenCopy = getAppCopy(board?.locale).screen;
   const loaderText =
-    webSupportState.status === 'checking' ? 'Ověřuji prohlížeč...' : 'Načítám ÁňaBoard...';
+    webSupportState.status === 'checking' ? screenCopy.checkingBrowser : screenCopy.loadingApp;
 
   return (
     <SafeAreaProvider>

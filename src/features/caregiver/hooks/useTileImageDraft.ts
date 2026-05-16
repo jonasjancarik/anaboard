@@ -6,6 +6,7 @@ import {
   deleteManagedTileImage,
   persistTileImage,
 } from "../services/tileImageService";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 
 const imagePickerOptions: ImagePicker.ImagePickerOptions = {
   mediaTypes: ["images"],
@@ -19,6 +20,7 @@ type UseTileImageDraftParams = {
   initialVisualType: TileVisualType;
   initialImageLocalUri?: string | null;
   initialImageRemotePath?: string | null;
+  locale?: unknown;
   onError: (message: string | null) => void;
 };
 
@@ -34,8 +36,10 @@ export const useTileImageDraft = ({
   initialVisualType,
   initialImageLocalUri,
   initialImageRemotePath,
+  locale,
   onError,
 }: UseTileImageDraftParams) => {
+  const copy = getAppCopy(locale).tileImageDraftErrors;
   const draftImageUrisRef = useRef<Set<string>>(new Set());
 
   const [visualType, setVisualType] = useState<TileVisualType>(initialVisualType);
@@ -86,7 +90,7 @@ export const useTileImageDraft = ({
 
     const asset = result.assets[0];
     if (!asset?.uri) {
-      onError("Fotku nešlo načíst.");
+      onError(copy.loadPhoto);
       return;
     }
 
@@ -99,7 +103,7 @@ export const useTileImageDraft = ({
       setVisualType("image");
       onError(null);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Fotku nešlo uložit");
+      onError(error instanceof Error ? error.message : copy.savePhoto);
     }
   };
 
@@ -113,14 +117,14 @@ export const useTileImageDraft = ({
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        onError("Bez přístupu k fotkám nejde obrázek vybrat.");
+        onError(copy.photoPermission);
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync(imagePickerOptions);
       await handlePickedImage(result);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Výběr fotky selhal");
+      onError(error instanceof Error ? error.message : copy.photoPick);
     }
   };
 
@@ -134,14 +138,14 @@ export const useTileImageDraft = ({
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        onError("Bez přístupu k foťáku nejde fotku pořídit.");
+        onError(copy.cameraPermission);
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync(imagePickerOptions);
       await handlePickedImage(result);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Pořízení fotky selhalo");
+      onError(error instanceof Error ? error.message : copy.cameraCapture);
     }
   };
 

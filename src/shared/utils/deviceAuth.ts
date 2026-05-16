@@ -1,5 +1,6 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Platform } from 'react-native';
+import { getAppCopy } from '../i18n/appCopy';
 
 export const canUseNativeCaregiverAuth = async (): Promise<boolean> => {
   try {
@@ -36,13 +37,19 @@ export const getNativeCaregiverAuthLabel = async (): Promise<string> => {
   return 'Ověřit telefonem';
 };
 
-export const authenticateWithDeviceForCaregiver = async () => {
+export const authenticateWithDeviceForCaregiver = async (locale?: unknown) => {
+  const copy = getAppCopy(locale);
   return LocalAuthentication.authenticateAsync({
-    promptMessage: 'Odemkni režim pečovatele',
+    promptMessage:
+      locale === 'en-US' ? 'Unlock caregiver mode' : 'Odemkni režim pečovatele',
     promptSubtitle: 'ÁňaBoard',
-    promptDescription: 'Použij biometriku nebo kód zařízení',
-    cancelLabel: 'Zrušit',
-    fallbackLabel: 'Použít kód zařízení',
+    promptDescription:
+      locale === 'en-US'
+        ? 'Use biometrics or the device passcode'
+        : 'Použij biometriku nebo kód zařízení',
+    cancelLabel: copy.common.cancel,
+    fallbackLabel:
+      locale === 'en-US' ? 'Use device passcode' : 'Použít kód zařízení',
     disableDeviceFallback: false,
     requireConfirmation: false,
     biometricsSecurityLevel: 'weak',

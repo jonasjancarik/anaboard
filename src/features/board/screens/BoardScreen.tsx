@@ -42,9 +42,10 @@ import {
 } from './boardPagerLayout';
 import {
   CATEGORY_COLORS,
-  CATEGORY_LABELS,
   DEFAULT_CATEGORY_ORDER,
 } from '../../../shared/constants/defaults';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
+import { normalizeSupportedLocale } from '../../../shared/i18n/profileLanguage';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { TileVisual } from '../../../shared/components/TileVisual';
 import { APP_THEME } from '../../../shared/constants/theme';
@@ -217,6 +218,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const navigate = useAppStore((state) => state.navigate);
 
   const showLabels = settings?.showLabels ?? false;
+  const locale = normalizeSupportedLocale(board?.locale);
+  const copy = getAppCopy(locale);
   const phraseBarEnabled = settings?.phraseBarEnabled ?? true;
   const suggestionCount = settings?.suggestionCount ?? 3;
   const boardLayoutMode = settings?.boardLayoutMode ?? 'manual';
@@ -420,7 +423,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
   const orderedTiles = useMemo(() => {
     if (!canReorderTiles) {
-      return getTilesForBoardLayout(tiles, boardLayoutMode, categoryOrder);
+      return getTilesForBoardLayout(tiles, boardLayoutMode, categoryOrder, locale);
     }
 
     const nextOrderedTiles = reorderTileIds
@@ -436,7 +439,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       ...nextOrderedTiles,
       ...tiles.filter((tile) => !orderedTileIds.has(tile.id)),
     ];
-  }, [boardLayoutMode, canReorderTiles, categoryOrder, reorderTileIds, tiles, tilesById]);
+  }, [boardLayoutMode, canReorderTiles, categoryOrder, locale, reorderTileIds, tiles, tilesById]);
 
   const logicalPages = useMemo<OrderedBoardPage[]>(() => {
     return getBoardPagesForLayout(
@@ -765,6 +768,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       ttsRate: settings.ttsRate,
       ttsPitch: settings.ttsPitch,
       preferredVoice: settings.preferredVoice,
+      locale,
     });
 
     setSpeaking(true);
@@ -870,13 +874,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       void appHaptics.success();
       setPhraseFeedback({
         kind: 'success',
-        text: 'Věta uložená',
+        text: copy.board.phraseSaved,
       });
     } catch (error) {
       void appHaptics.error();
       setPhraseFeedback({
         kind: 'error',
-        text: error instanceof Error ? error.message : 'Větu nešlo uložit',
+        text: error instanceof Error ? error.message : copy.board.phraseSaveError,
       });
     }
   }, [
@@ -885,6 +889,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     saveCurrentSentenceAsPhrase,
     sentence.length,
     clearPendingCaregiverAction,
+    copy,
     setPendingCaregiverAction,
   ]);
 
@@ -968,13 +973,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         return;
       }
 
-      Alert.alert('Smazat uloženou větu?', phrase.spokenText, [
+      Alert.alert(copy.board.deleteSavedPhraseTitle, phrase.spokenText, [
         {
-          text: 'Nechat',
+          text: copy.board.keepSavedPhrase,
           style: 'cancel',
         },
         {
-          text: 'Smazat',
+          text: copy.common.delete,
           style: 'destructive',
           onPress: () => {
             void (async () => {
@@ -983,7 +988,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                 void appHaptics.warning();
                 setPhraseFeedback({
                   kind: 'success',
-                  text: 'Uložená věta smazaná',
+                  text: copy.board.savedPhraseDeleted,
                 });
               } catch (error) {
                 void appHaptics.error();
@@ -992,7 +997,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                   text:
                     error instanceof Error
                       ? error.message
-                      : 'Uloženou větu nešlo smazat',
+                      : copy.board.savedPhraseDeleteError,
                 });
               }
             })();
@@ -1000,7 +1005,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         },
       ]);
     },
-    [caregiverUnlocked, deleteSavedPhrase, savedPhrases]
+    [caregiverUnlocked, copy, deleteSavedPhrase, savedPhrases]
   );
 
   const onClearSentence = () => {
@@ -1124,9 +1129,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       void appHaptics.success();
     } catch (error) {
       void appHaptics.error();
-      setTileDragError(error instanceof Error ? error.message : 'Přesun dlaždice se nepovedl');
+      setTileDragError(error instanceof Error ? error.message : copy.board.tileMoveError);
     }
-  }, [clearBoardDragState, moveTile]);
+  }, [clearBoardDragState, copy, moveTile]);
 
   const clearPendingReorderTouch = useCallback(() => {
     if (reorderLongPressTimerRef.current) {
@@ -1320,7 +1325,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       const nextOrderedTiles = getTilesForBoardLayout(
         nextTiles,
         boardLayoutMode,
-        categoryOrder
+        categoryOrder,
+        locale
       );
       const nextPages = getBoardPagesForLayout(
         nextOrderedTiles,
@@ -1393,7 +1399,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       }, 260);
     } catch (error) {
       void appHaptics.error();
-      setTileDragError(error instanceof Error ? error.message : 'Novou dlaždici nešlo přidat');
+      setTileDragError(error instanceof Error ? error.message : copy.board.addTileError);
     } finally {
       setIsAddingTile(false);
     }
@@ -1405,6 +1411,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     clearBoardDragState,
     clearPendingReorderTouch,
     createTileAfter,
+    copy,
+    locale,
     newTileFlashValue,
     pageSize,
     setBoardPageIndex,
@@ -1503,17 +1511,17 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       const normalizedLength = label.trim().length;
       const baseFontSize = Math.max(12, Math.min(18, Math.floor(tileSize * 0.17)));
 
-      if (normalizedLength >= 10) {
+      if (normalizedLength >= 9) {
         return {
-          fontSize: Math.max(12, baseFontSize - 3),
-          lineHeight: Math.max(14, baseFontSize - 1),
+          fontSize: Math.max(10, baseFontSize - 5),
+          lineHeight: Math.max(12, baseFontSize - 3),
         };
       }
 
       if (normalizedLength >= 7) {
         return {
-          fontSize: Math.max(13, baseFontSize - 2),
-          lineHeight: Math.max(15, baseFontSize),
+          fontSize: Math.max(11, baseFontSize - 4),
+          lineHeight: Math.max(13, baseFontSize - 2),
         };
       }
 
@@ -1523,6 +1531,12 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       };
     },
     [tileSize]
+  );
+
+  const getBoardTileAccessibilityLabel = useCallback(
+    (label: string, unlocked: boolean) =>
+      unlocked ? copy.board.editTileA11y(label) : copy.board.sayTileA11y(label),
+    [copy]
   );
 
   return (
@@ -1541,7 +1555,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             }}
           >
             {sentence.length === 0 ? (
-              <Text style={styles.placeholderText}>Klepni na ikony a sestav větu</Text>
+              <Text style={styles.placeholderText}>{copy.board.sentencePlaceholder}</Text>
             ) : (
               sentence.map((token) => (
                 <Pressable
@@ -1551,7 +1565,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                     removeSentenceToken(token.tokenId);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Odebrat ${token.label}`}
+                  accessibilityLabel={copy.board.removeToken(token.label)}
                   style={({ pressed }) => [
                     styles.token,
                     !showLabels && styles.tokenEmojiOnly,
@@ -1576,7 +1590,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Přečíst větu"
+            accessibilityLabel={copy.board.speakSentenceLabel}
             onPress={onSpeakSentence}
             disabled={sentence.length === 0}
             style={({ pressed }) => [
@@ -1590,13 +1604,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               🗣️
             </Text>
             <Text style={[styles.actionText, styles.speakText]} {...ACTION_TEXT_PROPS}>
-              Řekni
+              {copy.board.speakAction}
             </Text>
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Uložit větu"
+            accessibilityLabel={copy.board.saveSentenceLabel}
             onPress={() => {
               void onSavePhrase();
             }}
@@ -1612,13 +1626,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               ⭐
             </Text>
             <Text style={[styles.actionText, styles.savePhraseText]} {...ACTION_TEXT_PROPS}>
-              Uložit
+              {copy.board.saveAction}
             </Text>
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Smazat větu"
+            accessibilityLabel={copy.board.clearSentenceLabel}
             onPress={onClearSentence}
             disabled={sentence.length === 0}
             style={({ pressed }) => [
@@ -1632,7 +1646,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               🗑️
             </Text>
             <Text style={[styles.actionText, styles.clearText]} {...ACTION_TEXT_PROPS}>
-              Smazat
+              {copy.board.clearAction}
             </Text>
           </Pressable>
         </View>
@@ -1753,7 +1767,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                                   allowFontScaling={false}
                                   numberOfLines={1}
                                 >
-                                  {CATEGORY_LABELS[page.category]}
+                                  {copy.categories[page.category]}
                                 </Text>
                               </View>
                             ) : null}
@@ -1796,6 +1810,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                                         longPressDelayMs={REORDER_LONG_PRESS_MS}
                                         globalIndex={globalIndex}
                                         onTilePress={onTilePress}
+                                        getAccessibilityLabel={getBoardTileAccessibilityLabel}
                                         onBeginReorderTouch={beginReorderTouch}
                                         onEndReorderTouch={endReorderTouch}
                                       />
@@ -1890,7 +1905,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           >
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Přidat novou dlaždici"
+              accessibilityLabel={copy.board.addTileA11y}
               onPress={() => {
                 void onAddTilePress();
               }}
@@ -1902,7 +1917,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
               ]}
             >
               <Text style={styles.addTileButtonText} allowFontScaling={false}>
-                {isAddingTile ? 'Přidávám dlaždici...' : '+ Přidat dlaždici'}
+                {isAddingTile ? copy.board.addingTileLabel : copy.board.addTileLabel}
               </Text>
             </Pressable>
           </View>
@@ -1921,7 +1936,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           <View style={styles.bottomBarSide}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={caregiverUnlocked ? 'Zamknout režim pečovatele' : 'Odemknout režim pečovatele'}
+              accessibilityLabel={
+                caregiverUnlocked ? copy.board.lockCaregiverA11y : copy.board.unlockCaregiverA11y
+              }
                 onPress={onLockButtonPress}
               style={({ pressed }) => [
                 styles.lockButton,
@@ -1942,7 +1959,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
             <View style={styles.pageControls}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={isSpreadMode ? 'Předchozí dvojstrana' : 'Předchozí stránka'}
+                accessibilityLabel={
+                  isSpreadMode ? copy.board.previousSpreadA11y : copy.board.previousPageA11y
+                }
                 onPress={() => {
                   void appHaptics.page();
                   scrollToPage(currentPage - visiblePagesPerSpread, true);
@@ -1963,8 +1982,8 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
                     accessibilityRole="button"
                     accessibilityLabel={
                       isSpreadMode
-                        ? `Otevřít dvojstranu ${spreadIndex + 1}`
-                        : `Otevřít stránku ${spreadIndex + 1}`
+                        ? copy.board.openSpreadA11y(spreadIndex + 1)
+                        : copy.board.openPageA11y(spreadIndex + 1)
                     }
                     onPress={() => {
                       void appHaptics.page();
@@ -1980,7 +1999,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={isSpreadMode ? 'Další dvojstrana' : 'Další stránka'}
+                accessibilityLabel={
+                  isSpreadMode ? copy.board.nextSpreadA11y : copy.board.nextPageA11y
+                }
                 onPress={() => {
                   void appHaptics.page();
                   scrollToPage(currentPage + visiblePagesPerSpread, true);
@@ -2001,7 +2022,9 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
           <View style={styles.bottomBarSideRight}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={caregiverUnlocked ? 'Otevřít nastavení pečovatele' : 'Odemknout režim pečovatele'}
+              accessibilityLabel={
+                caregiverUnlocked ? copy.board.openSettingsA11y : copy.board.unlockCaregiverA11y
+              }
               onPress={onSettingsButtonPress}
               disabled={!caregiverUnlocked}
               style={({ pressed }) => [

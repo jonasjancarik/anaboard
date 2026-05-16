@@ -3,13 +3,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiClient } from "../../ai/aiClient";
 import { logError, logEvent } from "../../../shared/telemetry/logger";
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 import type { Category } from "../../../shared/types/domain";
 
 const REQUEST_TIMEOUT_MS = 60000;
 
-const createTimeoutError = () => new Error("AI návrh se zatím nevrátil ani po minutě.");
+const createTimeoutError = (locale: unknown) =>
+  new Error(getAppCopy(locale).emojiSuggestion.timeout);
 
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  locale: unknown,
+): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   try {
@@ -17,7 +23,7 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
       promise,
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(createTimeoutError());
+          reject(createTimeoutError(locale));
         }, timeoutMs);
       }),
     ]);
@@ -48,6 +54,7 @@ export const useEmojiSuggestions = ({
   const [suggestions, setSuggestions] = useState<EmojiSuggestion[]>([]);
   const requestIdRef = useRef(0);
   const normalizedLabel = label.trim();
+  const copy = getAppCopy(locale).emojiSuggestion;
   const resetKey = useMemo(
     () => `${normalizedLabel.toLocaleLowerCase(locale)}|${locale}|${category ?? ""}`,
     [category, locale, normalizedLabel]
@@ -73,7 +80,7 @@ export const useEmojiSuggestions = ({
 
     if (!normalizedLabel) {
       setSuggestions([]);
-      setError("Nejdřív napiš text dlaždice.");
+      setError(copy.labelRequired);
       return;
     }
 
@@ -91,7 +98,8 @@ export const useEmojiSuggestions = ({
           category,
           existingEmoji,
         }),
-        REQUEST_TIMEOUT_MS
+        REQUEST_TIMEOUT_MS,
+        locale
       );
 
       if (requestIdRef.current !== requestId) {
@@ -108,7 +116,7 @@ export const useEmojiSuggestions = ({
         label_length: normalizedLabel.length,
       });
       if (response.suggestions.length === 0) {
-        setError("Teď jsem nenašel dobrý emoji návrh.");
+        setError(copy.noneFound);
       }
     } catch (requestError) {
       if (requestIdRef.current !== requestId) {
@@ -118,7 +126,7 @@ export const useEmojiSuggestions = ({
       setSuggestions([]);
       logError("ai_emoji_suggest_error", requestError, {
         duration_ms: Date.now() - startedAtMs,
-        timeout: requestError instanceof Error && requestError.message === createTimeoutError().message,
+        timeout: requestError instanceof Error && requestError.message === createTimeoutError(locale).message,
         locale,
         category: category ?? null,
         label_length: normalizedLabel.length,
@@ -126,14 +134,14 @@ export const useEmojiSuggestions = ({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Emoji návrh teď nevyšel."
+          : copy.failed
       );
     } finally {
       if (requestIdRef.current === requestId) {
         setIsLoading(false);
       }
     }
-  }, [category, enabled, existingEmoji, locale, normalizedLabel]);
+  }, [category, copy, enabled, existingEmoji, locale, normalizedLabel]);
 
   return {
     clearSuggestions,

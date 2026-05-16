@@ -9,6 +9,7 @@ import {
 } from '../../../shared/utils/deviceAuth';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { appHaptics } from '../../../shared/feedback/haptics';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { hashPin } from '../../../shared/utils/security';
 import { useAppStore } from '../../../store/useAppStore';
@@ -20,8 +21,10 @@ type CaregiverGateScreenProps = {
 
 export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenProps) => {
   const settings = useAppStore((state) => state.settings);
+  const board = useAppStore((state) => state.board);
   const unlockCaregiver = useAppStore((state) => state.unlockCaregiver);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const copy = getAppCopy(board?.locale);
 
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +85,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
     setIsRecovering(true);
 
     try {
-      const result = await authenticateWithDeviceForCaregiver();
+      const result = await authenticateWithDeviceForCaregiver(board?.locale);
       if (!result.success) {
         if (
           result.error === 'user_cancel' ||
@@ -93,7 +96,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
         }
 
         void appHaptics.error();
-        setError('Ověření telefonu se nepovedlo.');
+        setError(copy.caregiverGate.deviceAuthFailed);
         return;
       }
 
@@ -103,7 +106,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
       onPassed();
     } catch {
       void appHaptics.error();
-      setError('Ověření telefonu se nepovedlo.');
+      setError(copy.caregiverGate.deviceAuthFailed);
     } finally {
       setIsRecovering(false);
     }
@@ -113,18 +116,18 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
         <View style={styles.headerRow}>
-          <BackButton onPress={onCancel} />
+          <BackButton onPress={onCancel} label={copy.common.back} />
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.title}>Režim pečovatele</Text>
+          <Text style={styles.title}>{copy.caregiverGate.title}</Text>
           <Text style={styles.subtitle}>
             {isWebPlatform
-              ? 'V prohlížeči se pro úpravy vždy používá PIN.'
-              : 'Zadej vlastní PIN pro úpravy tabule'}
+              ? copy.caregiverGate.webSubtitle
+              : copy.caregiverGate.nativeSubtitle}
           </Text>
 
-          <Text style={styles.pinTitle}>Vlastní PIN v aplikaci</Text>
+          <Text style={styles.pinTitle}>{copy.caregiverGate.pinTitle}</Text>
 
           <TextInput
             ref={pinInputRef}
@@ -138,7 +141,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
                 void (async () => {
                   const incomingHash = await hashPin(nextPin);
                   if (!settings) {
-                    setError('Nastavení není načtené');
+                    setError(copy.caregiverGate.settingsMissing);
                     return;
                   }
 
@@ -153,7 +156,7 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
 
                   setPin('');
                   void appHaptics.error();
-                  setError('Špatný PIN');
+                  setError(copy.caregiverGate.wrongPin);
                   pinInputRef.current?.focus();
                 })();
               }
@@ -180,12 +183,12 @@ export const CaregiverGateScreen = ({ onPassed, onCancel }: CaregiverGateScreenP
               {isRecovering ? (
                 <ActivityIndicator color={APP_THEME.primary} />
               ) : (
-                <Text style={styles.recoveryButtonText}>Zapomněl(a) jsem PIN</Text>
+                <Text style={styles.recoveryButtonText}>{copy.caregiverGate.forgotPin}</Text>
               )}
             </Pressable>
           ) : null}
 
-          <Text style={styles.note}>Výchozí PIN: 1234</Text>
+          <Text style={styles.note}>{copy.caregiverGate.defaultPin}</Text>
         </View>
       </View>
     </SafeAreaView>

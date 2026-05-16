@@ -15,11 +15,11 @@ import { styles } from "./EditorScreen.styles";
 import { buildSpeechSegments, speechEngine } from "../../speech/speechEngine";
 import { AI_FEATURE_FLAGS } from "../../ai/featureFlags";
 import {
-  CATEGORY_LABELS,
   CATEGORY_COLORS,
-  SPEECH_MODE_LABELS,
 } from "../../../shared/constants/defaults";
 import { appHaptics } from "../../../shared/feedback/haptics";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
+import { normalizeSupportedLocale } from "../../../shared/i18n/profileLanguage";
 import type {
   Category,
   SpeechMode,
@@ -76,6 +76,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [hasExplicitCategoryChoice, setHasExplicitCategoryChoice] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [tileActionError, setTileActionError] = useState<string | null>(null);
+  const locale = normalizeSupportedLocale(board?.locale);
+  const copy = getAppCopy(locale);
 
   useEffect(() => {
     if (tiles.length === 0) {
@@ -119,6 +121,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     initialVisualType: selectedTile?.visualType ?? "emoji",
     initialImageLocalUri: selectedTile?.imageLocalUri,
     initialImageRemotePath: selectedTile?.imageRemotePath,
+    locale,
     onError: setTileActionError,
   });
 
@@ -171,7 +174,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   } = useEmojiSuggestions({
     enabled: aiEmojiSuggestionsEnabled,
     label: effectiveLabel,
-    locale: board?.locale ?? "cs-CZ",
+    locale,
     category,
     existingEmoji: previewEmoji,
   });
@@ -196,7 +199,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       !nextImageRemotePath;
 
     if (nextVisualSelectionIncomplete) {
-      setTileActionError("Nejdřív přidej fotku z foťáku nebo knihovny.");
+      setTileActionError(copy.editor.imageRequired);
       return null;
     }
 
@@ -263,7 +266,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     } catch (error) {
       void appHaptics.error();
       setTileActionError(
-        error instanceof Error ? error.message : "Dlaždici nešlo uložit",
+        error instanceof Error ? error.message : copy.editor.saveTileError,
       );
     } finally {
       setIsSaving(false);
@@ -298,7 +301,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
     const normalizedLabel = effectiveLabel.trim();
     if (!normalizedLabel) {
-      setTileActionError("Nejdřív napiš text dlaždice.");
+      setTileActionError(copy.editor.labelRequired);
       return;
     }
 
@@ -311,14 +314,14 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         profileId: remoteContext?.profileId,
         tileId: selectedTile.id,
         label: normalizedLabel,
-        locale: board?.locale ?? "cs-CZ",
+        locale,
         category: promptCategory,
       });
 
       logEvent("ai_image_generate_success", {
         duration_ms: Date.now() - startedAtMs,
         anonymous: authIsAnonymous,
-        locale: board?.locale ?? "cs-CZ",
+        locale,
         category: promptCategory ?? null,
         label_length: normalizedLabel.length,
         trial_remaining:
@@ -335,13 +338,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       logError("ai_image_generate_error", error, {
         duration_ms: Date.now() - startedAtMs,
         anonymous: authIsAnonymous,
-        locale: board?.locale ?? "cs-CZ",
+        locale,
         category: promptCategory ?? null,
         label_length: normalizedLabel.length,
       });
       void appHaptics.error();
       setTileActionError(
-        error instanceof Error ? error.message : "AI obrázek nešel vytvořit",
+        error instanceof Error ? error.message : copy.editor.aiImageGenerateError,
       );
     } finally {
       setIsGeneratingAiImage(false);
@@ -374,7 +377,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     } catch (error) {
       void appHaptics.error();
       setTileActionError(
-        error instanceof Error ? error.message : "AI obrázek nešel použít",
+        error instanceof Error ? error.message : copy.editor.aiImageApplyError,
       );
     } finally {
       setIsApplyingAiImage(false);
@@ -396,7 +399,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       } catch (error) {
         void appHaptics.error();
         setRecordingError(
-          error instanceof Error ? error.message : "Nahrávání se nepovedlo",
+          error instanceof Error ? error.message : copy.editor.recordingError,
         );
       }
       return;
@@ -408,7 +411,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
       if (!recording) {
         void appHaptics.error();
-        setRecordingError("Nahrávka je prázdná");
+        setRecordingError(copy.editor.recordingEmpty);
         return;
       }
 
@@ -421,7 +424,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     } catch (error) {
       void appHaptics.error();
       setRecordingError(
-        error instanceof Error ? error.message : "Nahrávání se nepovedlo",
+        error instanceof Error ? error.message : copy.editor.recordingError,
       );
       setIsRecording(false);
     }
@@ -478,7 +481,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     });
 
     if (segments.length === 0) {
-      setRecordingError("V tomto režimu teď není co přehrát.");
+      setRecordingError(copy.editor.noSpeechPreview);
       return;
     }
 
@@ -486,6 +489,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       ttsRate: settings.ttsRate,
       ttsPitch: settings.ttsPitch,
       preferredVoice: settings.preferredVoice,
+      locale,
     });
 
     setIsTestingSpeech(true);
@@ -509,7 +513,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     } catch (error) {
       void appHaptics.error();
       setRecordingError(
-        error instanceof Error ? error.message : "Nahrávku nešlo smazat",
+        error instanceof Error ? error.message : copy.editor.deleteRecordingError,
       );
     }
   };
@@ -529,7 +533,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     } catch (error) {
       void appHaptics.error();
       setTileActionError(
-        error instanceof Error ? error.message : "Dlaždici nešlo smazat",
+        error instanceof Error ? error.message : copy.editor.deleteTileError,
       );
     }
   };
@@ -540,15 +544,15 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     }
 
     Alert.alert(
-      "Smazat vybranou dlaždici?",
-      "Dlaždice zmizí z tabule a zůstane dostupná v archivu.",
+      copy.editor.deleteTileTitle,
+      copy.editor.deleteTileBody,
       [
         {
-          text: "Zrušit",
+          text: copy.common.cancel,
           style: "cancel",
         },
         {
-          text: "Smazat",
+          text: copy.common.delete,
           style: "destructive",
           onPress: () => {
             void deleteSelectedTile();
@@ -574,11 +578,11 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const showAuthCtaForTileError =
     authIsAnonymous &&
-    Boolean(tileActionError && /bez účtu|přihlas/i.test(tileActionError));
+    Boolean(tileActionError && /bez účtu|přihlas|account|sign in/i.test(tileActionError));
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <ScreenHeader title="Upravit dlaždici" onBack={onBack} />
+      <ScreenHeader title={copy.editor.title} onBack={onBack} backLabel={copy.common.back} />
 
       <EmojiPicker
         open={isEmojiPickerOpen}
@@ -590,7 +594,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           setTileActionError(null);
           setIsEmojiPickerOpen(false);
         }}
-        translation={cs}
+        translation={locale === "cs-CZ" ? cs : undefined}
         enableSearchBar
         enableRecentlyUsed
       />
@@ -598,6 +602,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       <EmojiKeyboardModal
         visible={isEmojiKeyboardModalOpen}
         value={emoji}
+        locale={locale}
         onChange={(nextEmoji) => {
           setEmoji(nextEmoji);
           setTileActionError(null);
@@ -609,6 +614,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
       <TileVisualOptionsModal
         visible={isVisualMenuOpen}
+        locale={locale}
         hasPreviewImage={hasPreviewImage}
         showGenerateImageAction={aiGeneratedTileImagesEnabled}
         canGenerateImage={Boolean(effectiveLabel.trim())}
@@ -660,6 +666,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
       <SmartIconSuggestionsModal
         visible={isSmartSuggestionsOpen}
+        locale={locale}
         label={effectiveLabel}
         previewEmoji={previewEmoji}
         previewVisualType={previewVisualType}
@@ -707,6 +714,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                 <TileAppearanceSection
                   labelCs={labelCs}
                   onLabelChange={setLabelCs}
+                  labelPlaceholder={copy.tileAppearance.labelPlaceholder}
                   previewEmoji={previewEmoji}
                   previewVisualType={previewVisualType}
                   imageLocalUri={previewImageLocalUri}
@@ -718,7 +726,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
                 <View style={styles.divider} />
 
-                <Text style={styles.inputLabel}>Kategorie</Text>
+                <Text style={styles.inputLabel}>{copy.editor.category}</Text>
                 <View style={styles.chipWrap}>
                   {categories.map((item) => {
                     const selected = category === item;
@@ -749,14 +757,14 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                             selected && styles.chipTextSelected,
                           ]}
                         >
-                          {CATEGORY_LABELS[item]}
+                          {copy.categories[item]}
                         </Text>
                       </Pressable>
                     );
                   })}
                 </View>
 
-                <Text style={styles.inputLabel}>Režim řeči</Text>
+                <Text style={styles.inputLabel}>{copy.editor.speechMode}</Text>
                 <View style={styles.speechModeRow}>
                   <View style={styles.speechModeChipRow}>
                     {speechModes.map((mode) => {
@@ -781,7 +789,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                               selected && styles.chipTextSelected,
                             ]}
                           >
-                            {SPEECH_MODE_LABELS[mode]}
+                            {copy.speechModes[mode]}
                           </Text>
                         </Pressable>
                       );
@@ -798,7 +806,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                     disabled={!canTestSpeech && !isTestingSpeech}
                   >
                     <Text style={styles.modeTestButtonText}>
-                      {isTestingSpeech ? "■ Stop" : "🔊 Test"}
+                      {isTestingSpeech ? copy.editor.stopTest : copy.editor.test}
                     </Text>
                   </Pressable>
                 </View>
@@ -806,7 +814,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                 <View style={styles.divider} />
 
                 <View style={styles.recordingRow}>
-                  <Text style={styles.inputLabel}>Nahrávka</Text>
+                  <Text style={styles.inputLabel}>{copy.editor.recording}</Text>
                   <Pressable
                     style={[
                       styles.actionButton,
@@ -827,7 +835,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                           : null,
                       ]}
                     >
-                      {isRecording ? "Stop" : selectedClip ? "Smazat" : "Nahrát"}
+                      {isRecording ? copy.common.stop : selectedClip ? copy.common.delete : copy.editor.record}
                     </Text>
                   </Pressable>
                 </View>
@@ -855,7 +863,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                         styles.deleteTileButtonText,
                       ]}
                     >
-                      Smazat
+                      {copy.common.delete}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -870,7 +878,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                     disabled={isSaving || isRecording || visualSelectionIncomplete}
                   >
                     <Text style={styles.actionButtonText}>
-                      {isSaving ? "Ukládám..." : "Uložit"}
+                      {isSaving ? copy.common.saving : copy.common.save}
                     </Text>
                   </Pressable>
                 </View>
@@ -887,7 +895,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                         }}
                       >
                         <Text style={styles.inlineAuthLinkText}>
-                          Přihlásit / založit účet
+                          {copy.editor.signInCta}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -896,8 +904,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
               </>
             ) : (
               <Text style={styles.emptyText}>
-                Dlaždice není vybraná. Otevři editor dlouhým podržením dlaždice
-                na tabuli.
+                {copy.editor.empty}
               </Text>
             )}
           </View>

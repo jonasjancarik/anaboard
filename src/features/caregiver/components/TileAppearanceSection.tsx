@@ -15,6 +15,7 @@ type TileAppearanceSectionProps = {
   highContrast: boolean;
   previewBackgroundColor: string;
   onEditVisual: () => void;
+  labelPlaceholder?: string;
 };
 
 export const TileAppearanceSection = ({
@@ -27,6 +28,7 @@ export const TileAppearanceSection = ({
   highContrast,
   previewBackgroundColor,
   onEditVisual,
+  labelPlaceholder = "Text",
 }: TileAppearanceSectionProps) => {
   const [isLabelFocused, setIsLabelFocused] = useState(false);
 
@@ -60,7 +62,7 @@ export const TileAppearanceSection = ({
           <View style={styles.tilePreviewLabelField}>
             {!labelCs && !isLabelFocused ? (
               <Text pointerEvents="none" style={styles.tilePreviewLabelPlaceholder}>
-                Text
+                {labelPlaceholder}
               </Text>
             ) : null}
             <TextInput

@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 import { styles } from "../screens/EditorScreen.styles";
 
 type EmojiSuggestionSectionProps = {
@@ -11,6 +12,7 @@ type EmojiSuggestionSectionProps = {
   suggestions: EmojiSuggestion[];
   onRequest: () => void;
   onSelect: (value: string) => void;
+  locale?: unknown;
 };
 
 export const EmojiSuggestionSection = ({
@@ -21,15 +23,18 @@ export const EmojiSuggestionSection = ({
   suggestions,
   onRequest,
   onSelect,
+  locale,
 }: EmojiSuggestionSectionProps) => {
   if (!visible) {
     return null;
   }
 
+  const copy = getAppCopy(locale).emojiSuggestion;
+
   return (
     <View style={styles.aiSection}>
       <View style={styles.aiSectionHeader}>
-        <Text style={styles.inputLabel}>Emoji návrh</Text>
+        <Text style={styles.inputLabel}>{copy.title}</Text>
         <Pressable
           style={[
             styles.aiActionButton,
@@ -39,13 +44,13 @@ export const EmojiSuggestionSection = ({
           disabled={!hasLabel || isLoading}
         >
           <Text style={styles.aiActionButtonText}>
-            {isLoading ? "Hledám..." : "Navrhnout emoji"}
+            {isLoading ? copy.searching : copy.suggest}
           </Text>
         </Pressable>
       </View>
 
       {!hasLabel ? (
-        <Text style={styles.helperText}>Nejdřív napiš text dlaždice.</Text>
+        <Text style={styles.helperText}>{copy.labelRequired}</Text>
       ) : null}
 
       {suggestions.length > 0 ? (

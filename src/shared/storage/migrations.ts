@@ -18,6 +18,7 @@ type AppMetaRow = {
 
 const LEGACY_COMBINED_SPEECH_MODE = 'recording_with_tts_fallback';
 const DEFAULT_CATEGORY_ORDER_JSON = '["needs","feelings","social","food"]';
+const DEFAULT_CHILD_GENDER = 'masculine';
 
 const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
   await db.execAsync(`
@@ -117,6 +118,7 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
       board_layout_mode TEXT NOT NULL DEFAULT 'manual',
       category_order TEXT NOT NULL DEFAULT '["needs","feelings","social","food"]',
       categories_start_new_page INTEGER NOT NULL DEFAULT 1,
+      child_gender TEXT NOT NULL DEFAULT 'masculine',
       updated_at TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 1,
       dirty INTEGER NOT NULL DEFAULT 0
@@ -385,6 +387,28 @@ const ensureCategoryPageSetting = async (db: MigrationDatabase): Promise<void> =
   }
 };
 
+const ensureChildGenderSetting = async (db: MigrationDatabase): Promise<void> => {
+  if (!(await hasColumn(db, 'profile_settings', 'child_gender'))) {
+    await db.runAsync(
+      "ALTER TABLE profile_settings ADD COLUMN child_gender TEXT NOT NULL DEFAULT 'masculine'"
+    );
+  }
+
+  const syncEvents = await db.getAllAsync<{ id: number; payload: string }>(
+    "SELECT id, payload FROM sync_events WHERE entity_type = 'profile_settings' AND status != 'synced'"
+  );
+
+  for (const event of syncEvents) {
+    try {
+      const payload = JSON.parse(event.payload) as Record<string, unknown>;
+      payload.child_gender ??= DEFAULT_CHILD_GENDER;
+      await db.runAsync('UPDATE sync_events SET payload = ? WHERE id = ?', JSON.stringify(payload), event.id);
+    } catch {
+      // Leave malformed payloads untouched.
+    }
+  }
+};
+
 const migrationSteps: MigrationStep[] = [
   {
     version: 1,
@@ -494,6 +518,11 @@ const migrationSteps: MigrationStep[] = [
     version: 11,
     label: 'profile-settings-category-pages',
     run: ensureCategoryPageSetting,
+  },
+  {
+    version: 12,
+    label: 'profile-settings-child-gender',
+    run: ensureChildGenderSetting,
   },
 ];
 

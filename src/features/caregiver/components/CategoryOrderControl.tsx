@@ -2,8 +2,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   CATEGORY_COLORS,
-  CATEGORY_LABELS,
 } from '../../../shared/constants/defaults';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
 import { APP_THEME } from '../../../shared/constants/theme';
 import { appHaptics } from '../../../shared/feedback/haptics';
 import type { Category } from '../../../shared/types/domain';
@@ -13,6 +13,7 @@ type CategoryOrderControlProps = {
   value: Category[];
   onChange: (value: Category[]) => void;
   disabled?: boolean;
+  locale?: unknown;
 };
 
 const moveCategory = (categories: Category[], fromIndex: number, toIndex: number): Category[] => {
@@ -30,12 +31,14 @@ export const CategoryOrderControl = ({
   value,
   onChange,
   disabled = false,
+  locale,
 }: CategoryOrderControlProps) => {
   const categories = normalizeCategoryOrder(value);
+  const copy = getAppCopy(locale);
 
   return (
     <View style={[styles.block, disabled && styles.blockDisabled]}>
-      <Text style={styles.title}>Pořadí kategorií</Text>
+      <Text style={styles.title}>{copy.categoryOrder.title}</Text>
       <View style={styles.rows}>
         {categories.map((category, index) => {
           const canMoveUp = !disabled && index > 0;
@@ -53,11 +56,11 @@ export const CategoryOrderControl = ({
                   },
                 ]}
               />
-              <Text style={styles.label}>{CATEGORY_LABELS[category]}</Text>
+              <Text style={styles.label}>{copy.categories[category]}</Text>
               <View style={styles.buttons}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${CATEGORY_LABELS[category]} výš`}
+                  accessibilityLabel={copy.categoryOrder.moveUp(copy.categories[category])}
                   disabled={!canMoveUp}
                   onPress={() => {
                     if (!canMoveUp) {
@@ -77,7 +80,7 @@ export const CategoryOrderControl = ({
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${CATEGORY_LABELS[category]} níž`}
+                  accessibilityLabel={copy.categoryOrder.moveDown(copy.categories[category])}
                   disabled={!canMoveDown}
                   onPress={() => {
                     if (!canMoveDown) {

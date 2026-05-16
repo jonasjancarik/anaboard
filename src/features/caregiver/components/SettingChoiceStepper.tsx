@@ -15,6 +15,8 @@ type SettingChoiceStepperProps = {
   options: SettingChoiceOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  previousLabel?: string;
+  nextLabel?: string;
 };
 
 const findSelectedIndex = (value: string, options: SettingChoiceOption[]): number => {
@@ -28,6 +30,8 @@ export const SettingChoiceStepper = ({
   options,
   onChange,
   disabled = false,
+  previousLabel = 'předchozí',
+  nextLabel = 'další',
 }: SettingChoiceStepperProps) => {
   const selectedIndex = findSelectedIndex(value, options);
   const selectedOption = options[selectedIndex];
@@ -46,7 +50,7 @@ export const SettingChoiceStepper = ({
       <View style={styles.controlsRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} předchozí`}
+          accessibilityLabel={`${title} ${previousLabel}`}
           disabled={!canGoBack}
           onPress={() => {
             if (canGoBack) {
@@ -76,7 +80,7 @@ export const SettingChoiceStepper = ({
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} další`}
+          accessibilityLabel={`${title} ${nextLabel}`}
           disabled={!canGoForward}
           onPress={() => {
             if (canGoForward) {

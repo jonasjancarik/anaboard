@@ -1,3 +1,5 @@
+import type { ChildGender } from '../i18n/profileLanguage';
+
 export type Category = 'needs' | 'feelings' | 'social' | 'food';
 
 export type BoardLayoutMode =
@@ -101,6 +103,7 @@ export interface ProfileSettings {
   boardLayoutMode: BoardLayoutMode;
   categoryOrder: Category[];
   categoriesStartNewPage: boolean;
+  childGender: ChildGender;
   updatedAt: string;
   revision: number;
 }

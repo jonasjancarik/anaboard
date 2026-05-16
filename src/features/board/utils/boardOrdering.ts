@@ -9,10 +9,11 @@ export type OrderedBoardPage = {
 const DEFAULT_CATEGORY_ORDER: Category[] = ['needs', 'feelings', 'social', 'food'];
 const CATEGORY_SET = new Set<string>(DEFAULT_CATEGORY_ORDER);
 
-const collator = new Intl.Collator('cs-CZ', {
-  numeric: true,
-  sensitivity: 'base',
-});
+const createCollator = (locale: unknown): Intl.Collator =>
+  new Intl.Collator(locale === 'en-US' ? 'en-US' : 'cs-CZ', {
+    numeric: true,
+    sensitivity: 'base',
+  });
 
 const buildCategoryRank = (categoryOrder: Category[]): Record<Category, number> => {
   return categoryOrder.reduce<Record<Category, number>>((rank, category, index) => {
@@ -46,7 +47,8 @@ const normalizeBoardCategoryOrder = (categoryOrder: Category[]): Category[] => {
 export const getTilesForBoardLayout = (
   tiles: Tile[],
   layoutMode: BoardLayoutMode,
-  categoryOrder: Category[]
+  categoryOrder: Category[],
+  locale?: unknown
 ): Tile[] => {
   if (layoutMode === 'manual') {
     return tiles;
@@ -55,6 +57,7 @@ export const getTilesForBoardLayout = (
   const normalizedCategoryOrder = normalizeBoardCategoryOrder(categoryOrder);
   const categoryRank = buildCategoryRank(normalizedCategoryOrder);
   const fallbackRank = DEFAULT_CATEGORY_ORDER.length;
+  const collator = createCollator(locale);
 
   return [...tiles].sort((left, right) => {
     const categoryDelta =

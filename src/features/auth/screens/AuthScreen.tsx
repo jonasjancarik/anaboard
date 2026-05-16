@@ -14,6 +14,7 @@ import { authService } from '../authService';
 import { getOriginalEmailAddress } from '../emailAddress';
 import { SCREEN_CONTENT_PADDING } from '../../../shared/constants/layout';
 import { APP_THEME } from '../../../shared/constants/theme';
+import { getAppCopy } from '../../../shared/i18n/appCopy';
 import { isWebPlatform } from '../../../shared/platform/runtime';
 import { useAppStore } from '../../../store/useAppStore';
 import { ScreenHeader } from '../../caregiver/components/ScreenHeader';
@@ -24,6 +25,8 @@ type AuthScreenProps = {
 
 export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
+  const board = useAppStore((state) => state.board);
+  const copy = getAppCopy(board?.locale);
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,7 +35,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const submit = async () => {
     const originalEmail = getOriginalEmailAddress(email);
     if (!originalEmail) {
-      setError('Zadej e-mail');
+      setError(copy.auth.emailRequired);
       return;
     }
 
@@ -45,9 +48,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         ? window.location.origin
         : Linking.createURL('auth');
       await authService.sendMagicLink(originalEmail, emailRedirectTo);
-      setMessage('Odkaz jsme poslali do e-mailu. Otevři ho na tomto zařízení.');
+      setMessage(copy.auth.linkSent);
     } catch (submitError) {
-      const nextError = submitError instanceof Error ? submitError.message : 'Odeslání odkazu selhalo';
+      const nextError = submitError instanceof Error ? submitError.message : copy.auth.sendFailed;
       setError(nextError);
     } finally {
       setIsSubmitting(false);
@@ -62,15 +65,15 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         keyboardVerticalOffset={24}
       >
         <View style={styles.header}>
-          <ScreenHeader title="" onBack={onBack} />
+          <ScreenHeader title="" onBack={onBack} backLabel={copy.common.back} />
         </View>
 
         <View style={styles.form}>
           <Text style={styles.title}>Cloud sync</Text>
           <Text style={styles.subtitle}>
             {authIsAnonymous
-              ? 'Zadej e-mail. Pošleme jednorázový odkaz a po návratu se vrátíš k rozpracované dlaždici.'
-              : 'Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.'}
+              ? copy.auth.anonymousSubtitle
+              : copy.auth.signedOutSubtitle}
           </Text>
 
           <TextInput
@@ -91,7 +94,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           {message ? <Text style={styles.message}>{message}</Text> : null}
 
           <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
-            <Text style={styles.submitText}>{isSubmitting ? 'Posílám...' : 'Poslat odkaz do e-mailu'}</Text>
+            <Text style={styles.submitText}>
+              {isSubmitting ? copy.auth.sending : copy.auth.sendLink}
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

@@ -398,7 +398,7 @@ export const styles = StyleSheet.create({
     fontSize: 34,
   },
   tileLabel: {
-    width: '90%',
+    width: '98%',
     marginTop: 6,
     fontSize: 15,
     lineHeight: 18,

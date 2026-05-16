@@ -9,16 +9,21 @@ import { Platform } from 'react-native';
 
 import { mediaAssetExists, resolveManagedMediaUri } from '../../shared/media/mediaStorage';
 import { logError, logEvent } from '../../shared/telemetry/logger';
+import {
+  DEFAULT_PROFILE_LOCALE,
+  normalizeSupportedLocale,
+} from '../../shared/i18n/profileLanguage';
 import type { AudioClip, ProfileSettings, SentenceToken, SpeechSegment, Tile } from '../../shared/types/domain';
 import { sleep } from '../../shared/utils/time';
 
 const INTER_SEGMENT_PAUSE_MS = 120;
-const TTS_LANGUAGE = 'cs-CZ';
 const TTS_TIMEOUT_BUFFER_MS = 2_000;
 const TTS_TIMEOUT_MIN_MS = 4_000;
 const TTS_TIMEOUT_MAX_MS = 20_000;
 
-type SpeechSettings = Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'>;
+type SpeechSettings = Pick<ProfileSettings, 'ttsRate' | 'ttsPitch' | 'preferredVoice'> & {
+  locale?: unknown;
+};
 type TtsVoiceSelection = {
   language: string;
   voice?: string;
@@ -151,6 +156,7 @@ class SpeechEngine {
     ttsRate: 0.86,
     ttsPitch: 1,
     preferredVoice: undefined,
+    locale: DEFAULT_PROFILE_LOCALE,
   };
 
   public setSettings(settings: SpeechSettings): void {
@@ -252,9 +258,11 @@ class SpeechEngine {
   };
 
   private resolveTtsVoice = async (settings: SpeechSettings): Promise<TtsVoiceSelection> => {
+    const ttsLanguage = normalizeSupportedLocale(settings.locale ?? DEFAULT_PROFILE_LOCALE);
+
     if (!settings.preferredVoice) {
       return {
-        language: TTS_LANGUAGE,
+        language: ttsLanguage,
       };
     }
 
@@ -263,12 +271,12 @@ class SpeechEngine {
       const preferredVoice = voices.find((voice) => voice.identifier === settings.preferredVoice);
       if (preferredVoice) {
         return {
-          language: preferredVoice.language || TTS_LANGUAGE,
+          language: preferredVoice.language || ttsLanguage,
           voice: preferredVoice.identifier,
         };
       }
 
-      const fallbackVoice = findLanguageVoice(voices, TTS_LANGUAGE);
+      const fallbackVoice = findLanguageVoice(voices, ttsLanguage);
       logEvent('speech_voice_unavailable', {
         preferred_voice: settings.preferredVoice,
         platform: Platform.OS,
@@ -276,7 +284,7 @@ class SpeechEngine {
       });
 
       return {
-        language: TTS_LANGUAGE,
+        language: ttsLanguage,
         voice: fallbackVoice,
       };
     } catch (error) {
@@ -285,7 +293,7 @@ class SpeechEngine {
       });
 
       return {
-        language: TTS_LANGUAGE,
+        language: ttsLanguage,
       };
     }
   };

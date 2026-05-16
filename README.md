@@ -1,6 +1,6 @@
 # ÁňaBoard
 
-Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, local-first persistence, optional Supabase sync.
+Mobile-first AAC board for pilot families. Czech/English UX, caregiver controls, local-first persistence, optional Supabase sync.
 
 ## Implemented foundations
 
@@ -42,8 +42,12 @@ Mobile-first AAC board for pilot families. Czech-first UX, caregiver controls, l
 - Sync service scaffold with pending event queue and optional Supabase push
 - Supabase auth flow:
   - optional email magic-link sign in
-  - first-run family + child profile bootstrap
+  - first-run family + child profile bootstrap with board language and Czech user-gender form
   - persisted session via AsyncStorage
+- Internationalization:
+  - Czech and English UI copy
+  - Czech masculine/feminine starter tile sets
+  - English starter tile set
 - Privacy-safe telemetry abstraction with local diagnostics buffer
 - Opt-in Sentry error reporting plus caregiver diagnostics email/share action
 
@@ -190,7 +194,7 @@ Caregiver emails keep the original `email` for UI/outgoing auth, with generated 
 ## Notes
 
 - Default caregiver PIN is `1234` until changed in Settings.
-- Default board ships as a 2-page preschool starter set: page 1 home/core words, page 2 child fringe/routines/favorites.
+- Default board ships as a 2-page starter set. Czech has masculine and feminine variants for user-facing forms; English uses one neutral set.
 - Tile labels are shown by default for easier symbol learning and partner interpretation.
 - Saved phrases and recent phrase history sync through Supabase when cloud sync is enabled.
 - Caregiver settings act as the central hub for archive, reset-to-defaults, appearance, speech, PIN, and account actions.

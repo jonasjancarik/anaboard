@@ -13,6 +13,8 @@ type SettingStepperProps = {
   value: number;
   options: SettingStepperOption[];
   onChange: (value: number) => void;
+  decreaseLabel?: string;
+  increaseLabel?: string;
 };
 
 const findClosestIndex = (value: number, options: SettingStepperOption[]): number => {
@@ -28,6 +30,8 @@ export const SettingStepper = ({
   value,
   options,
   onChange,
+  decreaseLabel = 'snížit',
+  increaseLabel = 'zvýšit',
 }: SettingStepperProps) => {
   const selectedIndex = findClosestIndex(value, options);
 
@@ -41,7 +45,7 @@ export const SettingStepper = ({
       <View style={styles.controlsRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} snížit`}
+          accessibilityLabel={`${title} ${decreaseLabel}`}
           disabled={selectedIndex === 0}
           onPress={() => {
             if (selectedIndex > 0) {
@@ -88,7 +92,7 @@ export const SettingStepper = ({
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} zvýšit`}
+          accessibilityLabel={`${title} ${increaseLabel}`}
           disabled={selectedIndex === options.length - 1}
           onPress={() => {
             if (selectedIndex < options.length - 1) {

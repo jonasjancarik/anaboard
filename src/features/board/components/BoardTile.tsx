@@ -37,6 +37,7 @@ type BoardTileProps = {
   longPressDelayMs: number;
   globalIndex: number;
   onTilePress: (tileId: string) => void;
+  getAccessibilityLabel: (label: string, caregiverUnlocked: boolean) => string;
   onBeginReorderTouch: (
     tileId: string,
     startIndex: number,
@@ -61,6 +62,7 @@ const BoardTileComponent = ({
   longPressDelayMs,
   globalIndex,
   onTilePress,
+  getAccessibilityLabel,
   onBeginReorderTouch,
   onEndReorderTouch,
 }: BoardTileProps) => {
@@ -90,7 +92,7 @@ const BoardTileComponent = ({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={caregiverUnlocked ? `Upravit ${tile.labelCs}` : `Řekni ${tile.labelCs}`}
+      accessibilityLabel={getAccessibilityLabel(tile.labelCs, caregiverUnlocked)}
       onPress={handlePress}
       onLongPress={canReorder ? handleLongPress : undefined}
       delayLongPress={canReorder ? longPressDelayMs : undefined}
@@ -162,6 +164,7 @@ export const BoardTile = memo(BoardTileComponent, (previous, next) => {
     previous.longPressDelayMs === next.longPressDelayMs &&
     previous.globalIndex === next.globalIndex &&
     previous.onTilePress === next.onTilePress &&
+    previous.getAccessibilityLabel === next.getAccessibilityLabel &&
     previous.onBeginReorderTouch === next.onBeginReorderTouch &&
     previous.onEndReorderTouch === next.onEndReorderTouch
   );

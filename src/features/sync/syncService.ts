@@ -13,6 +13,7 @@ import {
   retryErroredSyncEvents,
 } from '../../shared/storage/repositories/syncRepository';
 import type { EntityType, SyncEvent, SyncStatus } from '../../shared/types/domain';
+import { normalizeChildGender } from '../../shared/i18n/profileLanguage';
 import {
   applyRemoteSnapshot,
   fetchRemoteSnapshot,
@@ -342,7 +343,8 @@ class SyncService {
         Object.prototype.hasOwnProperty.call(remotePayload, 'suggestion_count') ||
         Object.prototype.hasOwnProperty.call(remotePayload, 'board_layout_mode') ||
         Object.prototype.hasOwnProperty.call(remotePayload, 'category_order') ||
-        Object.prototype.hasOwnProperty.call(remotePayload, 'categories_start_new_page')
+        Object.prototype.hasOwnProperty.call(remotePayload, 'categories_start_new_page') ||
+        Object.prototype.hasOwnProperty.call(remotePayload, 'child_gender')
       )
     ) {
       const fallbackPayload = { ...remotePayload };
@@ -353,6 +355,7 @@ class SyncService {
       delete fallbackPayload.board_layout_mode;
       delete fallbackPayload.category_order;
       delete fallbackPayload.categories_start_new_page;
+      delete fallbackPayload.child_gender;
       const fallbackResult = await supabaseClient
         .from(event.entityType)
         .upsert(fallbackPayload, { onConflict: primaryKey });
@@ -470,6 +473,7 @@ class SyncService {
       board_layout_mode: payload.board_layout_mode ?? 'manual',
       category_order: payload.category_order ?? '["needs","feelings","social","food"]',
       categories_start_new_page: Boolean(payload.categories_start_new_page ?? true),
+      child_gender: normalizeChildGender(payload.child_gender),
       updated_at: payload.updated_at,
       revision: payload.revision,
     };

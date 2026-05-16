@@ -1,8 +1,16 @@
 import {
   DEFAULT_BOARD_ID,
+  DEFAULT_BOARD_NAME,
   DEFAULT_PROFILE_ID,
   DEFAULT_TILES,
 } from '../../constants/defaults';
+import {
+  DEFAULT_CHILD_GENDER,
+  DEFAULT_PROFILE_LOCALE,
+  normalizeChildGender,
+  normalizeSupportedLocale,
+  type ChildGender,
+} from '../../i18n/profileLanguage';
 import type {
   AudioClip,
   Board,
@@ -56,6 +64,16 @@ type AudioClipRow = {
   updated_at: string;
 };
 
+const getChildGenderForProfile = async (profileId: string): Promise<ChildGender> => {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ child_gender?: string | null }>(
+    'SELECT child_gender FROM profile_settings WHERE profile_id = ? LIMIT 1',
+    profileId
+  );
+
+  return normalizeChildGender(row?.child_gender ?? DEFAULT_CHILD_GENDER);
+};
+
 const mapBoardRow = (row: BoardRow): Board => ({
   id: row.id,
   profileId: row.profile_id,
@@ -106,14 +124,17 @@ const insertDefaultBoard = async (): Promise<void> => {
     `,
     DEFAULT_BOARD_ID,
     DEFAULT_PROFILE_ID,
-    'Moje tabule',
-    'cs-CZ',
+    DEFAULT_BOARD_NAME,
+    DEFAULT_PROFILE_LOCALE,
     4,
     4,
     timestamp
   );
 
-  const tiles = DEFAULT_TILES(timestamp);
+  const tiles = DEFAULT_TILES(timestamp, {
+    locale: DEFAULT_PROFILE_LOCALE,
+    childGender: DEFAULT_CHILD_GENDER,
+  });
   for (const tile of tiles) {
     await db.runAsync(
       `
@@ -157,8 +178,8 @@ const insertDefaultBoard = async (): Promise<void> => {
   await enqueueSyncEvent('boards', DEFAULT_BOARD_ID, 'upsert', {
     id: DEFAULT_BOARD_ID,
     profile_id: DEFAULT_PROFILE_ID,
-    name: 'Moje tabule',
-    locale: 'cs-CZ',
+    name: DEFAULT_BOARD_NAME,
+    locale: DEFAULT_PROFILE_LOCALE,
     columns_count: 4,
     rows_count: 4,
     updated_at: timestamp,
@@ -206,7 +227,11 @@ const syncDefaultBoardTiles = async (): Promise<void> => {
   );
 
   const existingIds = new Set(existingTiles.map((tile) => tile.id));
-  const defaults = DEFAULT_TILES(nowIso());
+  const childGender = await getChildGenderForProfile(boardRow.profile_id);
+  const defaults = DEFAULT_TILES(nowIso(), {
+    locale: normalizeSupportedLocale(boardRow.locale),
+    childGender,
+  });
   const missingDefaults = defaults.filter((tile) => !existingIds.has(tile.id));
 
   if (missingDefaults.length === 0) {
@@ -353,10 +378,17 @@ export const resetActiveBoardToDefaults = async (): Promise<void> => {
 
   const db = await getDatabase();
   const timestamp = nowIso();
+  const childGender = await getChildGenderForProfile(snapshot.board.profileId);
   const nextTiles =
     snapshot.board.id === DEFAULT_BOARD_ID
-      ? DEFAULT_TILES(timestamp)
-      : DEFAULT_TILES(timestamp).map((tile) => ({
+      ? DEFAULT_TILES(timestamp, {
+          locale: normalizeSupportedLocale(snapshot.board.locale),
+          childGender,
+        })
+      : DEFAULT_TILES(timestamp, {
+          locale: normalizeSupportedLocale(snapshot.board.locale),
+          childGender,
+        }).map((tile) => ({
           ...tile,
           id: createId('tile'),
           boardId: snapshot.board.id,

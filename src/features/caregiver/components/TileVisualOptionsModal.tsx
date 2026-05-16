@@ -7,6 +7,7 @@ import {
 } from "react-native";
 
 import { APP_THEME } from "../../../shared/constants/theme";
+import { getAppCopy } from "../../../shared/i18n/appCopy";
 
 type TileVisualOptionsModalProps = {
   visible: boolean;
@@ -21,6 +22,7 @@ type TileVisualOptionsModalProps = {
   onSelectCamera: () => void;
   onGenerateImage: () => void;
   onRemoveImage: () => void;
+  locale?: unknown;
 };
 
 export const TileVisualOptionsModal = ({
@@ -36,20 +38,22 @@ export const TileVisualOptionsModal = ({
   onSelectCamera,
   onGenerateImage,
   onRemoveImage,
+  locale,
 }: TileVisualOptionsModalProps) => {
+  const copy = getAppCopy(locale).tileVisualOptions;
   const actions = [
     { label: "Emoji", onPress: onSelectEmoji, disabled: false },
     {
-      label: "Emoji/text z klávesnice",
+      label: copy.keyboardEmoji,
       onPress: onSelectEmojiKeyboard,
       disabled: false,
     },
-    { label: "Fotka z knihovny", onPress: onSelectPhotoLibrary, disabled: false },
-    { label: "Vyfotit", onPress: onSelectCamera, disabled: false },
+    { label: copy.photoLibrary, onPress: onSelectPhotoLibrary, disabled: false },
+    { label: copy.camera, onPress: onSelectCamera, disabled: false },
     ...(showGenerateImageAction
       ? [
           {
-            label: isGeneratingImage ? "Vytvářím obrázek..." : "Vygenerovat obrázek",
+            label: isGeneratingImage ? copy.generatingImage : copy.generateImage,
             onPress: onGenerateImage,
             disabled: !canGenerateImage || isGeneratingImage,
           },
@@ -69,9 +73,9 @@ export const TileVisualOptionsModal = ({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={modalStyles.sheet}>
-          <Text style={modalStyles.title}>Ikona dlaždice</Text>
+          <Text style={modalStyles.title}>{copy.title}</Text>
           <Text style={modalStyles.subtitle}>
-            Vyber, jak chceš dlaždici upravit.
+            {copy.subtitle}
           </Text>
 
           <View style={modalStyles.actions}>
@@ -97,14 +101,14 @@ export const TileVisualOptionsModal = ({
                 <Text
                   style={[modalStyles.actionText, modalStyles.destructiveText]}
                 >
-                  Odebrat fotku
+                  {copy.removePhoto}
                 </Text>
               </Pressable>
             ) : null}
           </View>
 
           <Pressable style={modalStyles.cancelButton} onPress={onClose}>
-            <Text style={modalStyles.cancelText}>Zrušit</Text>
+            <Text style={modalStyles.cancelText}>{getAppCopy(locale).common.cancel}</Text>
           </Pressable>
         </View>
       </View>

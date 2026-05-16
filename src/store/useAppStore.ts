@@ -21,6 +21,7 @@ import {
   getProfileSettings,
   updateProfileSettings,
 } from '../shared/storage/repositories/settingsRepository';
+import { applyOnboardingPreferencesToLocalDefaults } from '../shared/storage/repositories/onboardingRepository';
 import {
   deleteSavedPhrase as deleteSavedPhraseInRepository,
   getRecentPhraseEvents,
@@ -35,6 +36,7 @@ import { getSyncOverview } from '../features/sync/syncStateRepository';
 import { logError } from '../shared/telemetry/logger';
 import type { AuthStatus, RemoteContext } from '../features/auth/types';
 import type { SyncIssueCode } from '../features/sync/types';
+import type { ChildGender } from '../shared/i18n/profileLanguage';
 import type {
   AudioClip,
   BoardLayoutMode,
@@ -157,6 +159,14 @@ type AppStore = {
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
   deleteTile: (tileId: string) => Promise<void>;
   resetBoardToDefaults: () => Promise<void>;
+  applyOnboardingPreferences: (input: {
+    locale: string;
+    childGender: ChildGender;
+  }) => Promise<void>;
+  applyLanguagePreferences: (input: {
+    locale: string;
+    childGender: ChildGender;
+  }) => Promise<void>;
   saveClip: (
     tileId: string,
     clipData: { localUri: string; durationMs: number; checksum?: string; format: string }
@@ -176,6 +186,7 @@ type AppStore = {
     boardLayoutMode?: BoardLayoutMode;
     categoryOrder?: Category[];
     categoriesStartNewPage?: boolean;
+    childGender?: ChildGender;
     pinHash?: string;
   }) => Promise<void>;
 
@@ -457,6 +468,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   resetBoardToDefaults: async () => {
     await resetActiveBoardToDefaults();
     await get().refreshBoard();
+    set({ sentence: [], editorTargetTileId: null, boardPageIndex: 0 });
+    await get().refreshPendingSyncEvents();
+  },
+
+  applyOnboardingPreferences: async (input) => {
+    await get().applyLanguagePreferences(input);
+  },
+
+  applyLanguagePreferences: async (input) => {
+    await applyOnboardingPreferencesToLocalDefaults(input);
+    await Promise.all([get().refreshBoard(), get().refreshSettings()]);
     set({ sentence: [], editorTargetTileId: null, boardPageIndex: 0 });
     await get().refreshPendingSyncEvents();
   },

@@ -7,6 +7,7 @@ import {
   normalizeCategoryOrder,
   serializeCategoryOrder,
 } from '../../shared/utils/categoryOrder';
+import { normalizeChildGender } from '../../shared/i18n/profileLanguage';
 import type { RemoteContext } from '../auth/types';
 import {
   downloadAudioClipFromSupabase,
@@ -76,6 +77,7 @@ type LocalSettingsSyncRow = {
   board_layout_mode: string;
   category_order: string;
   categories_start_new_page: number;
+  child_gender: string;
   updated_at: string;
   revision: number;
 };
@@ -141,27 +143,43 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
     throw new Error('Supabase client missing');
   }
 
+  const withChildGender = await supabaseClient
+    .from('profile_settings')
+    .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page, child_gender, updated_at, revision')
+    .eq('profile_id', profileId)
+    .maybeSingle<RemoteSettingsRow>();
+
+  if (!withChildGender.error) {
+    return withChildGender.data ?? null;
+  }
+
   const withCategoryPages = await supabaseClient
     .from('profile_settings')
     .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, categories_start_new_page, updated_at, revision')
     .eq('profile_id', profileId)
-    .maybeSingle<RemoteSettingsRow>();
+    .maybeSingle<Omit<RemoteSettingsRow, 'child_gender'>>();
 
   if (!withCategoryPages.error) {
-    return withCategoryPages.data ?? null;
+    return withCategoryPages.data
+      ? {
+          ...withCategoryPages.data,
+          child_gender: 'masculine',
+        }
+      : null;
   }
 
   const withBoardLayout = await supabaseClient
     .from('profile_settings')
     .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order, updated_at, revision')
     .eq('profile_id', profileId)
-    .maybeSingle<Omit<RemoteSettingsRow, 'categories_start_new_page'>>();
+    .maybeSingle<Omit<RemoteSettingsRow, 'categories_start_new_page' | 'child_gender'>>();
 
   if (!withBoardLayout.error) {
     return withBoardLayout.data
       ? {
           ...withBoardLayout.data,
           categories_start_new_page: true,
+          child_gender: 'masculine',
         }
       : null;
   }
@@ -170,7 +188,7 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
     .from('profile_settings')
     .select('profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision')
     .eq('profile_id', profileId)
-    .maybeSingle<Omit<RemoteSettingsRow, 'board_layout_mode' | 'category_order'>>();
+    .maybeSingle<Omit<RemoteSettingsRow, 'board_layout_mode' | 'category_order' | 'child_gender'>>();
 
   if (!withoutBoardLayout.error) {
     return withoutBoardLayout.data
@@ -179,6 +197,7 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
           board_layout_mode: 'manual',
           category_order: serializeCategoryOrder(null),
           categories_start_new_page: true,
+          child_gender: 'masculine',
         }
       : null;
   }
@@ -187,7 +206,12 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
     .from('profile_settings')
     .select('profile_id, pin_hash, lock_enabled, tts_rate, tts_pitch, preferred_voice, high_contrast, show_labels, phrase_bar_enabled, suggestion_count, updated_at, revision')
     .eq('profile_id', profileId)
-    .maybeSingle<Omit<RemoteSettingsRow, 'backup_pin_enabled'>>();
+    .maybeSingle<
+      Omit<
+        RemoteSettingsRow,
+        'backup_pin_enabled' | 'board_layout_mode' | 'category_order' | 'categories_start_new_page' | 'child_gender'
+      >
+    >();
 
   if (fallback.error) {
     throw withCategoryPages.error;
@@ -200,6 +224,7 @@ const fetchRemoteSettings = async (profileId: string): Promise<RemoteSettingsRow
         board_layout_mode: 'manual',
         category_order: serializeCategoryOrder(null),
         categories_start_new_page: true,
+        child_gender: 'masculine',
       }
     : null;
 };
@@ -430,6 +455,7 @@ export const getLocalEntitySyncPayload = async (
         board_layout_mode,
         category_order,
         categories_start_new_page,
+        child_gender,
         updated_at,
         revision
       FROM profile_settings
@@ -689,8 +715,8 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
           INSERT INTO profile_settings (
             profile_id, pin_hash, lock_enabled, backup_pin_enabled, tts_rate, tts_pitch, preferred_voice,
             high_contrast, show_labels, phrase_bar_enabled, suggestion_count, board_layout_mode, category_order,
-            categories_start_new_page, updated_at, revision, dirty
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            categories_start_new_page, child_gender, updated_at, revision, dirty
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
           ON CONFLICT(profile_id) DO UPDATE SET
             pin_hash = excluded.pin_hash,
             lock_enabled = excluded.lock_enabled,
@@ -705,6 +731,7 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
             board_layout_mode = excluded.board_layout_mode,
             category_order = excluded.category_order,
             categories_start_new_page = excluded.categories_start_new_page,
+            child_gender = excluded.child_gender,
             updated_at = excluded.updated_at,
             revision = excluded.revision,
             dirty = 0
@@ -723,6 +750,7 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
         normalizeBoardLayoutMode(snapshot.settings.board_layout_mode),
         serializeCategoryOrder(normalizeCategoryOrder(snapshot.settings.category_order)),
         snapshot.settings.categories_start_new_page !== false ? 1 : 0,
+        normalizeChildGender(snapshot.settings.child_gender),
         snapshot.settings.updated_at,
         snapshot.settings.revision
       );
