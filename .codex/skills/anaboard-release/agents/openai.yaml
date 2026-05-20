@@ -1,0 +1,4 @@
+interface:
+  display_name: "AnaBoard Release"
+  short_description: "Release AnaBoard with notes and APK."
+  default_prompt: "Use $anaboard-release to create and verify a new AnaBoard release."
