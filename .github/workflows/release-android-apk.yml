@@ -1,9 +1,6 @@
 name: Release Android APK
 
 on:
-  push:
-    tags:
-      - "v*"
   release:
     types:
       - published
@@ -50,28 +47,50 @@ jobs:
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "apk_name=anaboard-${tag}.apk" >> "${GITHUB_OUTPUT}"
 
+      - name: Check for uploaded APK
+        id: existing_apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          APK_NAME: ${{ steps.release.outputs.apk_name }}
+        shell: bash
+        run: |
+          asset_names="$(gh release view "${TAG}" --json assets --jq '.assets[].name' 2>/dev/null || true)"
+
+          if grep -Fxq "${APK_NAME}" <<< "${asset_names}"; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "APK ${APK_NAME} already exists on release ${TAG}; skipping build."
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Checkout
+        if: steps.existing_apk.outputs.exists != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 0
 
       - name: Setup Node
+        if: steps.existing_apk.outputs.exists != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Java
+        if: steps.existing_apk.outputs.exists != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
       - name: Install dependencies
+        if: steps.existing_apk.outputs.exists != 'true'
         run: npm ci
 
       - name: Validate release environment
+        if: steps.existing_apk.outputs.exists != 'true'
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
@@ -89,6 +108,7 @@ jobs:
           fi
 
       - name: Build release APK
+        if: steps.existing_apk.outputs.exists != 'true'
         run: npm run android:apk
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
@@ -99,6 +119,7 @@ jobs:
           EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES: ${{ vars.EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES || secrets.EXPO_PUBLIC_AI_GENERATED_TILE_IMAGES || '0' }}
 
       - name: Prepare release asset
+        if: steps.existing_apk.outputs.exists != 'true'
         shell: bash
         run: |
           mkdir -p "${APK_DIR}"
@@ -106,6 +127,7 @@ jobs:
           ls -lh "${APK_DIR}/${{ steps.release.outputs.apk_name }}"
 
       - name: Upload workflow artifact
+        if: steps.existing_apk.outputs.exists != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
@@ -113,6 +135,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create or update GitHub Release
+        if: steps.existing_apk.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}

@@ -8,6 +8,7 @@
     "android:doctor": "bash ./scripts/android-local-build.sh doctor",
     "android:prebuild": "bash ./scripts/android-local-build.sh prebuild",
     "android:apk": "bash ./scripts/android-local-build.sh apk",
+    "android:release:upload": "bash ./scripts/android-release-upload.sh",
     "admin:ai-trial": "node ./scripts/admin-ai-trial.mjs",
     "check": "npm run typecheck && npm run migrations:test && npm run board-ordering:test && npm run defaults:test && npm run email:test && npm run telemetry:test && npm run functions:check",
     "email:test": "node --experimental-strip-types ./scripts/test-email-normalization.mjs",

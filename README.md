@@ -69,21 +69,26 @@ Tester APK via EAS Build:
 npx eas-cli@latest build -p android --profile preview
 ```
 
-GitHub Release APK:
+GitHub Release APK, fast local path:
 
-- push a tag like `v1.0.0`
-- or publish a GitHub Release for an existing tag
-- GitHub Actions builds the local release APK
+- create and push a tag like `v1.0.0`
+- run `npm run android:release:upload -- v1.0.0`
+- the script builds the local release APK and uploads `anaboard-v1.0.0.apk`
+- when the GitHub Release is published, the workflow sees the uploaded APK and skips the remote APK build
+
+GitHub Actions fallback:
+
+- publish a GitHub Release without an APK asset
+- or manually run Actions -> Release Android APK -> enter an existing tag
 - the workflow creates or updates the matching GitHub Release and uploads `anaboard-v1.0.0.apk`
-- manual rerun: Actions -> Release Android APK -> enter an existing tag
 - this is a tester APK; use the production EAS build for Google Play
 
-Required GitHub Actions variables or secrets:
+Required release environment values, set either in the local shell or `.env.local`, or as GitHub Actions variables or secrets:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 
-Optional GitHub Actions variables or secrets:
+Optional release environment values, set the same way:
 
 - `EXPO_PUBLIC_SENTRY_DSN`
 - `EXPO_PUBLIC_AI_EMOJI_SUGGESTIONS`
@@ -103,6 +108,7 @@ Local APK on your machine:
 npm run android:doctor
 npm run android:prebuild
 npm run android:apk
+npm run android:release:upload -- v1.0.0 android/app/build/outputs/apk/release/app-release.apk
 ```
 
 Output:
