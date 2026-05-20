@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -104,6 +105,9 @@ const TILE_TAP_UNDO_WINDOW_MS = 550;
 const VISIBLE_SPREAD_WINDOW_RADIUS = 1;
 const REORDER_LAYOUT_TRANSITION = LinearTransition.duration(140);
 const CATEGORY_PAGE_HEADER_HEIGHT = 34;
+const BOTTOM_BAR_SAFE_AREA_GAP = 8;
+const BOTTOM_BAR_COMPACT_SAFE_AREA_MAX = 16;
+const ANDROID_LARGE_BOTTOM_SYSTEM_BAR_MIN_INSET = 40;
 const ACTION_TEXT_PROPS = {
   allowFontScaling: false,
   numberOfLines: 1 as const,
@@ -185,7 +189,14 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const dragOverlayTranslateY = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const bottomBarBottomPadding = Math.max(8, Math.min(insets.bottom, 16));
+  const hasLargeAndroidBottomSystemBar =
+    Platform.OS === 'android' &&
+    insets.bottom >= ANDROID_LARGE_BOTTOM_SYSTEM_BAR_MIN_INSET;
+  const compactBottomInset = Math.min(insets.bottom, BOTTOM_BAR_COMPACT_SAFE_AREA_MAX);
+  const bottomBarBottomPadding =
+    hasLargeAndroidBottomSystemBar
+      ? insets.bottom + BOTTOM_BAR_SAFE_AREA_GAP
+      : Math.max(BOTTOM_BAR_SAFE_AREA_GAP, compactBottomInset);
 
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
