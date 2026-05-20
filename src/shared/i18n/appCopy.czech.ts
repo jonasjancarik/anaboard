@@ -199,7 +199,17 @@ export const CS_APP_COPY: LocaleCopy = {
       resetConfirmAction: "Obnovit",
       cloudSyncError: "Cloud sync selhal",
       syncChecked: "Sync zkontrolován",
-      retryQueued: "Chybné položky vráceny do syncu",
+      retryQueued: "Zkusím sync znovu",
+      syncKeepLocalTitle: "Ponechat data v telefonu",
+      syncKeepLocalDetail: "Nahraje místní změny do cloudu a sync spustí znovu.",
+      syncUseCloudTitle: "Načíst data z cloudu",
+      syncUseCloudDetail: "Nahradí místní data touto cloud tabulí.",
+      syncUseCloudConfirmTitle: "Načíst data z cloudu?",
+      syncUseCloudConfirmBody:
+        "Místní změny v tomto telefonu se zahodí a nahradí daty z cloudu.",
+      syncUseCloudConfirmAction: "Načíst cloud",
+      syncKeepLocalSuccess: "Místní data zůstávají, sync pokračuje",
+      syncUseCloudSuccess: "Cloud data načtena",
       pinDetailOff: "Použije se, až znovu zapneš ochranu nastavení.",
       pinDetailWeb: "V prohlížeči se používá vždy pro odemknutí úprav.",
       pinDetailBackup: "4 číslice pro vstup do nastavení.",
@@ -224,7 +234,7 @@ export const CS_APP_COPY: LocaleCopy = {
         `Na tomto zařízení je dostupný jen jeden český hlas: ${voiceName}. ${setup}`,
       saveVoiceError: "Hlas nešel uložit",
       syncIssueInitialBind:
-        "Tento telefon už má vlastní místní data. Bez potvrzení je cloud nepřepíše.",
+        "V tomto telefonu i v cloudu jsou data. Vyber, která se mají použít.",
       syncIssueProfileSwitch:
         "Tento telefon byl dřív připojený k jiné cloud tabuli. Automatický přenos jsem zablokoval.",
       syncStatus: {
@@ -233,7 +243,7 @@ export const CS_APP_COPY: LocaleCopy = {
         anonymous: "Zkušební režim bez účtu",
         offline: "Zařízení je offline",
         syncing: "Probíhá sync",
-        error: "Sync potřebuje zásah",
+        error: "Sync je pozastavený",
         pending: "Čekají změny",
         running: "Cloud sync běží",
       },

@@ -164,6 +164,15 @@ export type LocaleCopy = {
     cloudSyncError: string;
     syncChecked: string;
     retryQueued: string;
+    syncKeepLocalTitle: string;
+    syncKeepLocalDetail: string;
+    syncUseCloudTitle: string;
+    syncUseCloudDetail: string;
+    syncUseCloudConfirmTitle: string;
+    syncUseCloudConfirmBody: string;
+    syncUseCloudConfirmAction: string;
+    syncKeepLocalSuccess: string;
+    syncUseCloudSuccess: string;
     pinDetailOff: string;
     pinDetailWeb: string;
     pinDetailBackup: string;

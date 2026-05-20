@@ -132,6 +132,48 @@ class SyncService {
     await this.runOnce();
   };
 
+  public keepLocalStateForInitialBind = async (): Promise<void> => {
+    const context = this.getInteractiveRemoteContext();
+
+    if (this.isRunning) {
+      throw new Error('Sync is already running.');
+    }
+
+    await setBoundSyncProfileId(context.profileId);
+    await setLastSyncIssue(null);
+    this.callbacks.onPendingCountChange?.(0);
+    await this.runOnce();
+  };
+
+  public replaceLocalStateWithCloud = async (): Promise<void> => {
+    const context = this.getInteractiveRemoteContext();
+
+    if (this.isRunning) {
+      throw new Error('Sync is already running.');
+    }
+
+    this.isRunning = true;
+
+    try {
+      this.callbacks.onStatusChange?.('syncing');
+      await this.pullRemoteSnapshot({ clearQueueBeforeApply: true });
+      await setBoundSyncProfileId(context.profileId);
+      await setLastSyncIssue(null);
+      await recordSuccessfulSync();
+      this.callbacks.onPendingCountChange?.(0);
+      this.callbacks.onStatusChange?.('idle');
+    } catch (error) {
+      logError('sync_replace_local_with_cloud_failed', error, {
+        profile_id: context.profileId,
+      });
+      this.callbacks.onPendingCountChange?.(0);
+      this.callbacks.onStatusChange?.('error');
+      throw error;
+    } finally {
+      this.isRunning = false;
+    }
+  };
+
   public runOnce = async (): Promise<void> => {
     if (this.isRunning) {
       return;
@@ -252,6 +294,18 @@ class SyncService {
     if (nextState === 'active') {
       void this.runOnce();
     }
+  };
+
+  private getInteractiveRemoteContext = (): RemoteContext => {
+    if (!hasSupabaseConfig || !supabaseClient) {
+      throw new Error('Supabase client missing');
+    }
+
+    if (!this.isAuthenticated || !this.remoteContext) {
+      throw new Error('Cloud sync is not ready.');
+    }
+
+    return this.remoteContext;
   };
 
   private pullRemoteSnapshot = async (

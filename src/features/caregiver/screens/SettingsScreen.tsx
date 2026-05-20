@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
 import { speechEngine } from '../../speech/speechEngine';
@@ -91,6 +91,7 @@ export const SettingsScreen = ({
   onOpenPinSettings,
   onOpenAuth,
 }: SettingsScreenProps) => {
+  const insets = useSafeAreaInsets();
   const settings = useAppStore((state) => state.settings);
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
@@ -101,6 +102,9 @@ export const SettingsScreen = ({
   const updateSettings = useAppStore((state) => state.updateSettings);
   const applyLanguagePreferences = useAppStore((state) => state.applyLanguagePreferences);
   const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
+  const refreshBoard = useAppStore((state) => state.refreshBoard);
+  const refreshSettings = useAppStore((state) => state.refreshSettings);
+  const refreshPhrases = useAppStore((state) => state.refreshPhrases);
   const refreshPendingSyncEvents = useAppStore((state) => state.refreshPendingSyncEvents);
   const syncStatus = useAppStore((state) => state.syncStatus);
   const pendingSyncEvents = useAppStore((state) => state.pendingSyncEvents);
@@ -216,6 +220,20 @@ export const SettingsScreen = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!message) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setMessage(null);
+    }, 3600);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [message]);
+
   const updateSetting = async <T,>(
     previousValue: T,
     nextValue: T,
@@ -315,7 +333,9 @@ export const SettingsScreen = ({
 
     try {
       await action();
-      await refreshPendingSyncEvents();
+      await refreshBoard();
+      await refreshSettings();
+      await Promise.all([refreshPhrases(), refreshPendingSyncEvents()]);
       void appHaptics.success();
       setMessage(successMessage);
     } catch (error) {
@@ -350,6 +370,43 @@ export const SettingsScreen = ({
           style: 'destructive',
           onPress: () => {
             void performBoardReset();
+          },
+        },
+      ]
+    );
+  };
+
+  const replaceLocalStateWithCloud = async () => {
+    await runSyncAction(
+      () => syncService.replaceLocalStateWithCloud(),
+      settingsCopy.syncUseCloudSuccess
+    );
+  };
+
+  const confirmUseCloudData = () => {
+    if (isWebPlatform && typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        `${settingsCopy.syncUseCloudConfirmTitle}\n\n${settingsCopy.syncUseCloudConfirmBody}`
+      );
+      if (confirmed) {
+        void replaceLocalStateWithCloud();
+      }
+      return;
+    }
+
+    Alert.alert(
+      settingsCopy.syncUseCloudConfirmTitle,
+      settingsCopy.syncUseCloudConfirmBody,
+      [
+        {
+          text: copy.common.cancel,
+          style: 'cancel',
+        },
+        {
+          text: settingsCopy.syncUseCloudConfirmAction,
+          style: 'destructive',
+          onPress: () => {
+            void replaceLocalStateWithCloud();
           },
         },
       ]
@@ -408,6 +465,7 @@ export const SettingsScreen = ({
   const lastSuccessfulSyncLabel = formatTimestamp(lastSuccessfulSyncAt, locale);
   const lastPullLabel = formatTimestamp(lastSyncPullAt, locale);
   const syncIssueDetail = formatSyncIssue(syncLastIssue, locale);
+  const hasInitialBindConflict = syncLastIssue === 'initial_bind_requires_review';
   const language = getSupportedLanguage(boardLocale);
   const languageLabel =
     locale === 'en-US' ? language.labelEn : language.label;
@@ -427,7 +485,7 @@ export const SettingsScreen = ({
       ? settingsCopy.syncStatus.offline
       : syncStatus === 'syncing'
         ? settingsCopy.syncStatus.syncing
-        : syncStatus === 'error'
+        : syncStatus === 'error' || syncLastIssue
           ? settingsCopy.syncStatus.error
           : pendingSyncEvents > 0
             ? settingsCopy.syncStatus.pending
@@ -495,30 +553,56 @@ export const SettingsScreen = ({
             {hasSupabaseConfig && authStatus === 'signed_in' && !authIsAnonymous ? (
               <>
                 <View style={styles.divider} />
-                <SettingRowButton
-                  title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
-                  detail={settingsCopy.syncNowDetail}
-                  disabled={isSyncActionRunning}
-                  onPress={() => {
-                    void runSyncAction(() => syncService.runOnce(), settingsCopy.syncChecked);
-                  }}
-                />
-                {syncErrorEvents > 0 ? (
+                {hasInitialBindConflict ? (
                   <>
-                    <View style={styles.divider} />
                     <SettingRowButton
-                      title={settingsCopy.retryFailedTitle}
-                      detail={settingsCopy.retryFailedDetail}
+                      title={settingsCopy.syncKeepLocalTitle}
+                      detail={settingsCopy.syncKeepLocalDetail}
                       disabled={isSyncActionRunning}
                       onPress={() => {
                         void runSyncAction(
-                          () => syncService.retryFailed(),
-                          settingsCopy.retryQueued
+                          () => syncService.keepLocalStateForInitialBind(),
+                          settingsCopy.syncKeepLocalSuccess
                         );
                       }}
                     />
+                    <View style={styles.divider} />
+                    <SettingRowButton
+                      title={settingsCopy.syncUseCloudTitle}
+                      detail={settingsCopy.syncUseCloudDetail}
+                      tone="danger"
+                      disabled={isSyncActionRunning}
+                      onPress={confirmUseCloudData}
+                    />
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    <SettingRowButton
+                      title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
+                      detail={settingsCopy.syncNowDetail}
+                      disabled={isSyncActionRunning}
+                      onPress={() => {
+                        void runSyncAction(() => syncService.runOnce(), settingsCopy.syncChecked);
+                      }}
+                    />
+                    {syncErrorEvents > 0 ? (
+                      <>
+                        <View style={styles.divider} />
+                        <SettingRowButton
+                          title={settingsCopy.retryFailedTitle}
+                          detail={settingsCopy.retryFailedDetail}
+                          disabled={isSyncActionRunning}
+                          onPress={() => {
+                            void runSyncAction(
+                              () => syncService.retryFailed(),
+                              settingsCopy.retryQueued
+                            );
+                          }}
+                        />
+                      </>
+                    ) : null}
+                  </>
+                )}
               </>
             ) : null}
           </View>
@@ -865,8 +949,23 @@ export const SettingsScreen = ({
             />
           </View>
         ) : null}
-        {message ? <Text style={styles.message}>{message}</Text> : null}
       </ScrollView>
+      {message ? (
+        <View
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          style={[
+            styles.toastWrap,
+            {
+              bottom: Math.max(insets.bottom, 12) + 12,
+            },
+          ]}
+        >
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>{message}</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -902,11 +1001,25 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: APP_THEME.borderSoft,
   },
-  message: {
+  toastWrap: {
+    position: 'absolute',
+    left: SCREEN_CONTENT_PADDING,
+    right: SCREEN_CONTENT_PADDING,
+    alignItems: 'center',
+  },
+  toast: {
+    maxWidth: 420,
+    borderRadius: 18,
+    backgroundColor: APP_THEME.text,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    boxShadow: '0px 8px 18px rgba(31, 26, 20, 0.18)',
+  },
+  toastText: {
+    color: APP_THEME.surface,
+    fontSize: 14,
+    fontWeight: '800',
     textAlign: 'center',
-    color: APP_THEME.message,
-    fontWeight: '700',
-    paddingVertical: 2,
   },
   statusBlock: {
     gap: 4,

@@ -199,7 +199,17 @@ export const EN_APP_COPY: LocaleCopy = {
       resetConfirmAction: "Restore",
       cloudSyncError: "Cloud sync failed",
       syncChecked: "Sync checked",
-      retryQueued: "Failed items returned to sync",
+      retryQueued: "Sync will retry",
+      syncKeepLocalTitle: "Keep this device's data",
+      syncKeepLocalDetail: "Uploads local changes to the cloud and restarts sync.",
+      syncUseCloudTitle: "Use cloud data",
+      syncUseCloudDetail: "Replaces local data with this cloud board.",
+      syncUseCloudConfirmTitle: "Use cloud data?",
+      syncUseCloudConfirmBody:
+        "Local changes on this device will be discarded and replaced with cloud data.",
+      syncUseCloudConfirmAction: "Use cloud",
+      syncKeepLocalSuccess: "Local data kept; sync is continuing",
+      syncUseCloudSuccess: "Cloud data loaded",
       pinDetailOff: "Used when you turn settings protection back on.",
       pinDetailWeb: "Always used to unlock editing in the web version.",
       pinDetailBackup: "4 digits for entering settings.",
@@ -224,7 +234,7 @@ export const EN_APP_COPY: LocaleCopy = {
         `Only one English voice is available on this device: ${voiceName}. ${setup}`,
       saveVoiceError: "Voice could not be saved",
       syncIssueInitialBind:
-        "This device already has local data. Cloud data will not overwrite it without review.",
+        "This device and the cloud both have data. Choose which one to use.",
       syncIssueProfileSwitch:
         "This device was previously connected to another cloud board. Automatic transfer was blocked.",
       syncStatus: {
@@ -233,7 +243,7 @@ export const EN_APP_COPY: LocaleCopy = {
         anonymous: "Trial mode without an account",
         offline: "Device is offline",
         syncing: "Syncing",
-        error: "Sync needs attention",
+        error: "Sync is paused",
         pending: "Changes waiting",
         running: "Cloud sync is running",
       },
