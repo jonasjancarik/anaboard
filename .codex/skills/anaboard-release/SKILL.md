@@ -55,14 +55,21 @@ Do not tag a feature/dev branch. Do not leave generic auto-generated release not
      `npm run android:release:upload -- vX.Y.Z`
    - The upload script requires a clean tree, local tag at `HEAD`, remote tag on `origin`, GitHub CLI auth, and release env values from shell or `.env.local`.
    - If a release already exists, the script uploads/clobbers the APK. If it creates generic notes, immediately replace them with the real changelog from step 6.
+   - The `Release Android APK` workflow is manual fallback only. Publishing a release should not trigger a second hosted APK build.
 
 8. Verify:
    - `gh release view vX.Y.Z --json tagName,name,isDraft,assets,body`
    - Confirm the body is not generic and the APK asset exists.
    - If CI is involved, use `gh run list/view`; rerun/fix until green if the user asked for a complete release.
+   - If you used the manual `Release Android APK` fallback, wait for that run to finish, then re-run the release view check because the workflow may clobber the APK asset.
+   - Confirm the working tree is clean and the tag still points at `main`.
+
+9. Restore working branch:
+   - At the end, check out `dev` again if it exists: `git checkout dev`.
+   - Do not push `dev` unless the user explicitly asked for it.
 
 ## Fallbacks
 
-- If local APK upload is blocked, use the `Release Android APK` workflow as fallback only after explaining the blocker.
+- If local APK upload is blocked, use the manual `Release Android APK` workflow as fallback only after explaining the blocker.
 - If a release exists without notes or without the APK, update the existing release instead of creating a duplicate.
 - If the working tree has unrelated changes, do not stash or discard them. Commit only release-related files or ask if the merge/release cannot proceed safely.
