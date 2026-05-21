@@ -6,7 +6,10 @@ import { logError, logEvent } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
 import {
   clearUnsyncedSyncEvents,
+  clearUnsyncedSyncEventsThrough,
   countErroredSyncEvents,
+  countPendingSyncEvents,
+  getMaxUnsyncedSyncEventId,
   getPendingSyncEvents,
   markSyncEventsError,
   markSyncEventsSynced,
@@ -18,7 +21,9 @@ import {
   applyRemoteSnapshot,
   fetchRemoteSnapshot,
   getLocalEntitySyncPayload,
+  getLocalSnapshotSyncPayloads,
   remoteSnapshotHasData,
+  type LocalSnapshotSyncPayloads,
 } from './remoteSyncRepository';
 import {
   getBoundSyncProfileId,
@@ -32,6 +37,7 @@ import {
   uploadTileImageToSupabase,
 } from './supabaseMediaSync';
 import { canSafelyDiscardLocalStateForInitialBind, SyncIssueError } from './initialBindGuard';
+import { shouldApplyLocalChange } from './syncConflictPolicy';
 
 type SyncCallbacks = {
   onStatusChange?: (status: SyncStatus) => void;
@@ -40,6 +46,7 @@ type SyncCallbacks = {
 };
 
 const SYNC_INTERVAL_MS = 20_000;
+const SYNC_BATCH_SIZE = 100;
 const EVENT_PRIORITY: Record<EntityType, number> = {
   boards: 0,
   profile_settings: 1,
@@ -63,6 +70,10 @@ const isTileImagePathForRemoteContext = (
 
 const primaryKeyColumn = (entityType: EntityType): 'id' | 'profile_id' => {
   return entityType === 'profile_settings' ? 'profile_id' : 'id';
+};
+
+const entityHasUpdatedAt = (entityType: EntityType): boolean => {
+  return entityType !== 'phrase_events';
 };
 
 const sortPendingEvents = (events: SyncEvent[]): SyncEvent[] => {
@@ -139,10 +150,27 @@ class SyncService {
       throw new Error('Sync is already running.');
     }
 
-    await setBoundSyncProfileId(context.profileId);
-    await setLastSyncIssue(null);
-    this.callbacks.onPendingCountChange?.(0);
-    await this.runOnce();
+    this.isRunning = true;
+
+    try {
+      await this.ensureOnline();
+      this.callbacks.onStatusChange?.('syncing');
+      await this.replaceCloudSnapshotWithLocal(context);
+      await setBoundSyncProfileId(context.profileId);
+      await setLastSyncIssue(null);
+      await recordSuccessfulSync();
+      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+      this.callbacks.onStatusChange?.('idle');
+    } catch (error) {
+      logError('sync_keep_local_for_initial_bind_failed', error, {
+        profile_id: context.profileId,
+      });
+      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+      this.callbacks.onStatusChange?.('error');
+      throw error;
+    } finally {
+      this.isRunning = false;
+    }
   };
 
   public replaceLocalStateWithCloud = async (): Promise<void> => {
@@ -155,18 +183,24 @@ class SyncService {
     this.isRunning = true;
 
     try {
+      await this.ensureOnline();
       this.callbacks.onStatusChange?.('syncing');
-      await this.pullRemoteSnapshot({ clearQueueBeforeApply: true });
+      const maxEventId = await getMaxUnsyncedSyncEventId();
+      const applied = await this.pullRemoteSnapshot();
+      if (!applied) {
+        throw new Error('Cloud data is empty.');
+      }
+      await clearUnsyncedSyncEventsThrough(maxEventId);
       await setBoundSyncProfileId(context.profileId);
       await setLastSyncIssue(null);
       await recordSuccessfulSync();
-      this.callbacks.onPendingCountChange?.(0);
+      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
       this.callbacks.onStatusChange?.('idle');
     } catch (error) {
       logError('sync_replace_local_with_cloud_failed', error, {
         profile_id: context.profileId,
       });
-      this.callbacks.onPendingCountChange?.(0);
+      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
       this.callbacks.onStatusChange?.('error');
       throw error;
     } finally {
@@ -192,8 +226,7 @@ class SyncService {
     this.isRunning = true;
 
     try {
-      const networkState = await Network.getNetworkStateAsync();
-      if (!networkState.isConnected || !networkState.isInternetReachable) {
+      if (!(await this.isOnline())) {
         this.callbacks.onStatusChange?.('offline');
         return;
       }
@@ -236,29 +269,16 @@ class SyncService {
         }
       }
 
-      const pending = sortPendingEvents(await getPendingSyncEvents(100));
-      this.callbacks.onPendingCountChange?.(pending.length);
-
-      if (pending.length > 0) {
-        const pushResult = await this.pushPendingEvents(pending);
-        if (pushResult.failedEventIds.length > 0) {
-          await markSyncEventsError(pushResult.failedEventIds);
-          this.callbacks.onPendingCountChange?.(0);
-          this.callbacks.onStatusChange?.('error');
-          return;
-        }
-
-        if (pushResult.successfulEventIds.length > 0) {
-          await markSyncEventsSynced(pushResult.successfulEventIds);
-          logEvent('sync_events_synced', {
-            count: pushResult.successfulEventIds.length,
-          });
-        }
+      const didPushPendingEvents = await this.pushAllPendingEvents();
+      if (!didPushPendingEvents) {
+        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+        this.callbacks.onStatusChange?.('error');
+        return;
       }
 
       const erroredEvents = await countErroredSyncEvents();
       if (erroredEvents > 0) {
-        this.callbacks.onPendingCountChange?.(0);
+        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
         this.callbacks.onStatusChange?.('error');
         return;
       }
@@ -296,6 +316,17 @@ class SyncService {
     }
   };
 
+  private isOnline = async (): Promise<boolean> => {
+    const networkState = await Network.getNetworkStateAsync();
+    return Boolean(networkState.isConnected && networkState.isInternetReachable);
+  };
+
+  private ensureOnline = async (): Promise<void> => {
+    if (!(await this.isOnline())) {
+      throw new Error('Zařízení je offline.');
+    }
+  };
+
   private getInteractiveRemoteContext = (): RemoteContext => {
     if (!hasSupabaseConfig || !supabaseClient) {
       throw new Error('Supabase client missing');
@@ -306,6 +337,45 @@ class SyncService {
     }
 
     return this.remoteContext;
+  };
+
+  private pushAllPendingEvents = async (): Promise<boolean> => {
+    let syncedCount = 0;
+
+    while (true) {
+      const pendingCount = await countPendingSyncEvents();
+      this.callbacks.onPendingCountChange?.(pendingCount);
+
+      if (pendingCount === 0) {
+        if (syncedCount > 0) {
+          logEvent('sync_events_synced', {
+            count: syncedCount,
+          });
+        }
+        return true;
+      }
+
+      const pending = sortPendingEvents(await getPendingSyncEvents(SYNC_BATCH_SIZE));
+      if (pending.length === 0) {
+        return true;
+      }
+
+      const pushResult = await this.pushPendingEvents(pending);
+      if (pushResult.successfulEventIds.length > 0) {
+        await markSyncEventsSynced(pushResult.successfulEventIds);
+        syncedCount += pushResult.successfulEventIds.length;
+      }
+
+      if (pushResult.failedEventIds.length > 0) {
+        await markSyncEventsError(pushResult.failedEventIds);
+        if (syncedCount > 0) {
+          logEvent('sync_events_synced', {
+            count: syncedCount,
+          });
+        }
+        return false;
+      }
+    }
   };
 
   private pullRemoteSnapshot = async (
@@ -330,6 +400,85 @@ class SyncService {
     }
 
     return applied;
+  };
+
+  private replaceCloudSnapshotWithLocal = async (context: RemoteContext): Promise<void> => {
+    const maxEventId = await getMaxUnsyncedSyncEventId();
+    const [previousRemoteSnapshot, localSnapshot] = await Promise.all([
+      fetchRemoteSnapshot(context),
+      getLocalSnapshotSyncPayloads(),
+    ]);
+
+    await this.pushLocalSnapshot(localSnapshot);
+    await this.deleteRemoteRowsMissingFromLocal(previousRemoteSnapshot, localSnapshot);
+    await clearUnsyncedSyncEventsThrough(maxEventId);
+  };
+
+  private pushLocalSnapshot = async (snapshot: LocalSnapshotSyncPayloads): Promise<void> => {
+    for (const board of snapshot.boards) {
+      await this.pushPayload('boards', board, { force: true });
+    }
+
+    for (const settings of snapshot.settings) {
+      await this.pushPayload('profile_settings', settings, { force: true });
+    }
+
+    for (const tile of snapshot.tiles) {
+      await this.pushPayload('tiles', tile, { force: true });
+    }
+
+    for (const clip of snapshot.audioClips) {
+      await this.pushPayload('audio_clips', clip, { force: true });
+    }
+
+    for (const phrase of snapshot.savedPhrases) {
+      await this.pushPayload('saved_phrases', phrase, { force: true });
+    }
+
+    for (const event of snapshot.phraseEvents) {
+      await this.pushPayload('phrase_events', event, { force: true });
+    }
+  };
+
+  private deleteRemoteRowsMissingFromLocal = async (
+    remoteSnapshot: Awaited<ReturnType<typeof fetchRemoteSnapshot>>,
+    localSnapshot: LocalSnapshotSyncPayloads
+  ): Promise<void> => {
+    const localBoardIds = new Set(localSnapshot.boards.map((row) => String(row.id)));
+    const localTileIds = new Set(localSnapshot.tiles.map((row) => String(row.id)));
+    const localAudioClipIds = new Set(localSnapshot.audioClips.map((row) => String(row.id)));
+    const localSavedPhraseIds = new Set(localSnapshot.savedPhrases.map((row) => String(row.id)));
+    const localPhraseEventIds = new Set(localSnapshot.phraseEvents.map((row) => String(row.id)));
+
+    for (const clip of remoteSnapshot.audioClips) {
+      if (!localAudioClipIds.has(clip.id)) {
+        await this.deleteRemoteEntity('audio_clips', clip.id, { force: true });
+      }
+    }
+
+    for (const tile of remoteSnapshot.tiles) {
+      if (!localTileIds.has(tile.id)) {
+        await this.deleteRemoteEntity('tiles', tile.id, { force: true });
+      }
+    }
+
+    for (const board of remoteSnapshot.boards) {
+      if (!localBoardIds.has(board.id)) {
+        await this.deleteRemoteEntity('boards', board.id, { force: true });
+      }
+    }
+
+    for (const phrase of remoteSnapshot.savedPhrases) {
+      if (!localSavedPhraseIds.has(phrase.id)) {
+        await this.deleteRemoteEntity('saved_phrases', phrase.id, { force: true });
+      }
+    }
+
+    for (const event of remoteSnapshot.phraseEvents) {
+      if (!localPhraseEventIds.has(event.id)) {
+        await this.deleteRemoteEntity('phrase_events', event.id, { force: true });
+      }
+    }
   };
 
   private pushPendingEvents = async (
@@ -363,33 +512,68 @@ class SyncService {
       throw new Error('Supabase client missing');
     }
 
-    const primaryKey = primaryKeyColumn(event.entityType);
     if (event.operation === 'delete') {
-      const { error } = await supabaseClient
-        .from(event.entityType)
-        .delete()
-        .eq(primaryKey, event.entityId);
-
-      if (error) {
-        throw error;
-      }
-
+      const remoteEntityId =
+        event.entityType === 'profile_settings' && this.remoteContext
+          ? this.remoteContext.profileId
+          : event.entityId;
+      await this.deleteRemoteEntity(event.entityType, remoteEntityId, {
+        localChangedAt: event.createdAt,
+      });
       return;
     }
 
     const eventPayload = JSON.parse(event.payload) as Record<string, unknown>;
     const localPayload = await getLocalEntitySyncPayload(event.entityType, event.entityId);
     const payload = localPayload ?? eventPayload;
-    const enrichedPayload = this.enrichPayload(event.entityType, payload);
-    const remotePayload = await this.prepareRemotePayload(event.entityType, enrichedPayload);
+    await this.pushPayload(event.entityType, payload, {
+      localChangedAt: String(payload.updated_at ?? event.createdAt),
+    });
+  };
+
+  private pushPayload = async (
+    entityType: EntityType,
+    payload: Record<string, unknown>,
+    options: { force?: boolean; localChangedAt?: string | null } = {}
+  ): Promise<void> => {
+    if (!supabaseClient) {
+      throw new Error('Supabase client missing');
+    }
+
+    const primaryKey = primaryKeyColumn(entityType);
+    const enrichedPayload = this.enrichPayload(entityType, payload);
+    const remoteEntityId = String(enrichedPayload[primaryKey] ?? payload[primaryKey] ?? '');
+
+    if (!remoteEntityId) {
+      throw new Error(`Sync payload missing primary key for ${entityType}`);
+    }
+
+    const remoteUpdatedAt = options.force
+      ? null
+      : await this.fetchRemoteUpdatedAt(entityType, remoteEntityId);
+    const decision = shouldApplyLocalChange({
+      localChangedAt: options.localChangedAt ?? String(enrichedPayload.updated_at ?? ''),
+      remoteChangedAt: remoteUpdatedAt,
+      force: options.force,
+    });
+
+    if (!decision.shouldApply) {
+      logEvent('sync_event_skipped_remote_newer', {
+        entity_type: entityType,
+        entity_id: remoteEntityId,
+      });
+      return;
+    }
+
+    const remotePayload = await this.prepareRemotePayload(entityType, enrichedPayload);
 
     let { error } = await supabaseClient
-      .from(event.entityType)
+      .from(entityType)
       .upsert(remotePayload, { onConflict: primaryKey });
 
     if (
       error &&
-      event.entityType === 'profile_settings' &&
+      entityType === 'profile_settings' &&
       (
         Object.prototype.hasOwnProperty.call(remotePayload, 'backup_pin_enabled') ||
         Object.prototype.hasOwnProperty.call(remotePayload, 'show_labels') ||
@@ -411,20 +595,20 @@ class SyncService {
       delete fallbackPayload.categories_start_new_page;
       delete fallbackPayload.child_gender;
       const fallbackResult = await supabaseClient
-        .from(event.entityType)
+        .from(entityType)
         .upsert(fallbackPayload, { onConflict: primaryKey });
       error = fallbackResult.error ?? null;
     }
 
     if (
       error &&
-      event.entityType === 'boards' &&
+      entityType === 'boards' &&
       Object.prototype.hasOwnProperty.call(remotePayload, 'is_active')
     ) {
       const fallbackPayload = { ...remotePayload };
       delete fallbackPayload.is_active;
       const fallbackResult = await supabaseClient
-        .from(event.entityType)
+        .from(entityType)
         .upsert(fallbackPayload, { onConflict: primaryKey });
       error = fallbackResult.error ?? null;
     }
@@ -432,6 +616,63 @@ class SyncService {
     if (error) {
       throw error;
     }
+  };
+
+  private deleteRemoteEntity = async (
+    entityType: EntityType,
+    entityId: string,
+    options: { force?: boolean; localChangedAt?: string | null } = {}
+  ): Promise<void> => {
+    if (!supabaseClient) {
+      throw new Error('Supabase client missing');
+    }
+
+    const remoteUpdatedAt = await this.fetchRemoteUpdatedAt(entityType, entityId);
+    const decision = shouldApplyLocalChange({
+      localChangedAt: options.localChangedAt,
+      remoteChangedAt: remoteUpdatedAt,
+      force: options.force,
+    });
+
+    if (!decision.shouldApply) {
+      logEvent('sync_delete_skipped_remote_newer', {
+        entity_type: entityType,
+        entity_id: entityId,
+      });
+      return;
+    }
+
+    const primaryKey = primaryKeyColumn(entityType);
+    const { error } = await supabaseClient
+      .from(entityType)
+      .delete()
+      .eq(primaryKey, entityId);
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  private fetchRemoteUpdatedAt = async (
+    entityType: EntityType,
+    entityId: string
+  ): Promise<string | null> => {
+    if (!supabaseClient || !entityHasUpdatedAt(entityType)) {
+      return null;
+    }
+
+    const primaryKey = primaryKeyColumn(entityType);
+    const { data, error } = await supabaseClient
+      .from(entityType)
+      .select('updated_at')
+      .eq(primaryKey, entityId)
+      .maybeSingle<{ updated_at?: string | null }>();
+
+    if (error) {
+      throw error;
+    }
+
+    return data?.updated_at ?? null;
   };
 
   private enrichPayload = (

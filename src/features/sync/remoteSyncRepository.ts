@@ -103,6 +103,15 @@ type LocalPhraseEventSyncRow = {
   spoken_at: string;
 };
 
+export type LocalSnapshotSyncPayloads = {
+  boards: Record<string, unknown>[];
+  tiles: Record<string, unknown>[];
+  audioClips: Record<string, unknown>[];
+  settings: Record<string, unknown>[];
+  savedPhrases: Record<string, unknown>[];
+  phraseEvents: Record<string, unknown>[];
+};
+
 const toBoolean = (value?: boolean | null): boolean => Boolean(value);
 
 const fetchRemoteBoards = async (context: RemoteContext): Promise<RemoteBoardRow[]> => {
@@ -468,6 +477,16 @@ export const getLocalEntitySyncPayload = async (
   return settings ? { ...settings } : null;
 };
 
+const getLocalBoards = async (): Promise<LocalBoardSyncRow[]> => {
+  const db = await getDatabase();
+  return db.getAllAsync<LocalBoardSyncRow>(
+    `
+      SELECT id, profile_id, name, locale, columns_count, rows_count, is_active, updated_at, revision
+      FROM boards
+    `
+  );
+};
+
 const getLocalTiles = async (): Promise<LocalTileSyncRow[]> => {
   const db = await getDatabase();
   return db.getAllAsync<LocalTileSyncRow>(
@@ -499,6 +518,98 @@ const getLocalAudioClips = async (): Promise<LocalAudioClipSyncRow[]> => {
       FROM audio_clips
     `
   );
+};
+
+const getLocalSettings = async (): Promise<LocalSettingsSyncRow[]> => {
+  const db = await getDatabase();
+  return db.getAllAsync<LocalSettingsSyncRow>(
+    `
+      SELECT
+        profile_id,
+        pin_hash,
+        lock_enabled,
+        backup_pin_enabled,
+        tts_rate,
+        tts_pitch,
+        preferred_voice,
+        high_contrast,
+        show_labels,
+        phrase_bar_enabled,
+        suggestion_count,
+        board_layout_mode,
+        category_order,
+        categories_start_new_page,
+        child_gender,
+        updated_at,
+        revision
+      FROM profile_settings
+    `
+  );
+};
+
+const getLocalSavedPhrases = async (): Promise<LocalSavedPhraseSyncRow[]> => {
+  const db = await getDatabase();
+  return db.getAllAsync<LocalSavedPhraseSyncRow>(
+    `
+      SELECT
+        id,
+        profile_id,
+        phrase_key,
+        label,
+        spoken_text,
+        tokens_json,
+        created_at,
+        updated_at,
+        usage_count
+      FROM saved_phrases
+    `
+  );
+};
+
+const getLocalPhraseEvents = async (): Promise<LocalPhraseEventSyncRow[]> => {
+  const db = await getDatabase();
+  return db.getAllAsync<LocalPhraseEventSyncRow>(
+    `
+      SELECT
+        id,
+        profile_id,
+        tile_sequence,
+        spoken_text,
+        mode,
+        spoken_at
+      FROM phrase_events
+    `
+  );
+};
+
+export const getLocalSnapshotSyncPayloads = async (): Promise<LocalSnapshotSyncPayloads> => {
+  const [
+    boards,
+    tiles,
+    audioClips,
+    settings,
+    savedPhrases,
+    phraseEvents,
+  ] = await Promise.all([
+    getLocalBoards(),
+    getLocalTiles(),
+    getLocalAudioClips(),
+    getLocalSettings(),
+    getLocalSavedPhrases(),
+    getLocalPhraseEvents(),
+  ]);
+
+  return {
+    boards: boards.map((board) => ({
+      ...board,
+      is_active: board.is_active === 1,
+    })),
+    tiles: tiles.map((tile) => ({ ...tile })),
+    audioClips: audioClips.map((clip) => ({ ...clip })),
+    settings: settings.map((setting) => ({ ...setting })),
+    savedPhrases: savedPhrases.map((phrase) => ({ ...phrase })),
+    phraseEvents: phraseEvents.map((event) => ({ ...event })),
+  };
 };
 
 const resolveTileImageUris = async (

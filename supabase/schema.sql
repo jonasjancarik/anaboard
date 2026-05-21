@@ -166,7 +166,7 @@ alter table profile_settings
 add column if not exists child_gender text not null default 'masculine';
 
 create table if not exists phrase_events (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   profile_id text not null,
   tile_sequence text not null,
   spoken_text text not null,

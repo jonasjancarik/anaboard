@@ -104,6 +104,15 @@ export const countPendingSyncEvents = async (): Promise<number> => {
   return result?.count ?? 0;
 };
 
+export const getMaxUnsyncedSyncEventId = async (): Promise<number | null> => {
+  const db = await getDatabase();
+  const result = await db.getFirstAsync<{ max_id: number | null }>(
+    "SELECT MAX(id) AS max_id FROM sync_events WHERE status IN ('pending', 'error')"
+  );
+
+  return result?.max_id ?? null;
+};
+
 export const countErroredSyncEvents = async (): Promise<number> => {
   const db = await getDatabase();
   const result = await db.getFirstAsync<{ count: number }>(
@@ -131,5 +140,21 @@ export const clearUnsyncedSyncEvents = async (): Promise<void> => {
       DELETE FROM sync_events
       WHERE status IN ('pending', 'error')
     `
+  );
+};
+
+export const clearUnsyncedSyncEventsThrough = async (maxEventId: number | null): Promise<void> => {
+  if (maxEventId === null) {
+    return;
+  }
+
+  const db = await getDatabase();
+  await db.runAsync(
+    `
+      DELETE FROM sync_events
+      WHERE status IN ('pending', 'error')
+        AND id <= ?
+    `,
+    maxEventId
   );
 };
