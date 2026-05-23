@@ -6,7 +6,7 @@ export type OrderedBoardPage = {
   category?: Category;
 };
 
-const DEFAULT_CATEGORY_ORDER: Category[] = ['needs', 'feelings', 'social', 'food'];
+const DEFAULT_CATEGORY_ORDER: Category[] = ['needs', 'feelings', 'social', 'activities', 'food'];
 const CATEGORY_SET = new Set<string>(DEFAULT_CATEGORY_ORDER);
 
 const createCollator = (locale: unknown): Intl.Collator =>

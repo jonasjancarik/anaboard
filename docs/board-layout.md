@@ -1,6 +1,6 @@
 # Board Layout Modes
 
-Last updated: 2026-05-16
+Last updated: 2026-05-23
 
 Read when: changing tile ordering, category behavior, board paging, or settings sync.
 
@@ -22,7 +22,7 @@ Grouped mode defaults to starting each category on a new logical page. Category 
 `categoryOrder` is stored as the complete ordered list of known categories:
 
 ```json
-["needs", "feelings", "social", "food"]
+["needs", "feelings", "social", "activities", "food"]
 ```
 
 The app normalizes this list before use: duplicates are removed, unknown categories are ignored, and missing known categories are appended in the default order.

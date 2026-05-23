@@ -23,15 +23,16 @@ const tiles = [
   makeTile('tile-food-1', 3, 'Ananas', 'food'),
   makeTile('tile-needs-1', 4, 'Ano', 'needs'),
   makeTile('tile-social-1', 5, 'Máma', 'social'),
+  makeTile('tile-activities-1', 6, 'Hrát', 'activities'),
 ];
 
-const manual = getTilesForBoardLayout(tiles, 'manual', ['food', 'needs', 'social', 'feelings']);
+const manual = getTilesForBoardLayout(tiles, 'manual', ['food', 'needs', 'social', 'activities', 'feelings']);
 assert.deepEqual(
   manual.map((tile) => tile.id),
   tiles.map((tile) => tile.id)
 );
 
-const grouped = getTilesForBoardLayout(tiles, 'category', ['food', 'needs', 'social', 'feelings']);
+const grouped = getTilesForBoardLayout(tiles, 'category', ['food', 'needs', 'social', 'activities', 'feelings']);
 assert.deepEqual(grouped.map((tile) => tile.id), [
   'tile-food-1',
   'tile-food-2',
@@ -39,6 +40,7 @@ assert.deepEqual(grouped.map((tile) => tile.id), [
   'tile-needs-2',
   'tile-social-1',
   'tile-social-2',
+  'tile-activities-1',
 ]);
 
 const dedupedOrder = getTilesForBoardLayout(tiles, 'category', ['social', 'social']);
@@ -47,6 +49,7 @@ assert.deepEqual(dedupedOrder.map((tile) => tile.id), [
   'tile-social-2',
   'tile-needs-1',
   'tile-needs-2',
+  'tile-activities-1',
   'tile-food-1',
   'tile-food-2',
 ]);
@@ -54,7 +57,7 @@ assert.deepEqual(dedupedOrder.map((tile) => tile.id), [
 const categoryPages = getBoardPagesForLayout(
   grouped,
   'category',
-  ['food', 'needs', 'social', 'feelings'],
+  ['food', 'needs', 'social', 'activities', 'feelings'],
   3,
   true
 );
@@ -67,17 +70,18 @@ assert.deepEqual(
     { category: 'food', ids: ['tile-food-1', 'tile-food-2'] },
     { category: 'needs', ids: ['tile-needs-1', 'tile-needs-2'] },
     { category: 'social', ids: ['tile-social-1', 'tile-social-2'] },
+    { category: 'activities', ids: ['tile-activities-1'] },
   ]
 );
 
 const continuousPages = getBoardPagesForLayout(
   grouped,
   'category',
-  ['food', 'needs', 'social', 'feelings'],
+  ['food', 'needs', 'social', 'activities', 'feelings'],
   3,
   false
 );
-assert.deepEqual(continuousPages.map((page) => page.category), [undefined, undefined]);
-assert.deepEqual(continuousPages.map((page) => page.tiles.length), [3, 3]);
+assert.deepEqual(continuousPages.map((page) => page.category), [undefined, undefined, undefined]);
+assert.deepEqual(continuousPages.map((page) => page.tiles.length), [3, 3, 1]);
 
 console.log('board-ordering-ok');

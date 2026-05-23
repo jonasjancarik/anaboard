@@ -1,6 +1,6 @@
 import type { ChildGender } from '../i18n/profileLanguage';
 
-export type Category = 'needs' | 'feelings' | 'social' | 'food';
+export type Category = 'needs' | 'feelings' | 'social' | 'activities' | 'food';
 
 export type BoardLayoutMode =
   | 'manual'

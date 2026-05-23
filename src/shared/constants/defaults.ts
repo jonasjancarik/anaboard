@@ -11,7 +11,13 @@ export const DEFAULT_PROFILE_ID = "default-profile";
 export const DEFAULT_BOARD_ID = "default-board";
 export const DEFAULT_BOARD_NAME = "Moje tabule";
 export const DEFAULT_BOARD_LAYOUT_MODE: BoardLayoutMode = "manual";
-export const DEFAULT_CATEGORY_ORDER: Category[] = ["needs", "feelings", "social", "food"];
+export const DEFAULT_CATEGORY_ORDER: Category[] = [
+  "needs",
+  "feelings",
+  "social",
+  "activities",
+  "food",
+];
 export const DEFAULT_CATEGORIES_START_NEW_PAGE = true;
 
 const DEFAULT_TILE_LOCALE: SupportedLocale = "cs-CZ";
@@ -41,7 +47,7 @@ export const DEFAULT_TILE_ROWS_CS_MASCULINE: DefaultTileRow[] = [
   { emoji: "✋", labelCs: "Stop", category: "needs" },
   { emoji: "😋", labelCs: "Jíst", category: "food" },
   { emoji: "🥤", labelCs: "Pít", category: "food" },
-  { emoji: "🎮", labelCs: "Hrát", category: "social" },
+  { emoji: "🎮", labelCs: "Hrát", category: "activities" },
   { emoji: "🚪", labelCs: "Ven", category: "needs" },
   { emoji: "👩", labelCs: "Máma", category: "social" },
   { emoji: "👨", labelCs: "Táta", category: "social" },
@@ -62,9 +68,27 @@ export const DEFAULT_TILE_ROWS_CS_MASCULINE: DefaultTileRow[] = [
   { emoji: "🍪", labelCs: "Sušenka", category: "food" },
   { emoji: "🍫", labelCs: "Čokoláda", category: "food" },
   { emoji: "🐱", labelCs: "Kočka", category: "social" },
-  { emoji: "📖", labelCs: "Knížka", category: "social" },
-  { emoji: "⚽", labelCs: "Míč", category: "social" },
-  { emoji: "🎵", labelCs: "Písnička", category: "social" },
+  { emoji: "📖", labelCs: "Knížka", category: "activities" },
+  { emoji: "⚽", labelCs: "Míč", category: "activities" },
+  { emoji: "🎵", labelCs: "Písnička", category: "activities" },
+
+  // Page 3: more social language, daily care, and flexible favorites.
+  { emoji: "👋", labelCs: "Nashle", category: "social" },
+  { emoji: "🙏", labelCs: "Prosím", category: "social" },
+  { emoji: "💛", labelCs: "Děkuju", category: "social" },
+  { emoji: "🧑‍🧑‍🧒", labelCs: "Rodina", category: "social" },
+  { emoji: "👵", labelCs: "Babička", category: "social" },
+  { emoji: "👴", labelCs: "Děda", category: "social" },
+  { emoji: "👧", labelCs: "Kamarád", category: "social" },
+  { emoji: "🧸", labelCs: "Hračka", category: "activities" },
+  { emoji: "🖍️", labelCs: "Kreslit", category: "activities" },
+  { emoji: "🧩", labelCs: "Puzzle", category: "activities" },
+  { emoji: "🫧", labelCs: "Bubliny", category: "activities" },
+  { emoji: "🛁", labelCs: "Koupel", category: "needs" },
+  { emoji: "🧼", labelCs: "Umýt", category: "needs" },
+  { emoji: "🧥", labelCs: "Obléct", category: "needs" },
+  { emoji: "🥛", labelCs: "Mléko", category: "food" },
+  { emoji: "🍞", labelCs: "Chleba", category: "food" },
 ];
 
 export const DEFAULT_TILE_ROWS_CS_FEMININE: DefaultTileRow[] = [
@@ -79,7 +103,7 @@ export const DEFAULT_TILE_ROWS_CS_FEMININE: DefaultTileRow[] = [
   { emoji: "✋", labelCs: "Stop", category: "needs" },
   { emoji: "😋", labelCs: "Jíst", category: "food" },
   { emoji: "🥤", labelCs: "Pít", category: "food" },
-  { emoji: "🎮", labelCs: "Hrát", category: "social" },
+  { emoji: "🎮", labelCs: "Hrát", category: "activities" },
   { emoji: "🚪", labelCs: "Ven", category: "needs" },
   { emoji: "👩", labelCs: "Máma", category: "social" },
   { emoji: "👨", labelCs: "Táta", category: "social" },
@@ -100,9 +124,27 @@ export const DEFAULT_TILE_ROWS_CS_FEMININE: DefaultTileRow[] = [
   { emoji: "🍪", labelCs: "Sušenka", category: "food" },
   { emoji: "🍫", labelCs: "Čokoláda", category: "food" },
   { emoji: "🐱", labelCs: "Kočka", category: "social" },
-  { emoji: "📖", labelCs: "Knížka", category: "social" },
-  { emoji: "⚽", labelCs: "Míč", category: "social" },
-  { emoji: "🎵", labelCs: "Písnička", category: "social" },
+  { emoji: "📖", labelCs: "Knížka", category: "activities" },
+  { emoji: "⚽", labelCs: "Míč", category: "activities" },
+  { emoji: "🎵", labelCs: "Písnička", category: "activities" },
+
+  // Page 3: more social language, daily care, and flexible favorites.
+  { emoji: "👋", labelCs: "Nashle", category: "social" },
+  { emoji: "🙏", labelCs: "Prosím", category: "social" },
+  { emoji: "💛", labelCs: "Děkuju", category: "social" },
+  { emoji: "🧑‍🧑‍🧒", labelCs: "Rodina", category: "social" },
+  { emoji: "👵", labelCs: "Babička", category: "social" },
+  { emoji: "👴", labelCs: "Děda", category: "social" },
+  { emoji: "👧", labelCs: "Kamarád", category: "social" },
+  { emoji: "🧸", labelCs: "Hračka", category: "activities" },
+  { emoji: "🖍️", labelCs: "Kreslit", category: "activities" },
+  { emoji: "🧩", labelCs: "Puzzle", category: "activities" },
+  { emoji: "🫧", labelCs: "Bubliny", category: "activities" },
+  { emoji: "🛁", labelCs: "Koupel", category: "needs" },
+  { emoji: "🧼", labelCs: "Umýt", category: "needs" },
+  { emoji: "🧥", labelCs: "Obléct", category: "needs" },
+  { emoji: "🥛", labelCs: "Mléko", category: "food" },
+  { emoji: "🍞", labelCs: "Chleba", category: "food" },
 ];
 
 export const DEFAULT_TILE_ROWS_EN: DefaultTileRow[] = [
@@ -117,7 +159,7 @@ export const DEFAULT_TILE_ROWS_EN: DefaultTileRow[] = [
   { emoji: "✋", labelCs: "Stop", category: "needs" },
   { emoji: "😋", labelCs: "Eat", category: "food" },
   { emoji: "🥤", labelCs: "Drink", category: "food" },
-  { emoji: "🎮", labelCs: "Play", category: "social" },
+  { emoji: "🎮", labelCs: "Play", category: "activities" },
   { emoji: "🚪", labelCs: "Outside", category: "needs" },
   { emoji: "👩", labelCs: "Mom", category: "social" },
   { emoji: "👨", labelCs: "Dad", category: "social" },
@@ -138,9 +180,27 @@ export const DEFAULT_TILE_ROWS_EN: DefaultTileRow[] = [
   { emoji: "🍪", labelCs: "Cookie", category: "food" },
   { emoji: "🍫", labelCs: "Chocolate", category: "food" },
   { emoji: "🐱", labelCs: "Cat", category: "social" },
-  { emoji: "📖", labelCs: "Book", category: "social" },
-  { emoji: "⚽", labelCs: "Ball", category: "social" },
-  { emoji: "🎵", labelCs: "Song", category: "social" },
+  { emoji: "📖", labelCs: "Book", category: "activities" },
+  { emoji: "⚽", labelCs: "Ball", category: "activities" },
+  { emoji: "🎵", labelCs: "Song", category: "activities" },
+
+  // Page 3: more social language, daily care, and flexible favorites.
+  { emoji: "👋", labelCs: "Bye", category: "social" },
+  { emoji: "🙏", labelCs: "Please", category: "social" },
+  { emoji: "💛", labelCs: "Thanks", category: "social" },
+  { emoji: "🧑‍🧑‍🧒", labelCs: "Family", category: "social" },
+  { emoji: "👵", labelCs: "Grandma", category: "social" },
+  { emoji: "👴", labelCs: "Grandpa", category: "social" },
+  { emoji: "👧", labelCs: "Friend", category: "social" },
+  { emoji: "🧸", labelCs: "Toy", category: "activities" },
+  { emoji: "🖍️", labelCs: "Draw", category: "activities" },
+  { emoji: "🧩", labelCs: "Puzzle", category: "activities" },
+  { emoji: "🫧", labelCs: "Bubbles", category: "activities" },
+  { emoji: "🛁", labelCs: "Bath", category: "needs" },
+  { emoji: "🧼", labelCs: "Wash", category: "needs" },
+  { emoji: "🧥", labelCs: "Dress", category: "needs" },
+  { emoji: "🥛", labelCs: "Milk", category: "food" },
+  { emoji: "🍞", labelCs: "Bread", category: "food" },
 ];
 
 const DEFAULT_TILE_ROWS: Record<SupportedLocale, Record<ChildGender, DefaultTileRow[]>> = {
@@ -212,6 +272,7 @@ export const CATEGORY_COLORS: Record<
   needs: { background: "#DCEAF8", border: "#6F92BE" },
   feelings: { background: "#F8E7BC", border: "#C39245" },
   social: { background: "#F2DDE7", border: "#B56E8D" },
+  activities: { background: "#E3DFF6", border: "#8274B8" },
   food: { background: "#DDEBD9", border: "#73976F" },
 };
 
@@ -219,6 +280,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   needs: "Potřeby",
   feelings: "Pocity",
   social: "Sociální",
+  activities: "Aktivity",
   food: "Jídlo",
 };
 

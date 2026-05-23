@@ -34,7 +34,13 @@ type EditorScreenProps = {
   onBack: () => void;
 };
 
-const categories: Category[] = ["needs", "feelings", "social", "food"];
+const categories: Category[] = [
+  "needs",
+  "feelings",
+  "social",
+  "activities",
+  "food",
+];
 const speechModes: SpeechMode[] = [
   "tts",
   "recording_only",

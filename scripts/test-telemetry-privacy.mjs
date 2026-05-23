@@ -131,7 +131,7 @@ const diagnostics = buildDiagnosticsPayload({
     phraseBarEnabled: true,
     suggestionCount: 3,
     boardLayoutMode: 'manual',
-    categoryOrder: ['needs', 'feelings', 'social', 'food'],
+    categoryOrder: ['needs', 'feelings', 'social', 'activities', 'food'],
     categoriesStartNewPage: true,
     childGender: 'masculine',
     updatedAt: '2026-05-01T12:00:00.000Z',

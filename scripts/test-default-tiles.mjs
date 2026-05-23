@@ -27,10 +27,10 @@ const englishFeminineTiles = DEFAULT_TILES('2026-05-16T00:00:00.000Z', {
   childGender: 'feminine',
 });
 
-assert.equal(masculineTiles.length, 32);
-assert.equal(feminineTiles.length, 32);
-assert.equal(englishTiles.length, 32);
-assert.equal(englishFeminineTiles.length, 32);
+assert.equal(masculineTiles.length, 48);
+assert.equal(feminineTiles.length, 48);
+assert.equal(englishTiles.length, 48);
+assert.equal(englishFeminineTiles.length, 48);
 assert.deepEqual(
   masculineTiles.map((tile) => tile.id),
   feminineTiles.map((tile) => tile.id)
@@ -51,6 +51,16 @@ assert.equal(englishTiles[3].labelCs, 'Done');
 assert.equal(englishTiles[5].labelCs, 'Not');
 assert.equal(englishTiles[20].labelCs, 'Happy');
 assert.equal(englishTiles[23].labelCs, 'Unsure');
+assert.equal(masculineTiles[10].labelCs, 'Hrát');
+assert.equal(masculineTiles[10].category, 'activities');
+assert.equal(masculineTiles[16].labelCs, 'Ahoj');
+assert.equal(masculineTiles[16].category, 'social');
+assert.equal(masculineTiles[33].labelCs, 'Prosím');
+assert.equal(masculineTiles[33].category, 'social');
+assert.equal(masculineTiles[39].labelCs, 'Hračka');
+assert.equal(masculineTiles[39].category, 'activities');
+assert.equal(englishTiles[33].labelCs, 'Please');
+assert.equal(englishTiles[39].labelCs, 'Toy');
 assert.deepEqual(
   englishTiles.map((tile) => tile.labelCs),
   englishFeminineTiles.map((tile) => tile.labelCs)

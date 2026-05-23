@@ -17,6 +17,7 @@ export const EN_APP_COPY: LocaleCopy = {
       needs: "Needs",
       feelings: "Feelings",
       social: "Social",
+      activities: "Activities",
       food: "Food",
     },
     boardLayoutModes: {

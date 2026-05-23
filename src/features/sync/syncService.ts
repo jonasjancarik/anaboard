@@ -766,7 +766,7 @@ class SyncService {
       phrase_bar_enabled: Boolean(payload.phrase_bar_enabled),
       suggestion_count: payload.suggestion_count,
       board_layout_mode: payload.board_layout_mode ?? 'manual',
-      category_order: payload.category_order ?? '["needs","feelings","social","food"]',
+      category_order: payload.category_order ?? '["needs","feelings","social","activities","food"]',
       categories_start_new_page: Boolean(payload.categories_start_new_page ?? true),
       child_gender: normalizeChildGender(payload.child_gender),
       updated_at: payload.updated_at,

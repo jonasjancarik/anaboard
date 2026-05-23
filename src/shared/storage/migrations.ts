@@ -17,8 +17,10 @@ type AppMetaRow = {
 };
 
 const LEGACY_COMBINED_SPEECH_MODE = 'recording_with_tts_fallback';
-const DEFAULT_CATEGORY_ORDER_JSON = '["needs","feelings","social","food"]';
+const DEFAULT_CATEGORY_ORDER = ['needs', 'feelings', 'social', 'activities', 'food'] as const;
+const DEFAULT_CATEGORY_ORDER_JSON = JSON.stringify(DEFAULT_CATEGORY_ORDER);
 const DEFAULT_CHILD_GENDER = 'masculine';
+const CATEGORY_SET = new Set<string>(DEFAULT_CATEGORY_ORDER);
 
 const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
   await db.execAsync(`
@@ -116,7 +118,7 @@ const createBaseSchema = async (db: MigrationDatabase): Promise<void> => {
       phrase_bar_enabled INTEGER NOT NULL DEFAULT 1,
       suggestion_count INTEGER NOT NULL DEFAULT 3,
       board_layout_mode TEXT NOT NULL DEFAULT 'manual',
-      category_order TEXT NOT NULL DEFAULT '["needs","feelings","social","food"]',
+      category_order TEXT NOT NULL DEFAULT '["needs","feelings","social","activities","food"]',
       categories_start_new_page INTEGER NOT NULL DEFAULT 1,
       child_gender TEXT NOT NULL DEFAULT 'masculine',
       updated_at TEXT NOT NULL,
@@ -203,6 +205,46 @@ const setAppMetaValue = async (
     key,
     value
   );
+};
+
+const normalizeCategoryOrderJson = (value: unknown): string => {
+  let rawOrder: unknown[] = [];
+
+  if (Array.isArray(value)) {
+    rawOrder = value;
+  } else if (typeof value === 'string' && value.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      rawOrder = Array.isArray(parsed) ? parsed : value.split(',');
+    } catch {
+      rawOrder = value.split(',');
+    }
+  }
+
+  const seen = new Set<string>();
+  const order: string[] = [];
+
+  for (const item of rawOrder) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+
+    const category = item.trim();
+    if (!CATEGORY_SET.has(category) || seen.has(category)) {
+      continue;
+    }
+
+    seen.add(category);
+    order.push(category);
+  }
+
+  for (const category of DEFAULT_CATEGORY_ORDER) {
+    if (!seen.has(category)) {
+      order.push(category);
+    }
+  }
+
+  return JSON.stringify(order);
 };
 
 const normalizeLegacyCombinedSpeechMode = async (
@@ -409,6 +451,39 @@ const ensureChildGenderSetting = async (db: MigrationDatabase): Promise<void> =>
   }
 };
 
+const ensureActivitiesCategoryOrder = async (db: MigrationDatabase): Promise<void> => {
+  const settingsRows = await db.getAllAsync<{ profile_id: string; category_order: string }>(
+    'SELECT profile_id, category_order FROM profile_settings'
+  );
+
+  for (const row of settingsRows) {
+    const nextCategoryOrder = normalizeCategoryOrderJson(row.category_order);
+    if (nextCategoryOrder === row.category_order) {
+      continue;
+    }
+
+    await db.runAsync(
+      'UPDATE profile_settings SET category_order = ? WHERE profile_id = ?',
+      nextCategoryOrder,
+      row.profile_id
+    );
+  }
+
+  const syncEvents = await db.getAllAsync<{ id: number; payload: string }>(
+    "SELECT id, payload FROM sync_events WHERE entity_type = 'profile_settings' AND status != 'synced'"
+  );
+
+  for (const event of syncEvents) {
+    try {
+      const payload = JSON.parse(event.payload) as Record<string, unknown>;
+      payload.category_order = normalizeCategoryOrderJson(payload.category_order);
+      await db.runAsync('UPDATE sync_events SET payload = ? WHERE id = ?', JSON.stringify(payload), event.id);
+    } catch {
+      // Leave malformed payloads untouched.
+    }
+  }
+};
+
 const migrationSteps: MigrationStep[] = [
   {
     version: 1,
@@ -523,6 +598,11 @@ const migrationSteps: MigrationStep[] = [
     version: 12,
     label: 'profile-settings-child-gender',
     run: ensureChildGenderSetting,
+  },
+  {
+    version: 13,
+    label: 'profile-settings-activities-category',
+    run: ensureActivitiesCategoryOrder,
   },
 ];
 

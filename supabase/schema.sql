@@ -133,7 +133,7 @@ create table if not exists profile_settings (
   phrase_bar_enabled boolean not null default true,
   suggestion_count int not null default 3,
   board_layout_mode text not null default 'manual',
-  category_order text not null default '["needs","feelings","social","food"]',
+  category_order text not null default '["needs","feelings","social","activities","food"]',
   categories_start_new_page boolean not null default true,
   child_gender text not null default 'masculine',
   updated_at timestamptz not null,
@@ -157,7 +157,7 @@ alter table profile_settings
 add column if not exists board_layout_mode text not null default 'manual';
 
 alter table profile_settings
-add column if not exists category_order text not null default '["needs","feelings","social","food"]';
+add column if not exists category_order text not null default '["needs","feelings","social","activities","food"]';
 
 alter table profile_settings
 add column if not exists categories_start_new_page boolean not null default true;

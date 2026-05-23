@@ -347,7 +347,7 @@ try {
   assert.equal(settingsRow.backup_pin_enabled, 0);
   assert.equal(settingsRow.suggestion_count, 3);
   assert.equal(settingsRow.board_layout_mode, 'manual');
-  assert.equal(settingsRow.category_order, '["needs","feelings","social","food"]');
+  assert.equal(settingsRow.category_order, '["needs","feelings","social","activities","food"]');
   assert.equal(settingsRow.categories_start_new_page, 1);
   assert.equal(settingsRow.child_gender, 'masculine');
 
@@ -356,7 +356,7 @@ try {
     .get('profile_settings', 'default-profile');
   const pendingSettingsPayload = JSON.parse(pendingSettingsEvent.payload);
   assert.equal(pendingSettingsPayload.board_layout_mode, 'manual');
-  assert.equal(pendingSettingsPayload.category_order, '["needs","feelings","social","food"]');
+  assert.equal(pendingSettingsPayload.category_order, '["needs","feelings","social","activities","food"]');
   assert.equal(pendingSettingsPayload.categories_start_new_page, 1);
   assert.equal(pendingSettingsPayload.child_gender, 'masculine');
 

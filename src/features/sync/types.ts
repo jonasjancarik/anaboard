@@ -32,7 +32,7 @@ export type RemoteTileRow = {
   emoji: string;
   visual_type: 'emoji' | 'image';
   image_remote_path?: string | null;
-  category: 'needs' | 'feelings' | 'social' | 'food';
+  category: 'needs' | 'feelings' | 'social' | 'activities' | 'food';
   speech_mode: 'tts' | 'recording_only';
   audio_clip_id?: string | null;
   updated_at: string;
