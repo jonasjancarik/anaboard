@@ -108,6 +108,7 @@ EOF
   export ANDROID_SDK_ROOT="${sdk_root}"
   export ANDROID_HOME="${sdk_root}"
   export JAVA_HOME="${java_home}"
+  export SENTRY_DISABLE_AUTO_UPLOAD="${SENTRY_DISABLE_AUTO_UPLOAD:-true}"
   export PATH="${JAVA_HOME}/bin:${ANDROID_SDK_ROOT}/platform-tools:${ANDROID_SDK_ROOT}/emulator:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/tools/bin:${PATH}"
 }
 
@@ -146,9 +147,7 @@ build_apk() {
   local apk_mtime=0
   local gradle_status=0
 
-  if [[ ! -d "${PROJECT_ROOT}/android" ]]; then
-    npx expo prebuild --platform android --no-install
-  fi
+  npx expo prebuild --platform android --no-install
 
   build_started_at="$(date +%s)"
 

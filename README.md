@@ -121,7 +121,8 @@ Notes:
 
 - The helper script prefers Android Studio's bundled Java runtime to avoid local JDK mismatches.
 - Install Android SDK components in Android Studio if `npm run android:doctor` reports a missing SDK.
-- The generated `/android` folder is local/ignored; regenerate with `npm run android:prebuild` when native config changes.
+- The generated `/android` folder is local/ignored; `npm run android:apk` syncs it with Expo config before Gradle runs.
+- Local APK builds default `SENTRY_DISABLE_AUTO_UPLOAD=true`; CI can upload source maps separately when configured.
 - The local release APK is debug-signed by Expo's generated template, good for device testing, not for Play Store upload.
 
 ## Environment
