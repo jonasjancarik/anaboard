@@ -6,6 +6,11 @@ export type OrderedBoardPage = {
   category?: Category;
 };
 
+export type AddTileTarget = {
+  anchorTile: Tile;
+  category?: Category;
+};
+
 const DEFAULT_CATEGORY_ORDER: Category[] = ['needs', 'feelings', 'social', 'activities', 'food'];
 const CATEGORY_SET = new Set<string>(DEFAULT_CATEGORY_ORDER);
 
@@ -128,4 +133,33 @@ export const getBoardPagesForLayout = (
   }
 
   return pages;
+};
+
+export const getAddTileTargetForLayout = (
+  tiles: Tile[],
+  pages: OrderedBoardPage[],
+  layoutMode: BoardLayoutMode,
+  pageIndex: number
+): AddTileTarget | null => {
+  const fallbackAnchorTile = tiles[tiles.length - 1];
+  if (!fallbackAnchorTile) {
+    return null;
+  }
+
+  if (layoutMode !== 'category') {
+    return {
+      anchorTile: fallbackAnchorTile,
+    };
+  }
+
+  const normalizedPageIndex = Math.max(0, Math.min(pages.length - 1, pageIndex));
+  const page = pages[normalizedPageIndex];
+  const pageTiles = page?.tiles ?? [];
+  const anchorTile = pageTiles[pageTiles.length - 1] ?? fallbackAnchorTile;
+  const category = page?.category ?? pageTiles[pageTiles.length - 1]?.category;
+
+  return {
+    anchorTile,
+    category,
+  };
 };

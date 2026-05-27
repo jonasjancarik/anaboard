@@ -378,7 +378,13 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         localUri: promoted.localUri,
         remotePath: promoted.storagePath,
       });
-      setVisualType("image");
+      await updateTileDraft(selectedTile.id, {
+        visualType: "image",
+        imageLocalUri: promoted.localUri,
+        imageRemotePath: promoted.storagePath,
+      });
+      await commitDraft(true, promoted.localUri);
+      setIsSmartSuggestionsOpen(false);
       void appHaptics.success();
     } catch (error) {
       void appHaptics.error();
@@ -683,6 +689,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         emojiSuggestions={emojiSuggestions}
         isEmojiLoading={isEmojiSuggestionsLoading}
         isImageLoading={isGeneratingAiImage}
+        isImageApplying={isApplyingAiImage}
         hasGeneratedImage={Boolean(generatedDraft)}
         error={tileActionError}
         showAuthCta={showAuthCtaForTileError}
@@ -695,8 +702,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
           setTileActionError(null);
         }}
         onUseGeneratedImage={() => {
-          setVisualType("image");
-          setTileActionError(null);
+          void handleApplyAiImage();
         }}
         onRegenerateImage={() => {
           void handleGenerateAiImage();

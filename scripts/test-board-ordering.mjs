@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-const { getBoardPagesForLayout, getTilesForBoardLayout } =
+const { getAddTileTargetForLayout, getBoardPagesForLayout, getTilesForBoardLayout } =
   await import('../src/features/board/utils/boardOrdering.ts');
 
 const makeTile = (id, position, labelCs, category) => ({
@@ -83,5 +83,17 @@ const continuousPages = getBoardPagesForLayout(
 );
 assert.deepEqual(continuousPages.map((page) => page.category), [undefined, undefined, undefined]);
 assert.deepEqual(continuousPages.map((page) => page.tiles.length), [3, 3, 1]);
+
+const manualAddTarget = getAddTileTargetForLayout(tiles, categoryPages, 'manual', 1);
+assert.equal(manualAddTarget?.anchorTile.id, 'tile-activities-1');
+assert.equal(manualAddTarget?.category, undefined);
+
+const categoryAddTarget = getAddTileTargetForLayout(tiles, categoryPages, 'category', 2);
+assert.equal(categoryAddTarget?.anchorTile.id, 'tile-social-2');
+assert.equal(categoryAddTarget?.category, 'social');
+
+const continuousAddTarget = getAddTileTargetForLayout(tiles, continuousPages, 'category', 1);
+assert.equal(continuousAddTarget?.anchorTile.id, 'tile-social-2');
+assert.equal(continuousAddTarget?.category, 'social');
 
 console.log('board-ordering-ok');

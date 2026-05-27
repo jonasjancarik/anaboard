@@ -14,6 +14,7 @@ import {
   deleteTileById,
   updateTile,
   updateTilePosition,
+  type TileCreateInput,
   type TileUpdateInput,
 } from '../shared/storage/repositories/tileRepository';
 import {
@@ -155,7 +156,7 @@ type AppStore = {
   }) => Promise<void>;
 
   updateTileDraft: (tileId: string, update: TileUpdateInput) => Promise<void>;
-  createTileAfter: (tileId: string) => Promise<string>;
+  createTileAfter: (tileId: string, input?: TileCreateInput) => Promise<string>;
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
   deleteTile: (tileId: string) => Promise<void>;
   resetBoardToDefaults: () => Promise<void>;
@@ -443,8 +444,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await get().refreshPendingSyncEvents();
   },
 
-  createTileAfter: async (tileId) => {
-    const newTileId = await createTileAfterInRepository(tileId);
+  createTileAfter: async (tileId, input) => {
+    const newTileId = await createTileAfterInRepository(tileId, input);
     await get().refreshBoard();
     await get().refreshPendingSyncEvents();
     return newTileId;

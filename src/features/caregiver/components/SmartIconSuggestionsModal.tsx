@@ -18,6 +18,7 @@ type SmartIconSuggestionsModalProps = {
   emojiSuggestions: EmojiSuggestion[];
   isEmojiLoading: boolean;
   isImageLoading: boolean;
+  isImageApplying: boolean;
   hasGeneratedImage: boolean;
   error: string | null;
   showAuthCta: boolean;
@@ -41,6 +42,7 @@ export const SmartIconSuggestionsModal = ({
   emojiSuggestions,
   isEmojiLoading,
   isImageLoading,
+  isImageApplying,
   hasGeneratedImage,
   error,
   showAuthCta,
@@ -52,6 +54,8 @@ export const SmartIconSuggestionsModal = ({
   locale,
 }: SmartIconSuggestionsModalProps) => {
   const copy = getAppCopy(locale);
+  const isImageActionDisabled = isImageLoading || isImageApplying;
+
   return (
     <Modal
       visible={visible}
@@ -123,10 +127,26 @@ export const SmartIconSuggestionsModal = ({
                   size={92}
                 />
                 <View style={styles.imageActions}>
-                  <Pressable style={styles.primaryButton} onPress={onUseGeneratedImage}>
-                    <Text style={styles.primaryButtonText}>{copy.smartIcon.useImage}</Text>
+                  <Pressable
+                    style={[
+                      styles.primaryButton,
+                      isImageActionDisabled && styles.disabledButton,
+                    ]}
+                    onPress={onUseGeneratedImage}
+                    disabled={isImageActionDisabled}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {isImageApplying ? copy.imageDraft.applying : copy.smartIcon.useImage}
+                    </Text>
                   </Pressable>
-                  <Pressable style={styles.secondaryButton} onPress={onRegenerateImage}>
+                  <Pressable
+                    style={[
+                      styles.secondaryButton,
+                      isImageActionDisabled && styles.disabledButton,
+                    ]}
+                    onPress={onRegenerateImage}
+                    disabled={isImageActionDisabled}
+                  >
                     <Text style={styles.secondaryButtonText}>{copy.smartIcon.retryImage}</Text>
                   </Pressable>
                 </View>
@@ -279,6 +299,9 @@ const styles = StyleSheet.create({
     color: APP_THEME.text,
     fontSize: 14,
     fontWeight: "800",
+  },
+  disabledButton: {
+    opacity: 0.55,
   },
   emptyText: {
     color: APP_THEME.textMuted,

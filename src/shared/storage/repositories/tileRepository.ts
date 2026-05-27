@@ -44,6 +44,16 @@ export type TileUpdateInput = {
   audioClipId?: string | null;
 };
 
+export type TileCreateInput = {
+  labelCs?: string;
+  emoji?: string;
+  visualType?: TileVisualType;
+  imageLocalUri?: string | null;
+  imageRemotePath?: string | null;
+  category?: Category;
+  speechMode?: SpeechMode;
+};
+
 const getTileById = async (tileId: string): Promise<TileRow | null> => {
   const db = await getDatabase();
   return db.getFirstAsync<TileRow>(
@@ -234,15 +244,7 @@ export const updateTilePosition = async (
 
 export const createTileAfter = async (
   afterTileId: string,
-  input?: {
-    labelCs?: string;
-    emoji?: string;
-    visualType?: TileVisualType;
-    imageLocalUri?: string | null;
-    imageRemotePath?: string | null;
-    category?: Category;
-    speechMode?: SpeechMode;
-  },
+  input?: TileCreateInput,
 ): Promise<string> => {
   const db = await getDatabase();
 

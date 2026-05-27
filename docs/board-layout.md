@@ -17,6 +17,8 @@ Switching modes never rewrites tile `position`. Manual order remains available w
 
 Grouped mode defaults to starting each category on a new logical page. Category pages show a small Czech category name above the tile grid. Caregivers can turn this off while keeping grouped alphabetical order, in which case categories flow continuously across pages.
 
+When a caregiver adds a tile while grouped mode is active, the new tile uses the category of the current logical page. On continuous grouped pages, the category follows the tile at the insertion point.
+
 ## Category Order
 
 `categoryOrder` is stored as the complete ordered list of known categories:

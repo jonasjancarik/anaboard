@@ -55,6 +55,7 @@ import type { PhraseSource, PhraseTokenSnapshot, SentenceToken, Tile } from '../
 import { createId } from '../../../shared/utils/id';
 import { useAppStore, selectTilesById } from '../../../store/useAppStore';
 import {
+  getAddTileTargetForLayout,
   getBoardPagesForLayout,
   getTilesForBoardLayout,
   type OrderedBoardPage,
@@ -1319,8 +1320,13 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
       return;
     }
 
-    const anchorTile = tiles[tiles.length - 1];
-    if (!anchorTile) {
+    const addTileTarget = getAddTileTargetForLayout(
+      tiles,
+      logicalPages,
+      boardLayoutMode,
+      currentPageRef.current
+    );
+    if (!addTileTarget) {
       return;
     }
 
@@ -1331,7 +1337,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     setIsAddingTile(true);
 
     try {
-      const newTileId = await createTileAfter(anchorTile.id);
+      const newTileId = await createTileAfter(
+        addTileTarget.anchorTile.id,
+        addTileTarget.category ? { category: addTileTarget.category } : undefined
+      );
       const nextTiles = useAppStore.getState().tiles;
       const nextOrderedTiles = getTilesForBoardLayout(
         nextTiles,
@@ -1422,6 +1431,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     clearBoardDragState,
     clearPendingReorderTouch,
     createTileAfter,
+    logicalPages,
     copy,
     locale,
     newTileFlashValue,
