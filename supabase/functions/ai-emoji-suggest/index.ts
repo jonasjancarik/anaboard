@@ -1,4 +1,4 @@
-import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
+import { corsHeaders, errorResponse, errorResponseFromError, jsonResponse } from '../_shared/cors.ts';
 import { generateJsonText } from '../_shared/openai.ts';
 import { requireUser } from '../_shared/supabase.ts';
 
@@ -133,6 +133,6 @@ Deno.serve(async (request: Request) => {
       cached: false,
     });
   } catch (error) {
-    return errorResponse(error instanceof Error ? error.message : 'Emoji suggestion failed', 500);
+    return errorResponseFromError(error, 'Emoji suggestion failed');
   }
 });

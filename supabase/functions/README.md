@@ -16,6 +16,14 @@ Optional:
 
 - `OPENAI_TEXT_MODEL`
 - `OPENAI_IMAGE_MODEL`
+- `AI_IMAGE_GENERATION_ENABLED` (`1` by default; set `0` as a server kill switch)
+- `AI_IMAGE_RATE_LIMIT_WINDOW_SECONDS` (`60` by default)
+- `AI_IMAGE_RATE_LIMIT_MAX` (`3` by default)
+- `AI_IMAGE_ANONYMOUS_LIFETIME_LIMIT` (`10` by default)
+- `AI_IMAGE_SIGNED_IN_DAILY_LIMIT` (`20` by default)
+- `AI_IMAGE_FAMILY_DAILY_LIMIT` (`50` by default)
+- `AI_IMAGE_SIGNED_IN_MONTHLY_LIMIT` (`200` by default)
+- `AI_IMAGE_FAMILY_MONTHLY_LIMIT` (`500` by default)
 - `SUPABASE_ANON_KEY` fallback during migration only
 - `SUPABASE_SERVICE_ROLE_KEY` fallback during migration only
 
@@ -56,22 +64,12 @@ npm run functions:secrets
 npm run functions:deploy
 ```
 
-Admin helper for anonymous image trial quota:
+Quota and usage inspection:
 
-```bash
-npm run admin:ai-trial -- list
-npm run admin:ai-trial -- show --user-id <auth-user-uuid>
-npm run admin:ai-trial -- reset --user-id <auth-user-uuid>
-node ./scripts/admin-ai-trial.mjs list --json | jq -r '.[] | select(.isAnonymous) | .userId' | xargs -n1 node ./scripts/admin-ai-trial.mjs reset --user-id
-```
-
-Supports:
-
-- `list --all` for full auth-user dump
-- `set-used --count <number>` for manual overrides
-- `--env-file <path>` if you do not use `supabase/functions/.env.local`
-- `--email <caregiver@email>` to resolve registered caregiver ids via `caregivers.email_canonical`
-- direct `node` invocation is better for JSON pipelines; `npm run` prepends banner output
+- Accepted image generation requests are logged in the private `ai_image_generation_events` table.
+- The quota check is atomic in `anaboard_consume_ai_image_generation_quota(...)`.
+- Function completion updates the same event through `anaboard_complete_ai_image_generation_event(...)`.
+- Inspect or adjust events with service-role access only; client roles have no table policies.
 
 ## Local serve
 
@@ -85,4 +83,6 @@ npm run functions:serve
 - Image drafts use the existing private `tile-images` bucket under `ai-drafts/`.
 - Generated drafts are promoted into the final tile path on acceptance.
 - Image generation uses OpenAI `gpt-image-1.5` with transparent PNG output.
+- Image generation has a server-side kill switch, per-user short-window rate limit, anonymous lifetime quota, and signed-in user/family daily and monthly quotas.
+- Use a dedicated OpenAI project/key budget for this feature so provider-side spend has a hard ceiling.
 - `verify_jwt` is disabled; functions verify Supabase JWTs manually from the `Authorization` header.

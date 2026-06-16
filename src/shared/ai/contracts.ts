@@ -39,6 +39,13 @@ export type GenerateTileImageDraftResponse = {
   provider: AiProvider;
   promptVersion: string;
   trialRemaining?: number | null;
+  quota?: {
+    rateLimitRemaining?: number | null;
+    signedInDailyRemaining?: number | null;
+    signedInMonthlyRemaining?: number | null;
+    familyDailyRemaining?: number | null;
+    familyMonthlyRemaining?: number | null;
+  };
 };
 
 export type PromoteTileImageDraftRequest = {

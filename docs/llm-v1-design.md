@@ -420,8 +420,13 @@ Expected function protections:
 - map requester to caregiver/family/profile
 - store objects only inside that family path
 - no client-supplied arbitrary bucket/path writes
+- server-side kill switch independent from app feature flags
+- atomic DB-backed quota consume before provider calls
 - rate limit by caregiver ID and family ID
-- log minimal metadata only
+- signed-in user/family daily and monthly limits
+- anonymous lifetime limit
+- log minimal metadata only in `ai_image_generation_events`
+- dedicated OpenAI project/key budget for provider-side spend ceiling
 
 V1 scope restriction:
 

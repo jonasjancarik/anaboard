@@ -4,6 +4,8 @@ const OPENAI_API_KEY = getRequiredEnv('OPENAI_API_KEY');
 const OPENAI_TEXT_MODEL = getOptionalEnv('OPENAI_TEXT_MODEL', 'gpt-5-mini');
 const OPENAI_IMAGE_MODEL = getOptionalEnv('OPENAI_IMAGE_MODEL', 'gpt-image-1.5');
 
+export const getOpenAIImageModel = (): string => OPENAI_IMAGE_MODEL;
+
 type OpenAIResponsesApiResponse = {
   error?: {
     message?: string;

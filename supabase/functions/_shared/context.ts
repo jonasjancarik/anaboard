@@ -1,4 +1,5 @@
 import { createAdminClient } from './supabase.ts';
+import { HttpError } from './cors.ts';
 
 type CaregiverRow = {
   id: string;
@@ -20,7 +21,7 @@ export const getAuthorizedStorageContext = async (userId: string, profileId: str
     .maybeSingle<CaregiverRow>();
 
   if (caregiverError || !caregiver) {
-    throw new Error('Caregiver context missing');
+    throw new HttpError('Caregiver context missing', 403);
   }
 
   const { data: profile, error: profileError } = await admin
@@ -31,7 +32,7 @@ export const getAuthorizedStorageContext = async (userId: string, profileId: str
     .maybeSingle<ProfileRow>();
 
   if (profileError || !profile) {
-    throw new Error('Profile does not belong to caregiver family');
+    throw new HttpError('Profile does not belong to caregiver family', 403);
   }
 
   return {

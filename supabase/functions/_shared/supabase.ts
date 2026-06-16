@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 
+import { HttpError } from './cors.ts';
 import { getRequiredEnv } from './env.ts';
 
 const supabaseUrl = getRequiredEnv('SUPABASE_URL');
@@ -32,7 +33,7 @@ const getBearerToken = (request: Request): string => {
   const [scheme, token] = authorization.split(' ');
 
   if (scheme !== 'Bearer' || !token) {
-    throw new Error('Unauthorized');
+    throw new HttpError('Unauthorized', 401);
   }
 
   return token;
@@ -64,7 +65,7 @@ export const requireUser = async (request: Request) => {
   const isAnonymous = data?.claims?.is_anonymous === true;
 
   if (error || !userId) {
-    throw new Error('Unauthorized');
+    throw new HttpError('Unauthorized', 401);
   }
 
   return {

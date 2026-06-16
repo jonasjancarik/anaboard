@@ -1,13 +1,19 @@
-import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
+
+import { corsHeaders, errorResponse, errorResponseFromError, jsonResponse } from '../_shared/cors.ts';
 import { getAuthorizedStorageContext } from '../_shared/context.ts';
-import { generateTransparentImage } from '../_shared/openai.ts';
+import { generateTransparentImage, getOpenAIImageModel } from '../_shared/openai.ts';
 import {
   buildAnonymousTileImageDraftPath,
   buildTileImageDraftPath,
   TILE_IMAGES_BUCKET,
 } from '../_shared/storage.ts';
 import { createAdminClient, requireUser } from '../_shared/supabase.ts';
-import { consumeAnonymousImageGenerationQuota } from '../_shared/trialQuota.ts';
+import {
+  assertImageGenerationEnabled,
+  completeImageGenerationEvent,
+  consumeImageGenerationQuota,
+} from '../_shared/trialQuota.ts';
 
 type RequestBody = {
   profileId?: string;
@@ -16,6 +22,8 @@ type RequestBody = {
   locale?: string;
   category?: string;
 };
+
+const PROMPT_VERSION = 'tile-image-v1-openai';
 
 const getExtension = (mimeType: string): string => {
   if (mimeType === 'image/webp') {
@@ -47,8 +55,14 @@ Deno.serve(async (request: Request) => {
     return errorResponse('Method not allowed', 405);
   }
 
+  let quotaAdmin: SupabaseClient | null = null;
+  let quotaEventId: string | null = null;
+  let draftStoragePath: string | null = null;
+
   try {
     const user = await requireUser(request);
+    assertImageGenerationEnabled();
+
     const body = (await request.json()) as RequestBody;
 
     const profileId = body.profileId?.trim();
@@ -60,6 +74,10 @@ Deno.serve(async (request: Request) => {
       return errorResponse('tileId and label are required');
     }
 
+    if (!user.isAnonymous && !profileId) {
+      return errorResponse('profileId is required for signed-in image generation');
+    }
+
     const storageContext =
       profileId && !user.isAnonymous
         ? await getAuthorizedStorageContext(user.id, profileId)
@@ -68,8 +86,23 @@ Deno.serve(async (request: Request) => {
             familyId: null,
           };
     const admin = storageContext.admin;
+    quotaAdmin = admin;
+
     const draftId = crypto.randomUUID();
-    const trialQuota = await consumeAnonymousImageGenerationQuota(admin, user.id, user.isAnonymous);
+    const quota = await consumeImageGenerationQuota({
+      admin,
+      userId: user.id,
+      familyId: storageContext.familyId,
+      profileId: profileId ?? null,
+      isAnonymous: user.isAnonymous,
+      labelLength: label.length,
+      locale,
+      category: body.category,
+      promptVersion: PROMPT_VERSION,
+      model: getOpenAIImageModel(),
+    });
+    quotaEventId = quota.eventId;
+
     const image = await generateTransparentImage(
       buildPrompt({
         label,
@@ -83,6 +116,8 @@ Deno.serve(async (request: Request) => {
       profileId && !user.isAnonymous
         ? buildTileImageDraftPath(storageContext.familyId as string, profileId, draftId, extension)
         : buildAnonymousTileImageDraftPath(user.id, draftId, extension);
+    draftStoragePath = storagePath;
+
     const { error: uploadError } = await admin.storage.from(TILE_IMAGES_BUCKET).upload(
       storagePath,
       image.bytes,
@@ -104,6 +139,13 @@ Deno.serve(async (request: Request) => {
       throw signedUrlError ?? new Error('Signed URL generation failed');
     }
 
+    await completeImageGenerationEvent({
+      admin,
+      eventId: quota.eventId,
+      status: 'succeeded',
+      draftStoragePath: storagePath,
+    });
+
     return jsonResponse({
       draftId,
       storagePath,
@@ -112,10 +154,25 @@ Deno.serve(async (request: Request) => {
       width: image.width,
       height: image.height,
       provider: 'openai',
-      promptVersion: 'tile-image-v1-openai',
-      trialRemaining: trialQuota.remaining,
+      promptVersion: PROMPT_VERSION,
+      trialRemaining: quota.anonymousLifetimeRemaining,
+      quota: {
+        rateLimitRemaining: quota.rateLimitRemaining,
+        signedInDailyRemaining: quota.signedInDailyRemaining,
+        signedInMonthlyRemaining: quota.signedInMonthlyRemaining,
+        familyDailyRemaining: quota.familyDailyRemaining,
+        familyMonthlyRemaining: quota.familyMonthlyRemaining,
+      },
     });
   } catch (error) {
-    return errorResponse(error instanceof Error ? error.message : 'Image draft generation failed', 500);
+    await completeImageGenerationEvent({
+      admin: quotaAdmin,
+      eventId: quotaEventId,
+      status: 'failed',
+      draftStoragePath,
+      errorMessage: error instanceof Error ? error.message : 'Image draft generation failed',
+    });
+
+    return errorResponseFromError(error, 'Image draft generation failed');
   }
 });

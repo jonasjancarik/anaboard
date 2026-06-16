@@ -130,15 +130,23 @@ set_hosted_secrets() {
   require_env_file
 
   local openai_api_key=""
-  local openai_text_model=""
-  local openai_image_model=""
   local sb_publishable_key=""
   local sb_secret_key=""
   local project_ref=""
+  local optional_secret_keys=(
+    "OPENAI_TEXT_MODEL"
+    "OPENAI_IMAGE_MODEL"
+    "AI_IMAGE_GENERATION_ENABLED"
+    "AI_IMAGE_RATE_LIMIT_WINDOW_SECONDS"
+    "AI_IMAGE_RATE_LIMIT_MAX"
+    "AI_IMAGE_ANONYMOUS_LIFETIME_LIMIT"
+    "AI_IMAGE_SIGNED_IN_DAILY_LIMIT"
+    "AI_IMAGE_FAMILY_DAILY_LIMIT"
+    "AI_IMAGE_SIGNED_IN_MONTHLY_LIMIT"
+    "AI_IMAGE_FAMILY_MONTHLY_LIMIT"
+  )
 
   openai_api_key="$(get_env_value "OPENAI_API_KEY" || true)"
-  openai_text_model="$(get_env_value "OPENAI_TEXT_MODEL" || true)"
-  openai_image_model="$(get_env_value "OPENAI_IMAGE_MODEL" || true)"
   sb_publishable_key="$(get_env_value "SB_PUBLISHABLE_KEY" || true)"
   sb_secret_key="$(get_env_value "SB_SECRET_KEY" || true)"
   project_ref="$(resolve_project_ref)"
@@ -151,13 +159,14 @@ set_hosted_secrets() {
   cd "${PROJECT_ROOT}"
   supabase secrets set --project-ref "${project_ref}" OPENAI_API_KEY="${openai_api_key}"
 
-  if [[ -n "${openai_text_model}" ]]; then
-    supabase secrets set --project-ref "${project_ref}" OPENAI_TEXT_MODEL="${openai_text_model}"
-  fi
-
-  if [[ -n "${openai_image_model}" ]]; then
-    supabase secrets set --project-ref "${project_ref}" OPENAI_IMAGE_MODEL="${openai_image_model}"
-  fi
+  local optional_key=""
+  local optional_value=""
+  for optional_key in "${optional_secret_keys[@]}"; do
+    optional_value="$(get_env_value "${optional_key}" || true)"
+    if [[ -n "${optional_value}" ]]; then
+      supabase secrets set --project-ref "${project_ref}" "${optional_key}=${optional_value}"
+    fi
+  done
 
   if [[ -n "${sb_publishable_key}" ]]; then
     supabase secrets set --project-ref "${project_ref}" SB_PUBLISHABLE_KEY="${sb_publishable_key}"

@@ -1,4 +1,4 @@
-import { corsHeaders, errorResponse, jsonResponse } from '../_shared/cors.ts';
+import { corsHeaders, errorResponse, errorResponseFromError, jsonResponse } from '../_shared/cors.ts';
 import { getAuthorizedStorageContext } from '../_shared/context.ts';
 import {
   buildAnonymousTileImagePath,
@@ -41,7 +41,11 @@ Deno.serve(async (request: Request) => {
       return errorResponse('tileId, draftId, and draftStoragePath are required');
     }
 
-    const isAnonymous = user.isAnonymous || !profileId;
+    if (!user.isAnonymous && !profileId) {
+      return errorResponse('profileId is required for signed-in image generation');
+    }
+
+    const isAnonymous = user.isAnonymous;
     const { admin, familyId } =
       !isAnonymous && profileId
         ? await getAuthorizedStorageContext(user.id, profileId)
@@ -87,6 +91,6 @@ Deno.serve(async (request: Request) => {
       signedUrl: signedUrlData.signedUrl,
     });
   } catch (error) {
-    return errorResponse(error instanceof Error ? error.message : 'Image draft promote failed', 500);
+    return errorResponseFromError(error, 'Image draft promote failed');
   }
 });

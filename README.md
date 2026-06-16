@@ -165,6 +165,14 @@ Optional function secrets:
 
 - `OPENAI_TEXT_MODEL`
 - `OPENAI_IMAGE_MODEL`
+- `AI_IMAGE_GENERATION_ENABLED` (`1` by default; set `0` as a server kill switch)
+- `AI_IMAGE_RATE_LIMIT_WINDOW_SECONDS` (`60` by default)
+- `AI_IMAGE_RATE_LIMIT_MAX` (`3` by default)
+- `AI_IMAGE_ANONYMOUS_LIFETIME_LIMIT` (`10` by default)
+- `AI_IMAGE_SIGNED_IN_DAILY_LIMIT` (`20` by default)
+- `AI_IMAGE_FAMILY_DAILY_LIMIT` (`50` by default)
+- `AI_IMAGE_SIGNED_IN_MONTHLY_LIMIT` (`200` by default)
+- `AI_IMAGE_FAMILY_MONTHLY_LIMIT` (`500` by default)
 
 Suggested rollout:
 
@@ -172,25 +180,8 @@ Suggested rollout:
 - local function env example: `/Users/janca/projects/anaboard/supabase/functions/.env.example`
 - local/static function check: `npm run functions:check`
 - app should prefer `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; `EXPO_PUBLIC_SUPABASE_ANON_KEY` remains fallback during migration
-
-Admin helper for anonymous AI image trial quota:
-
-```bash
-npm run admin:ai-trial -- list
-npm run admin:ai-trial -- show --user-id <auth-user-uuid>
-npm run admin:ai-trial -- reset --user-id <auth-user-uuid>
-npm run admin:ai-trial -- set-used --user-id <auth-user-uuid> --count 3
-node ./scripts/admin-ai-trial.mjs list --json | jq -r '.[] | select(.isAnonymous) | .userId' | xargs -n1 node ./scripts/admin-ai-trial.mjs reset --user-id
-```
-
-Notes:
-
-- defaults to `supabase/functions/.env.local`
-- requires `SUPABASE_URL` + `SB_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`)
-- `list --all` walks all auth users; default page size `50`
-- `--email <caregiver@email>` resolves registered caregivers via `caregivers.email_canonical`
-- anonymous users usually need `--user-id`
-- use `node ./scripts/admin-ai-trial.mjs ... --json` for pipelines; `npm run` adds banner text ahead of JSON
+- AI image quota and usage events live in the private `ai_image_generation_events` table; inspect it with service-role access only
+- configure a dedicated OpenAI project/key budget for image generation so provider-side spend has a hard ceiling too
 
 ## Supabase schema
 
