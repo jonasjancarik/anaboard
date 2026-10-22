@@ -341,8 +341,15 @@ Cleanup policy:
 
 1. Caregiver taps `Nakreslit „<text>“`.
 2. App calls `ai-image-draft-generate`.
-3. Function calls OpenAI.
-4. OpenAI returns base64 image data.
+3. Function asks the text model (`OPENAI_TEXT_MODEL`) what the label means in the
+   board's language and what to draw (`describeTileMeaning` in
+   `supabase/functions/_shared/tileImagePrompt.ts`). This works for any locale and
+   stops the image model misreading short words (Czech "Ven" was once drawn as wine).
+   If this call fails, generation continues with a label-only prompt.
+4. Function calls the image model (`OPENAI_IMAGE_MODEL`) with the resolved meaning,
+   depiction and drawing rules (people only for person words, a face for feelings,
+   otherwise a single emoji-like object; nothing cropped; transparent background).
+   OpenAI returns base64 image data.
 5. Function uploads bytes to `tile-images/{familyId}/{profileId}/ai-drafts/{draftId}.png`.
 6. Function returns:
    - `draftId`

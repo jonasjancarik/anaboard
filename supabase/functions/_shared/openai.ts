@@ -80,11 +80,13 @@ export const generateJsonText = async <T,>(params: {
   prompt: string;
   schemaName: string;
   schema: Record<string, unknown>;
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
 }): Promise<T> => {
   const payload = await postJson<OpenAIResponsesApiResponse>('https://api.openai.com/v1/responses', {
     model: OPENAI_TEXT_MODEL,
     input: params.prompt,
     store: false,
+    ...(params.reasoningEffort ? { reasoning: { effort: params.reasoningEffort } } : {}),
     text: {
       format: {
         type: 'json_schema',

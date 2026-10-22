@@ -10,6 +10,12 @@ import {
 } from '../_shared/storage.ts';
 import { createAdminClient, requireUser } from '../_shared/supabase.ts';
 import {
+  buildTileImagePrompt,
+  describeTileMeaning,
+  TILE_IMAGE_PROMPT_VERSION,
+  type TileMeaning,
+} from '../_shared/tileImagePrompt.ts';
+import {
   assertImageGenerationEnabled,
   completeImageGenerationEvent,
   consumeImageGenerationQuota,
@@ -23,27 +29,12 @@ type RequestBody = {
   category?: string;
 };
 
-const PROMPT_VERSION = 'tile-image-v1-openai';
-
 const getExtension = (mimeType: string): string => {
   if (mimeType === 'image/webp') {
     return 'webp';
   }
 
   return 'png';
-};
-
-const buildPrompt = (body: Required<Pick<RequestBody, 'label' | 'locale'>> & RequestBody) => {
-  return [
-    `Create one square Augmentative and Alternative Communication app tile illustration for the label "${body.label}".`,
-    `Locale: ${body.locale}.`,
-    body.category ? `Category: ${body.category}.` : 'Category: unknown.',
-    'Style: warm, calm, child-friendly flat emoji or pictogram.',
-    'Single clear object preferred, if appropriate.',
-    'Centered composition. Soft edges. Soft color palette.',
-    'No text, unless appropriate. No watermark. No frame. No background.',
-    'Make the object instantly recognizable for a preschool child.',
-  ].join(' ');
 };
 
 Deno.serve(async (request: Request) => {
@@ -98,18 +89,23 @@ Deno.serve(async (request: Request) => {
       labelLength: label.length,
       locale,
       category: body.category,
-      promptVersion: PROMPT_VERSION,
+      promptVersion: TILE_IMAGE_PROMPT_VERSION,
       model: getOpenAIImageModel(),
     });
     quotaEventId = quota.eventId;
 
-    const image = await generateTransparentImage(
-      buildPrompt({
-        label,
-        locale,
-        category: body.category,
-      })
-    );
+    const promptInput = { label, locale, category: body.category };
+    let meaning: TileMeaning | null = null;
+    try {
+      meaning = await describeTileMeaning(promptInput);
+    } catch (meaningError) {
+      console.warn(
+        'tile meaning lookup failed, using label-only prompt',
+        meaningError instanceof Error ? meaningError.message : meaningError
+      );
+    }
+
+    const image = await generateTransparentImage(buildTileImagePrompt(promptInput, meaning));
 
     const extension = getExtension(image.mimeType);
     const storagePath =
@@ -154,7 +150,7 @@ Deno.serve(async (request: Request) => {
       width: image.width,
       height: image.height,
       provider: 'openai',
-      promptVersion: PROMPT_VERSION,
+      promptVersion: TILE_IMAGE_PROMPT_VERSION,
       trialRemaining: quota.anonymousLifetimeRemaining,
       quota: {
         rateLimitRemaining: quota.rateLimitRemaining,
