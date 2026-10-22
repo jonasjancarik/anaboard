@@ -229,36 +229,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setTileActionError(null);
 
     try {
-      let payloadOverrides:
-        | {
-            visualType: TileVisualType;
-            imageLocalUri: string | null;
-            imageRemotePath: string | null;
-          }
-        | undefined;
-
-      if (generatedDraft && previewVisualType === "image") {
-        const promoted = await imageDraftService.promoteDraft({
-          profileId: remoteContext?.profileId,
-          tileId: selectedTile.id,
-          draftId: generatedDraft.draftId,
-          draftStoragePath: generatedDraft.storagePath,
-          localUri: generatedDraft.localUri,
-        });
-
-        await applyGeneratedDraft({
-          localUri: promoted.localUri,
-          remotePath: promoted.storagePath,
-        });
-        setVisualType("image");
-        payloadOverrides = {
-          visualType: "image",
-          imageLocalUri: promoted.localUri,
-          imageRemotePath: promoted.storagePath,
-        };
-      }
-
-      const payload = buildTileUpdatePayload(payloadOverrides);
+      const payload = buildTileUpdatePayload();
       if (!payload) {
         return;
       }
@@ -292,10 +263,6 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     if (effectiveLabel.trim()) {
       if (!isEmojiSuggestionsLoading && emojiSuggestions.length === 0) {
         void requestEmojiSuggestions();
-      }
-
-      if (!generatedDraft && !isGeneratingAiImage) {
-        void handleGenerateAiImage();
       }
     }
   };
@@ -603,6 +570,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         }}
         onEmojiSelected={(selected: EmojiType) => {
           setEmoji(selected.emoji);
+          setVisualType("emoji");
           setTileActionError(null);
           setIsEmojiPickerOpen(false);
         }}
@@ -617,6 +585,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         locale={locale}
         onChange={(nextEmoji) => {
           setEmoji(nextEmoji);
+          setVisualType("emoji");
           setTileActionError(null);
         }}
         onClose={() => {
@@ -628,45 +597,39 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         visible={isVisualMenuOpen}
         locale={locale}
         hasPreviewImage={hasPreviewImage}
-        showGenerateImageAction={aiGeneratedTileImagesEnabled}
-        canGenerateImage={Boolean(effectiveLabel.trim())}
+        showSuggestionsAction={
+          aiEmojiSuggestionsEnabled || aiGeneratedTileImagesEnabled
+        }
+        canSuggest={Boolean(effectiveLabel.trim())}
         isGeneratingImage={isGeneratingAiImage}
         onClose={() => {
           setIsVisualMenuOpen(false);
         }}
         onSelectEmoji={() => {
           setIsVisualMenuOpen(false);
-          setVisualType("emoji");
-          clearGeneratedDraft();
           setIsEmojiKeyboardModalOpen(false);
           setIsEmojiPickerOpen(true);
           setTileActionError(null);
         }}
         onSelectEmojiKeyboard={() => {
           setIsVisualMenuOpen(false);
-          setVisualType("emoji");
-          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(true);
           setTileActionError(null);
         }}
         onSelectPhotoLibrary={() => {
           setIsVisualMenuOpen(false);
-          setVisualType("image");
-          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(false);
           void pickImageFromLibrary();
         }}
         onSelectCamera={() => {
           setIsVisualMenuOpen(false);
-          setVisualType("image");
-          clearGeneratedDraft();
           setIsEmojiPickerOpen(false);
           setIsEmojiKeyboardModalOpen(false);
           void takePhoto();
         }}
-        onGenerateImage={() => {
+        onOpenSuggestions={() => {
           openSmartSuggestions();
         }}
         onRemoveImage={() => {
@@ -688,6 +651,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         generatedImageRemotePath={generatedDraft?.previewUrl}
         emojiSuggestions={emojiSuggestions}
         isEmojiLoading={isEmojiSuggestionsLoading}
+        emojiError={emojiSuggestionError}
+        showEmojiSection={aiEmojiSuggestionsEnabled}
+        showImageSection={aiGeneratedTileImagesEnabled}
         isImageLoading={isGeneratingAiImage}
         isImageApplying={isApplyingAiImage}
         hasGeneratedImage={Boolean(generatedDraft)}

@@ -378,7 +378,7 @@ export const EN_APP_COPY: LocaleCopy = {
       photoLibrary: "Photo from library",
       camera: "Take photo",
       generatingImage: "Creating image...",
-      generateImage: "Generate image",
+      suggestIcon: "Suggest an icon",
       title: "Tile icon",
       subtitle: "Choose how to edit the tile.",
       removePhoto: "Remove photo",

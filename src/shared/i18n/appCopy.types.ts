@@ -332,7 +332,7 @@ export type LocaleCopy = {
     photoLibrary: string;
     camera: string;
     generatingImage: string;
-    generateImage: string;
+    suggestIcon: string;
     title: string;
     subtitle: string;
     removePhoto: string;

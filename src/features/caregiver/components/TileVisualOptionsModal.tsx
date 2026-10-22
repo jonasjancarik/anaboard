@@ -12,15 +12,15 @@ import { getAppCopy } from "../../../shared/i18n/appCopy";
 type TileVisualOptionsModalProps = {
   visible: boolean;
   hasPreviewImage: boolean;
-  showGenerateImageAction: boolean;
-  canGenerateImage: boolean;
+  showSuggestionsAction: boolean;
+  canSuggest: boolean;
   isGeneratingImage: boolean;
   onClose: () => void;
   onSelectEmoji: () => void;
   onSelectEmojiKeyboard: () => void;
   onSelectPhotoLibrary: () => void;
   onSelectCamera: () => void;
-  onGenerateImage: () => void;
+  onOpenSuggestions: () => void;
   onRemoveImage: () => void;
   locale?: unknown;
 };
@@ -28,15 +28,15 @@ type TileVisualOptionsModalProps = {
 export const TileVisualOptionsModal = ({
   visible,
   hasPreviewImage,
-  showGenerateImageAction,
-  canGenerateImage,
+  showSuggestionsAction,
+  canSuggest,
   isGeneratingImage,
   onClose,
   onSelectEmoji,
   onSelectEmojiKeyboard,
   onSelectPhotoLibrary,
   onSelectCamera,
-  onGenerateImage,
+  onOpenSuggestions,
   onRemoveImage,
   locale,
 }: TileVisualOptionsModalProps) => {
@@ -50,12 +50,12 @@ export const TileVisualOptionsModal = ({
     },
     { label: copy.photoLibrary, onPress: onSelectPhotoLibrary, disabled: false },
     { label: copy.camera, onPress: onSelectCamera, disabled: false },
-    ...(showGenerateImageAction
+    ...(showSuggestionsAction
       ? [
           {
-            label: isGeneratingImage ? copy.generatingImage : copy.generateImage,
-            onPress: onGenerateImage,
-            disabled: !canGenerateImage || isGeneratingImage,
+            label: isGeneratingImage ? copy.generatingImage : copy.suggestIcon,
+            onPress: onOpenSuggestions,
+            disabled: !canSuggest || isGeneratingImage,
           },
         ]
       : []),

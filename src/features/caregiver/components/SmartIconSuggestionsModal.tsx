@@ -17,6 +17,9 @@ type SmartIconSuggestionsModalProps = {
   generatedImageRemotePath?: string | null;
   emojiSuggestions: EmojiSuggestion[];
   isEmojiLoading: boolean;
+  emojiError: string | null;
+  showEmojiSection: boolean;
+  showImageSection: boolean;
   isImageLoading: boolean;
   isImageApplying: boolean;
   hasGeneratedImage: boolean;
@@ -41,6 +44,9 @@ export const SmartIconSuggestionsModal = ({
   generatedImageRemotePath,
   emojiSuggestions,
   isEmojiLoading,
+  emojiError,
+  showEmojiSection,
+  showImageSection,
   isImageLoading,
   isImageApplying,
   hasGeneratedImage,
@@ -84,82 +90,86 @@ export const SmartIconSuggestionsModal = ({
             <Text style={styles.previewLabel}>{copy.smartIcon.currentPreview}</Text>
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{copy.smartIcon.emojiSuggestions}</Text>
-              {isEmojiLoading ? (
-                <Text style={styles.sectionHint}>{copy.smartIcon.searching}</Text>
-              ) : null}
-            </View>
-
-            {emojiSuggestions.length > 0 ? (
-              <View style={styles.emojiWrap}>
-                {emojiSuggestions.map((suggestion) => (
-                  <Pressable
-                    key={`${suggestion.value}:${suggestion.confidence}`}
-                    style={styles.emojiChip}
-                    onPress={() => onSelectEmoji(suggestion.value)}
-                  >
-                    <Text style={styles.emojiChipText}>{suggestion.value}</Text>
-                  </Pressable>
-                ))}
+          {showEmojiSection ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{copy.smartIcon.emojiSuggestions}</Text>
+                {isEmojiLoading ? (
+                  <Text style={styles.sectionHint}>{copy.smartIcon.searching}</Text>
+                ) : null}
               </View>
-            ) : !isEmojiLoading ? (
-              <Text style={styles.emptyText}>{copy.smartIcon.noEmoji}</Text>
-            ) : null}
-          </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{copy.smartIcon.imageSuggestion}</Text>
-              {isImageLoading ? (
-                <Text style={styles.sectionHint}>{copy.smartIcon.generating}</Text>
+              {emojiSuggestions.length > 0 ? (
+                <View style={styles.emojiWrap}>
+                  {emojiSuggestions.map((suggestion) => (
+                    <Pressable
+                      key={`${suggestion.value}:${suggestion.confidence}`}
+                      style={styles.emojiChip}
+                      onPress={() => onSelectEmoji(suggestion.value)}
+                    >
+                      <Text style={styles.emojiChipText}>{suggestion.value}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : !isEmojiLoading ? (
+                <Text style={styles.emptyText}>{emojiError ?? copy.smartIcon.noEmoji}</Text>
               ) : null}
             </View>
+          ) : null}
 
-            {hasGeneratedImage ? (
-              <View style={styles.imageCard}>
-                <TileVisual
-                  emoji={previewEmoji}
-                  visualType="image"
-                  imageLocalUri={generatedImageLocalUri}
-                  imageRemotePath={generatedImageRemotePath}
-                  size={92}
-                />
+          {showImageSection ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{copy.smartIcon.imageSuggestion}</Text>
+                {isImageLoading ? (
+                  <Text style={styles.sectionHint}>{copy.smartIcon.generating}</Text>
+                ) : null}
+              </View>
+
+              {hasGeneratedImage ? (
+                <View style={styles.imageCard}>
+                  <TileVisual
+                    emoji={previewEmoji}
+                    visualType="image"
+                    imageLocalUri={generatedImageLocalUri}
+                    imageRemotePath={generatedImageRemotePath}
+                    size={92}
+                  />
+                  <View style={styles.imageActions}>
+                    <Pressable
+                      style={[
+                        styles.primaryButton,
+                        isImageActionDisabled && styles.disabledButton,
+                      ]}
+                      onPress={onUseGeneratedImage}
+                      disabled={isImageActionDisabled}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        {isImageApplying ? copy.imageDraft.applying : copy.smartIcon.useImage}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.secondaryButton,
+                        isImageActionDisabled && styles.disabledButton,
+                      ]}
+                      onPress={onRegenerateImage}
+                      disabled={isImageActionDisabled}
+                    >
+                      <Text style={styles.secondaryButtonText}>{copy.smartIcon.retryImage}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : isImageLoading ? null : (
                 <View style={styles.imageActions}>
-                  <Pressable
-                    style={[
-                      styles.primaryButton,
-                      isImageActionDisabled && styles.disabledButton,
-                    ]}
-                    onPress={onUseGeneratedImage}
-                    disabled={isImageActionDisabled}
-                  >
-                    <Text style={styles.primaryButtonText}>
-                      {isImageApplying ? copy.imageDraft.applying : copy.smartIcon.useImage}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.secondaryButton,
-                      isImageActionDisabled && styles.disabledButton,
-                    ]}
-                    onPress={onRegenerateImage}
-                    disabled={isImageActionDisabled}
-                  >
-                    <Text style={styles.secondaryButtonText}>{copy.smartIcon.retryImage}</Text>
+                  <Text style={styles.emptyText}>{copy.smartIcon.noImage}</Text>
+                  <Pressable style={styles.secondaryButton} onPress={onRegenerateImage}>
+                    <Text style={styles.secondaryButtonText}>{copy.smartIcon.suggestImage}</Text>
                   </Pressable>
                 </View>
-              </View>
-            ) : isImageLoading ? null : (
-              <View style={styles.imageActions}>
-                <Text style={styles.emptyText}>{copy.smartIcon.noImage}</Text>
-                <Pressable style={styles.secondaryButton} onPress={onRegenerateImage}>
-                  <Text style={styles.secondaryButtonText}>{copy.smartIcon.suggestImage}</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
+              )}
+            </View>
+          ) : null}
 
           {error ? (
             <View style={styles.errorWrap}>

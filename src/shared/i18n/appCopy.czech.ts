@@ -378,7 +378,7 @@ export const CS_APP_COPY: LocaleCopy = {
       photoLibrary: "Fotka z knihovny",
       camera: "Vyfotit",
       generatingImage: "Vytvářím obrázek...",
-      generateImage: "Vygenerovat obrázek",
+      suggestIcon: "Navrhnout ikonu",
       title: "Ikona dlaždice",
       subtitle: "Vyber, jak chceš dlaždici upravit.",
       removePhoto: "Odebrat fotku",
