@@ -42,6 +42,7 @@
 
   <h2>Bez přihlášení zůstává vše v zařízení</h2>
   <p>Aplikaci můžete používat bez účtu. Tabule, dlaždice, fotky, nahrávky hlasu, uložené fráze i nastavení se pak ukládají jen v telefonu nebo tabletu a nikam se neodesílají.</p>
+  <p>Aby fungovaly AI pomocníci popsaní níže, vytvoří si aplikace při prvním spuštění anonymní technický identifikátor. Neobsahuje e-mail ani jiné údaje o vás a slouží jen k tomu, abychom mohli omezit počet AI obrázků na jedno zařízení.</p>
 
   <h2>Když zapnete synchronizaci</h2>
   <p>Přihlášení e-mailem je dobrovolné a slouží k tomu, aby rodina měla stejnou tabuli na více zařízeních a nepřišla o ni při výměně telefonu. Po přihlášení se do cloudu ukládá:</p>
@@ -50,9 +51,15 @@
     <li>jméno profilu dítěte a zvolený tvar oslovení, aby věty zněly gramaticky správně,</li>
     <li>tabule a dlaždice: texty, emoji, vlastní fotky a nahrávky hlasu,</li>
     <li>uložené fráze a historie vyslovených frází, ze které aplikace navrhuje další slova,</li>
-    <li>nastavení aplikace, například hlas, rychlost řeči nebo podobu tabule.</li>
+    <li>nastavení aplikace, například hlas, rychlost řeči nebo podobu tabule,</li>
+    <li>obrázky vytvořené AI pomocníkem.</li>
   </ul>
   <p>Data ukládáme u služby <a href="https://supabase.com/privacy">Supabase</a> na serverech v Evropské unii (Irsko). Fotky a nahrávky nejsou veřejné. Přístup k datům rodiny má jen ten, kdo se přihlásí jejím e-mailem.</p>
+
+  <h2>AI pomocníci</h2>
+  <p>Při úpravě dlaždice vám aplikace může navrhnout vhodné emoji nebo nakreslit obrázek. Pro tyto návrhy posíláme službě <a href="https://openai.com/policies/privacy-policy/">OpenAI</a> jen text dlaždice, její kategorii, jazyk a u emoji také ty, které už dlaždice má. Vaše fotky, nahrávky, fráze, e-mail ani jméno dítěte se do OpenAI neposílají.</p>
+  <p>Požadavky jdou přes náš server, takže OpenAI nevidí, z jakého zařízení přišly. OpenAI je zpracovává na serverech v USA, nepoužívá je k trénování svých modelů a podle svých pravidel je smaže nejpozději do 30 dnů. Vygenerovaný obrázek se uloží v naší databázi Supabase v EU, odkud si ho aplikace stáhne k dlaždici. U každého vytvořeného obrázku si zaznamenáme čas a délku textu, abychom mohli hlídat limity, ale samotný text dlaždice v tomto záznamu neukládáme.</p>
+  <p>Pokud AI návrhy nepoužijete, nic se do OpenAI neodesílá.</p>
 
   <h2>Hlášení chyb</h2>
   <p>Některé verze aplikace mohou při pádu odeslat technický záznam o chybě do služby <a href="https://sentry.io/privacy/">Sentry</a>, abychom chybu mohli opravit. Záznam neobsahuje e-mail, texty dlaždic, fráze, fotky ani nahrávky. Diagnostické údaje z nastavení aplikace se odesílají jen tehdy, když je sami sdílíte, například e-mailem.</p>
