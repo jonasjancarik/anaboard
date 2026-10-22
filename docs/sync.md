@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-22
 
-Read when: changing sync queue processing, cloud restore, initial bind conflict handling, Supabase sync schema, or multi-device merge behavior.
+Read when: changing sync queue processing, background pull skipping, cloud restore, initial bind conflict handling, Supabase sync schema, or multi-device merge behavior.
 
 ## Product Jobs
 
@@ -26,6 +26,19 @@ Failed events are retried automatically. After each failed upload the next autom
 `applyRemoteSnapshot` refuses to apply while any local change is still queued (`pending` or `error`). This covers edits made while a pull was downloading. The check runs once before media downloads and again inside the write transaction. A skipped pull returns `local_changes_pending` and the next run uploads the edit first.
 
 Explicit restores ("Použít data z cloudu" and the automatic first bind of an untouched device) pass `discardUnsyncedEventsThrough`, which drops only the changes that existed when the restore started, inside the same transaction. Changes queued after that still block the restore.
+
+## Skipping Unchanged Pulls
+
+Background sync runs every 20 s and always fetches the cloud snapshot, but it does not rewrite local rows or refresh the board when nothing changed. After each applied pull the service stores a SHA-256 fingerprint of the fetched snapshot (plus the profile id) in `app_meta` (`sync_last_applied_snapshot_fingerprint`). A later background run skips `applyRemoteSnapshot` and `onDataChanged` only when:
+
+- the fetched snapshot has the same fingerprint, and
+- the same run uploaded no queued changes.
+
+The first background pull after the app starts always applies, so cached pictures or recordings that disappeared locally are downloaded again.
+
+Any upload means apply, because the conflict policy can skip an upload and leave a newer cloud row that still has to reach the device. The fingerprint is cleared before "Použít data z cloudu" and "Použít data z tohoto telefonu", and whenever the bound profile changes, so those paths always apply. The pure rules live in `syncRunPolicy.ts` (`buildSnapshotFingerprintSource`, `canSkipRemoteApply`).
+
+Uploaded (`synced`) queue rows are pruned after 7 days, at most once an hour after a successful run. Only `pending` and `error` rows matter for sync, diagnostics and migrations.
 
 ## Large Tables
 

@@ -1,9 +1,12 @@
+import * as Crypto from 'expo-crypto';
 import * as Network from 'expo-network';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { RemoteContext } from '../auth/types';
 import { logError, logEvent } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
+import { getDatabase } from '../../shared/storage/db';
+import type { MigrationDatabase } from '../../shared/storage/migrations';
 import {
   clearUnsyncedSyncEventsThrough,
   countErroredSyncEvents,
@@ -28,10 +31,12 @@ import {
 } from './remoteSyncRepository';
 import {
   getBoundSyncProfileId,
+  getLastAppliedSnapshotFingerprint,
   recordSuccessfulPull,
   recordSuccessfulSync,
   setLastSyncIssue,
   setBoundSyncProfileId,
+  setLastAppliedSnapshotFingerprint,
 } from './syncStateRepository';
 import {
   uploadAudioClipToSupabase,
@@ -39,7 +44,13 @@ import {
 } from './supabaseMediaSync';
 import { canSafelyDiscardLocalStateForInitialBind, SyncIssueError } from './initialBindGuard';
 import { shouldApplyLocalChange } from './syncConflictPolicy';
-import { getAutoRetryDelayMs } from './syncRunPolicy';
+import {
+  buildSnapshotFingerprintSource,
+  canSkipRemoteApply,
+  getAutoRetryDelayMs,
+  pruneSyncedEventsBefore,
+  SYNCED_EVENT_RETENTION_MS,
+} from './syncRunPolicy';
 import type { SyncActionErrorCode, SyncRunResult } from './types';
 
 type SyncCallbacks = {
@@ -61,6 +72,7 @@ export class SyncActionError extends Error {
 const SYNC_INTERVAL_MS = 20_000;
 const MAX_AUTO_RETRY_DELAY_MS = 15 * 60_000;
 const SYNC_BATCH_SIZE = 100;
+const SYNCED_EVENT_PRUNE_INTERVAL_MS = 60 * 60_000;
 const EVENT_PRIORITY: Record<EntityType, number> = {
   boards: 0,
   profile_settings: 1,
@@ -124,6 +136,11 @@ class SyncService {
 
   private nextAutoRetryAt = 0;
 
+  private lastSyncedEventPruneAt = 0;
+
+  // The first pull after start always applies, so missing cached media files get downloaded again.
+  private hasAppliedSinceStart = false;
+
   public setRuntime = (params: {
     remoteContext: RemoteContext | null;
     isAuthenticated: boolean;
@@ -135,6 +152,7 @@ class SyncService {
   public start = (callbacks: SyncCallbacks): void => {
     this.callbacks = callbacks;
     this.stop();
+    this.hasAppliedSinceStart = false;
 
     void this.runOnce();
 
@@ -178,6 +196,7 @@ class SyncService {
       try {
         await this.ensureOnline();
         this.callbacks.onStatusChange?.('syncing');
+        await setLastAppliedSnapshotFingerprint(null);
         await this.replaceCloudSnapshotWithLocal(context);
         await setBoundSyncProfileId(context.profileId);
         await setLastSyncIssue(null);
@@ -204,6 +223,7 @@ class SyncService {
         await this.ensureOnline();
         this.callbacks.onStatusChange?.('syncing');
         const maxEventId = await getMaxUnsyncedSyncEventId();
+        await setLastAppliedSnapshotFingerprint(null);
         const result = await this.pullRemoteSnapshot({ discardUnsyncedEventsThrough: maxEventId });
         if (result === 'empty') {
           throw new SyncActionError('cloud_empty', 'Cloud data is empty.');
@@ -319,8 +339,8 @@ class SyncService {
         await retryErroredSyncEvents();
       }
 
-      const didPushPendingEvents = await this.pushAllPendingEvents();
-      const erroredEvents = didPushPendingEvents ? await countErroredSyncEvents() : 1;
+      const uploadedEventCount = await this.pushAllPendingEvents();
+      const erroredEvents = uploadedEventCount === null ? 1 : await countErroredSyncEvents();
       if (erroredEvents > 0) {
         this.scheduleAutoRetry();
         this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
@@ -328,10 +348,13 @@ class SyncService {
       }
 
       this.resetAutoRetry();
-      const pullResult = await this.pullRemoteSnapshot();
+      const pullResult = await this.pullRemoteSnapshot({
+        skipIfUnchanged: { uploadedEventCount: uploadedEventCount ?? 0 },
+      });
       await setBoundSyncProfileId(context.profileId);
       await setLastSyncIssue(null);
       await recordSuccessfulSync();
+      await this.pruneOldSyncedEvents();
       this.callbacks.onPendingCountChange?.(0);
       this.callbacks.onStatusChange?.('idle');
       return pullResult === 'local_changes_pending' ? 'deferred' : 'synced';
@@ -398,7 +421,8 @@ class SyncService {
     return this.remoteContext;
   };
 
-  private pushAllPendingEvents = async (): Promise<boolean> => {
+  /** Uploads every queued change. Returns how many were uploaded, or null when one failed. */
+  private pushAllPendingEvents = async (): Promise<number | null> => {
     let syncedCount = 0;
 
     while (true) {
@@ -411,12 +435,12 @@ class SyncService {
             count: syncedCount,
           });
         }
-        return true;
+        return syncedCount;
       }
 
       const pending = sortPendingEvents(await getPendingSyncEvents(SYNC_BATCH_SIZE));
       if (pending.length === 0) {
-        return true;
+        return syncedCount;
       }
 
       const pushResult = await this.pushPendingEvents(pending);
@@ -432,26 +456,71 @@ class SyncService {
             count: syncedCount,
           });
         }
-        return false;
+        return null;
       }
     }
   };
 
+  /**
+   * Fetches the cloud snapshot and applies it locally. With `skipIfUnchanged`, a background run
+   * leaves local data and the board untouched when the cloud has not changed since the last apply.
+   */
   private pullRemoteSnapshot = async (
-    options: { discardUnsyncedEventsThrough?: number | null } = {}
-  ): Promise<ApplyRemoteSnapshotResult> => {
-    if (!this.remoteContext) {
+    options: {
+      discardUnsyncedEventsThrough?: number | null;
+      skipIfUnchanged?: { uploadedEventCount: number };
+    } = {}
+  ): Promise<ApplyRemoteSnapshotResult | 'unchanged'> => {
+    const context = this.remoteContext;
+    if (!context) {
       return 'empty';
     }
 
-    const snapshot = await fetchRemoteSnapshot(this.remoteContext);
-    const result = await applyRemoteSnapshot(snapshot, options);
+    const snapshot = await fetchRemoteSnapshot(context);
+    const fingerprint = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      buildSnapshotFingerprintSource(context.profileId, snapshot)
+    );
+
+    if (
+      options.skipIfUnchanged &&
+      this.hasAppliedSinceStart &&
+      canSkipRemoteApply({
+        fingerprint,
+        lastAppliedFingerprint: await getLastAppliedSnapshotFingerprint(),
+        uploadedEventCount: options.skipIfUnchanged.uploadedEventCount,
+      })
+    ) {
+      await recordSuccessfulPull();
+      return 'unchanged';
+    }
+
+    const result = await applyRemoteSnapshot(snapshot, {
+      discardUnsyncedEventsThrough: options.discardUnsyncedEventsThrough,
+    });
     if (result === 'applied') {
+      this.hasAppliedSinceStart = true;
+      await setLastAppliedSnapshotFingerprint(fingerprint);
       await recordSuccessfulPull();
       this.callbacks.onDataChanged?.();
     }
 
     return result;
+  };
+
+  private pruneOldSyncedEvents = async (): Promise<void> => {
+    const now = Date.now();
+    if (now - this.lastSyncedEventPruneAt < SYNCED_EVENT_PRUNE_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastSyncedEventPruneAt = now;
+    try {
+      const db = (await getDatabase()) as unknown as MigrationDatabase;
+      await pruneSyncedEventsBefore(db, new Date(now - SYNCED_EVENT_RETENTION_MS).toISOString());
+    } catch (error) {
+      logError('sync_prune_synced_events_failed', error);
+    }
   };
 
   private replaceCloudSnapshotWithLocal = async (context: RemoteContext): Promise<void> => {

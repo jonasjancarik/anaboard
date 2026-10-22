@@ -7,6 +7,7 @@ const APP_META_KEYS = {
   lastSuccessfulSyncAt: 'sync_last_success_at',
   lastPullAt: 'sync_last_pull_at',
   lastIssue: 'sync_last_issue',
+  lastAppliedSnapshotFingerprint: 'sync_last_applied_snapshot_fingerprint',
 } as const;
 
 type AppMetaRow = {
@@ -74,7 +75,21 @@ export const getBoundSyncProfileId = async (): Promise<string | null> => {
 };
 
 export const setBoundSyncProfileId = async (profileId: string | null): Promise<void> => {
+  const previousProfileId = await getMetaValue(APP_META_KEYS.boundProfileId);
+  if (previousProfileId !== profileId) {
+    await setMetaValue(APP_META_KEYS.lastAppliedSnapshotFingerprint, null);
+  }
   await setMetaValue(APP_META_KEYS.boundProfileId, profileId);
+};
+
+export const getLastAppliedSnapshotFingerprint = async (): Promise<string | null> => {
+  return getMetaValue(APP_META_KEYS.lastAppliedSnapshotFingerprint);
+};
+
+export const setLastAppliedSnapshotFingerprint = async (
+  fingerprint: string | null
+): Promise<void> => {
+  await setMetaValue(APP_META_KEYS.lastAppliedSnapshotFingerprint, fingerprint);
 };
 
 export const setLastSyncIssue = async (issueCode: SyncIssueCode | null): Promise<void> => {

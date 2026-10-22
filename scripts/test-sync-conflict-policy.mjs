@@ -4,11 +4,14 @@ import { DatabaseSync } from 'node:sqlite';
 
 const { shouldApplyLocalChange } = await import('../src/features/sync/syncConflictPolicy.ts');
 const {
+  buildSnapshotFingerprintSource,
+  canSkipRemoteApply,
   countUnsyncedEventsAfter,
   discardUnsyncedEventsThrough,
   fetchAllPages,
   getAutoRetryDelayMs,
   isSameSyncTimestamp,
+  pruneSyncedEventsBefore,
 } = await import('../src/features/sync/syncRunPolicy.ts');
 const { migrateDatabaseSchema } = await import('../src/shared/storage/migrations.ts');
 
@@ -153,6 +156,95 @@ assert.equal(getAutoRetryDelayMs(20, 20_000, 900_000), 900_000);
     [1, 'synced'],
     [editedDuringRestore, 'pending'],
   ]);
+  database.close();
+}
+
+// Background pulls skip the local rewrite only when the cloud snapshot is unchanged and nothing
+// was uploaded in the same run.
+{
+  const snapshot = {
+    boards: [{ id: 'b1', name: 'Doma', updated_at: '2026-05-21T10:00:00+00:00' }],
+    tiles: [{ id: 't1', label_cs: 'pít', image_remote_path: null }],
+    settings: null,
+  };
+  const reordered = {
+    settings: null,
+    tiles: [{ image_remote_path: undefined, label_cs: 'pít', id: 't1' }],
+    boards: [{ updated_at: '2026-05-21T10:00:00+00:00', name: 'Doma', id: 'b1' }],
+  };
+  const source = buildSnapshotFingerprintSource('p1', snapshot);
+  assert.equal(source, buildSnapshotFingerprintSource('p1', reordered), 'key order is ignored');
+  assert.notEqual(source, buildSnapshotFingerprintSource('p2', snapshot), 'profile is part of it');
+  assert.notEqual(
+    source,
+    buildSnapshotFingerprintSource('p1', {
+      ...snapshot,
+      tiles: [{ ...snapshot.tiles[0], label_cs: 'jíst' }],
+    }),
+    'an edit from another device changes it'
+  );
+  assert.notEqual(
+    source,
+    buildSnapshotFingerprintSource('p1', {
+      ...snapshot,
+      boards: [{ ...snapshot.boards[0], updated_at: '2026-05-21T10:00:01+00:00' }],
+    }),
+    'a newer timestamp changes it'
+  );
+
+  assert.equal(
+    canSkipRemoteApply({ fingerprint: 'a', lastAppliedFingerprint: 'a', uploadedEventCount: 0 }),
+    true
+  );
+  assert.equal(
+    canSkipRemoteApply({ fingerprint: 'a', lastAppliedFingerprint: 'a', uploadedEventCount: 1 }),
+    false,
+    'any upload means apply'
+  );
+  assert.equal(
+    canSkipRemoteApply({ fingerprint: 'a', lastAppliedFingerprint: 'b', uploadedEventCount: 0 }),
+    false
+  );
+  assert.equal(
+    canSkipRemoteApply({ fingerprint: 'a', lastAppliedFingerprint: null, uploadedEventCount: 0 }),
+    false,
+    'cleared fingerprint (restore, keep local, new profile) means apply'
+  );
+}
+
+// Uploaded changes older than the cutoff are pruned; queued and failed changes are kept.
+{
+  const database = new DatabaseSync(':memory:');
+  const db = {
+    execAsync: async (source) => database.exec(source),
+    runAsync: async (source, ...params) => database.prepare(source).run(...params),
+    getFirstAsync: async (source, ...params) => database.prepare(source).get(...params) ?? null,
+    getAllAsync: async (source, ...params) => database.prepare(source).all(...params),
+    withTransactionAsync: async (task) => task(),
+  };
+  await migrateDatabaseSchema(db);
+
+  const insert = (status, createdAt, syncedAt) =>
+    Number(
+      database
+        .prepare(
+          "INSERT INTO sync_events (entity_type, entity_id, operation, payload, created_at, synced_at, status) VALUES ('tiles', 't1', 'upsert', '{}', ?, ?, ?)"
+        )
+        .run(createdAt, syncedAt, status).lastInsertRowid
+    );
+
+  insert('synced', '2026-05-01T10:00:00.000Z', '2026-05-01T10:00:05.000Z');
+  insert('synced', '2026-05-01T10:00:00.000Z', null);
+  const recentSynced = insert('synced', '2026-05-01T10:00:00.000Z', '2026-05-20T10:00:00.000Z');
+  const oldPending = insert('pending', '2026-05-01T10:00:00.000Z', null);
+  const oldError = insert('error', '2026-05-01T10:00:00.000Z', null);
+
+  await pruneSyncedEventsBefore(db, '2026-05-14T10:00:00.000Z');
+  const remaining = database
+    .prepare('SELECT id FROM sync_events ORDER BY id')
+    .all()
+    .map((row) => Number(row.id));
+  assert.deepEqual(remaining, [recentSynced, oldPending, oldError]);
   database.close();
 }
 
