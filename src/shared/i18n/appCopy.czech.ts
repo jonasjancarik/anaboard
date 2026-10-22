@@ -339,6 +339,7 @@ export const CS_APP_COPY: LocaleCopy = {
       stopTest: "■ Stop",
       record: "● Nahrát",
       recordingEmpty: "Nahrávka je prázdná",
+      microphonePermission: "Bez přístupu k mikrofonu nejde nahrávat. Povol ho v nastavení telefonu.",
       recordingError: "Nahrávání se nepovedlo",
       noSpeechPreview: "V tomto režimu teď není co přehrát.",
       deleteRecordingError: "Nahrávku nešlo smazat",
@@ -429,8 +430,5 @@ export const CS_APP_COPY: LocaleCopy = {
       unsupportedKicker: "Web verze",
       unsupportedTitle: "Tento prohlížeč teď ÁňaBoard neutáhne",
       unsupportedNote: "Na telefonu nestačí `http://192.168…`. Použij HTTPS nebo Expo tunnel.",
-      deviceAuthUnavailableTitle: "Ověření není dostupné",
-      deviceAuthUnavailableBody:
-        "Telefon nemá dostupné systémové ověření. Zapni v nastavení volbu „Vlastní PIN v aplikaci“.",
     },
   };

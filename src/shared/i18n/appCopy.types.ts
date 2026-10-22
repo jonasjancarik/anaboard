@@ -293,6 +293,7 @@ export type LocaleCopy = {
     stopTest: string;
     record: string;
     recordingEmpty: string;
+    microphonePermission: string;
     recordingError: string;
     noSpeechPreview: string;
     deleteRecordingError: string;
@@ -372,7 +373,5 @@ export type LocaleCopy = {
     unsupportedKicker: string;
     unsupportedTitle: string;
     unsupportedNote: string;
-    deviceAuthUnavailableTitle: string;
-    deviceAuthUnavailableBody: string;
   };
 };

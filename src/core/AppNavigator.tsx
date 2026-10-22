@@ -1,4 +1,4 @@
-import { Alert, BackHandler, StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { BoardScreen } from '../features/board/screens/BoardScreen';
@@ -118,13 +118,13 @@ export const AppNavigator = () => {
       return true;
     }
 
+    // Without a phone screen lock there is nothing to verify against, so fall back to the
+    // in-app PIN. Showing an alert here locked people out: the PIN setting lives in Settings,
+    // which is itself behind this lock.
     const nativeAvailable = await canUseNativeCaregiverAuth();
     if (!nativeAvailable) {
-      Alert.alert(
-        copy.screen.deviceAuthUnavailableTitle,
-        copy.screen.deviceAuthUnavailableBody
-      );
-      return false;
+      navigate('caregiverGate');
+      return true;
     }
 
     const result = await authenticateWithDeviceForCaregiver(board?.locale);

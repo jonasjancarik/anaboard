@@ -339,6 +339,7 @@ export const EN_APP_COPY: LocaleCopy = {
       stopTest: "■ Stop",
       record: "● Record",
       recordingEmpty: "Recording is empty",
+      microphonePermission: "Recording needs microphone access. Allow it in the phone settings.",
       recordingError: "Recording failed",
       noSpeechPreview: "There is nothing to play in this mode right now.",
       deleteRecordingError: "Recording could not be deleted",
@@ -425,8 +426,5 @@ export const EN_APP_COPY: LocaleCopy = {
       unsupportedKicker: "Web version",
       unsupportedTitle: "This browser cannot run ÁňaBoard right now",
       unsupportedNote: "On a phone, `http://192.168...` is not enough. Use HTTPS or an Expo tunnel.",
-      deviceAuthUnavailableTitle: "Verification is unavailable",
-      deviceAuthUnavailableBody:
-        "This phone does not have system verification available. Turn on App PIN in settings.",
     },
   };
