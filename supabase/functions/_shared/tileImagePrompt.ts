@@ -65,9 +65,9 @@ export const describeTileMeaning = async (input: TileImagePromptInput): Promise<
 };
 
 const SUBJECT_RULES: Record<TileSubjectKind, string> = {
-  person: 'Show only that one person, head and shoulders, friendly and calm. No other people.',
-  feeling: 'Show one simple, friendly round face that clearly expresses it, like an emoji face. No body, no scene.',
-  thing: 'Draw it like a single emoji: one object or symbol. No people, no hands, no scene.',
+  person: 'Show only that one person as an emoji-style person: head and shoulders, friendly and calm. No other people.',
+  feeling: 'Show one round yellow emoji face that clearly expresses it. No body, no scene.',
+  thing: 'Draw it as a single emoji: one object or symbol. No people, no hands, no scene.',
 };
 
 export const buildTileImagePrompt = (
@@ -90,8 +90,8 @@ export const buildTileImagePrompt = (
     'Create one square pictogram for an Augmentative and Alternative Communication (AAC) tile for young children.',
     ...subject,
     input.category ? `Category: ${input.category}.` : null,
-    'Style: warm, calm, child-friendly flat illustration with simple shapes, soft outlines and a soft color palette, readable at 64 pixels.',
-    'Centered, with the whole subject fully inside the canvas and roughly 10% empty margin on every side. Nothing cropped.',
+    'Style: a modern smartphone emoji. Chunky rounded shapes, bright friendly colors, smooth soft shading with a gentle highlight, no outlines or only very subtle ones, minimal detail, readable at 64 pixels.',
+    'Centered and large: the subject fills about 80% of the canvas, fully inside it with a small even margin on every side. Nothing cropped.',
     'Transparent background. No text, letters or numbers. No watermark. No frame. No background scene.',
   ]
     .filter(Boolean)
