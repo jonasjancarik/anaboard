@@ -5,7 +5,6 @@ import type { RemoteContext } from '../auth/types';
 import { logError, logEvent } from '../../shared/telemetry/logger';
 import { hasSupabaseConfig, supabaseClient } from '../../shared/services/supabaseClient';
 import {
-  clearUnsyncedSyncEvents,
   clearUnsyncedSyncEventsThrough,
   countErroredSyncEvents,
   countPendingSyncEvents,
@@ -22,7 +21,9 @@ import {
   fetchRemoteSnapshot,
   getLocalEntitySyncPayload,
   getLocalSnapshotSyncPayloads,
+  recordUploadedTileImagePath,
   remoteSnapshotHasData,
+  type ApplyRemoteSnapshotResult,
   type LocalSnapshotSyncPayloads,
 } from './remoteSyncRepository';
 import {
@@ -38,6 +39,8 @@ import {
 } from './supabaseMediaSync';
 import { canSafelyDiscardLocalStateForInitialBind, SyncIssueError } from './initialBindGuard';
 import { shouldApplyLocalChange } from './syncConflictPolicy';
+import { getAutoRetryDelayMs } from './syncRunPolicy';
+import type { SyncActionErrorCode, SyncRunResult } from './types';
 
 type SyncCallbacks = {
   onStatusChange?: (status: SyncStatus) => void;
@@ -45,7 +48,18 @@ type SyncCallbacks = {
   onDataChanged?: () => void;
 };
 
+export class SyncActionError extends Error {
+  public readonly code: SyncActionErrorCode;
+
+  public constructor(code: SyncActionErrorCode, message: string) {
+    super(message);
+    this.name = 'SyncActionError';
+    this.code = code;
+  }
+}
+
 const SYNC_INTERVAL_MS = 20_000;
+const MAX_AUTO_RETRY_DELAY_MS = 15 * 60_000;
 const SYNC_BATCH_SIZE = 100;
 const EVENT_PRIORITY: Record<EntityType, number> = {
   boards: 0,
@@ -102,7 +116,13 @@ class SyncService {
 
   private isAuthenticated = false;
 
-  private isRunning = false;
+  private activeRun: Promise<unknown> | null = null;
+
+  // Failed uploads are retried automatically with growing pauses so a short network drop
+  // does not leave sync paused until a caregiver notices it.
+  private failedPushAttempts = 0;
+
+  private nextAutoRetryAt = 0;
 
   public setRuntime = (params: {
     remoteContext: RemoteContext | null;
@@ -137,114 +157,130 @@ class SyncService {
     }
   };
 
-  public retryFailed = async (): Promise<void> => {
-    await retryErroredSyncEvents();
-    this.callbacks.onPendingCountChange?.(0);
-    await this.runOnce();
+  /** Background run. Skips when another run is in progress. */
+  public runOnce = async (): Promise<SyncRunResult> => {
+    if (this.activeRun) {
+      return 'busy';
+    }
+
+    return this.runExclusive(() => this.performSync({ retryFailedNow: false }));
+  };
+
+  /** Caregiver-triggered run. Waits for any run in progress and retries failed changes now. */
+  public syncNow = async (): Promise<SyncRunResult> => {
+    return this.runExclusive(() => this.performSync({ retryFailedNow: true }));
   };
 
   public keepLocalStateForInitialBind = async (): Promise<void> => {
     const context = this.getInteractiveRemoteContext();
 
-    if (this.isRunning) {
-      throw new Error('Sync is already running.');
-    }
-
-    this.isRunning = true;
-
-    try {
-      await this.ensureOnline();
-      this.callbacks.onStatusChange?.('syncing');
-      await this.replaceCloudSnapshotWithLocal(context);
-      await setBoundSyncProfileId(context.profileId);
-      await setLastSyncIssue(null);
-      await recordSuccessfulSync();
-      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
-      this.callbacks.onStatusChange?.('idle');
-    } catch (error) {
-      logError('sync_keep_local_for_initial_bind_failed', error, {
-        profile_id: context.profileId,
-      });
-      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
-      this.callbacks.onStatusChange?.('error');
-      throw error;
-    } finally {
-      this.isRunning = false;
-    }
+    await this.runExclusive(async () => {
+      try {
+        await this.ensureOnline();
+        this.callbacks.onStatusChange?.('syncing');
+        await this.replaceCloudSnapshotWithLocal(context);
+        await setBoundSyncProfileId(context.profileId);
+        await setLastSyncIssue(null);
+        await recordSuccessfulSync();
+        this.resetAutoRetry();
+        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+        this.callbacks.onStatusChange?.('idle');
+      } catch (error) {
+        logError('sync_keep_local_for_initial_bind_failed', error, {
+          profile_id: context.profileId,
+        });
+        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+        this.callbacks.onStatusChange?.('error');
+        throw error;
+      }
+    });
   };
 
   public replaceLocalStateWithCloud = async (): Promise<void> => {
     const context = this.getInteractiveRemoteContext();
 
-    if (this.isRunning) {
-      throw new Error('Sync is already running.');
+    await this.runExclusive(async () => {
+      try {
+        await this.ensureOnline();
+        this.callbacks.onStatusChange?.('syncing');
+        const maxEventId = await getMaxUnsyncedSyncEventId();
+        const result = await this.pullRemoteSnapshot({ discardUnsyncedEventsThrough: maxEventId });
+        if (result === 'empty') {
+          throw new SyncActionError('cloud_empty', 'Cloud data is empty.');
+        }
+        if (result === 'local_changes_pending') {
+          throw new SyncActionError(
+            'changed_during_action',
+            'Local data changed while cloud data was loading.'
+          );
+        }
+        await setBoundSyncProfileId(context.profileId);
+        await setLastSyncIssue(null);
+        await recordSuccessfulSync();
+        this.resetAutoRetry();
+        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+        this.callbacks.onStatusChange?.('idle');
+      } catch (error) {
+        logError('sync_replace_local_with_cloud_failed', error, {
+          profile_id: context.profileId,
+        });
+        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+        this.callbacks.onStatusChange?.('error');
+        throw error;
+      }
+    });
+  };
+
+  private runExclusive = async <T>(task: () => Promise<T>): Promise<T> => {
+    while (this.activeRun) {
+      await this.activeRun.catch(() => undefined);
     }
 
-    this.isRunning = true;
+    const run = task();
+    this.activeRun = run;
 
     try {
-      await this.ensureOnline();
-      this.callbacks.onStatusChange?.('syncing');
-      const maxEventId = await getMaxUnsyncedSyncEventId();
-      const applied = await this.pullRemoteSnapshot();
-      if (!applied) {
-        throw new Error('Cloud data is empty.');
-      }
-      await clearUnsyncedSyncEventsThrough(maxEventId);
-      await setBoundSyncProfileId(context.profileId);
-      await setLastSyncIssue(null);
-      await recordSuccessfulSync();
-      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
-      this.callbacks.onStatusChange?.('idle');
-    } catch (error) {
-      logError('sync_replace_local_with_cloud_failed', error, {
-        profile_id: context.profileId,
-      });
-      this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
-      this.callbacks.onStatusChange?.('error');
-      throw error;
+      return await run;
     } finally {
-      this.isRunning = false;
+      if (this.activeRun === run) {
+        this.activeRun = null;
+      }
     }
   };
 
-  public runOnce = async (): Promise<void> => {
-    if (this.isRunning) {
-      return;
-    }
-
+  private performSync = async (options: { retryFailedNow: boolean }): Promise<SyncRunResult> => {
     if (!hasSupabaseConfig || !supabaseClient) {
       this.callbacks.onStatusChange?.('disabled');
-      return;
+      return 'disabled';
     }
 
-    if (!this.isAuthenticated || !this.remoteContext) {
+    const context = this.remoteContext;
+    if (!this.isAuthenticated || !context) {
       this.callbacks.onStatusChange?.('disabled');
-      return;
+      return 'disabled';
     }
-
-    this.isRunning = true;
 
     try {
       if (!(await this.isOnline())) {
         this.callbacks.onStatusChange?.('offline');
-        return;
+        return 'offline';
       }
 
       this.callbacks.onStatusChange?.('syncing');
 
       const boundProfileId = await getBoundSyncProfileId();
-      const isBoundToCurrentProfile = boundProfileId === this.remoteContext.profileId;
+      const isBoundToCurrentProfile = boundProfileId === context.profileId;
 
       if (!isBoundToCurrentProfile) {
-        if (boundProfileId && boundProfileId !== this.remoteContext.profileId) {
+        if (boundProfileId && boundProfileId !== context.profileId) {
           throw new SyncIssueError(
             'profile_switch_requires_review',
             'This device was previously linked to a different cloud profile.'
           );
         }
 
-        const snapshot = await fetchRemoteSnapshot(this.remoteContext);
+        const maxEventId = await getMaxUnsyncedSyncEventId();
+        const snapshot = await fetchRemoteSnapshot(context);
         if (remoteSnapshotHasData(snapshot)) {
           const canDiscardLocalState = await canSafelyDiscardLocalStateForInitialBind();
           if (!canDiscardLocalState) {
@@ -254,41 +290,51 @@ class SyncService {
             );
           }
 
-          const applied = await applyRemoteSnapshot(snapshot);
-          await clearUnsyncedSyncEvents();
+          const result = await applyRemoteSnapshot(snapshot, {
+            discardUnsyncedEventsThrough: maxEventId,
+          });
+          if (result === 'local_changes_pending') {
+            // The board was edited while the cloud data loaded. The next run re-checks it.
+            this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
+            this.callbacks.onStatusChange?.('idle');
+            return 'deferred';
+          }
+
           await recordSuccessfulPull();
-          await setBoundSyncProfileId(this.remoteContext.profileId);
+          await setBoundSyncProfileId(context.profileId);
           await setLastSyncIssue(null);
           await recordSuccessfulSync();
+          this.resetAutoRetry();
           this.callbacks.onPendingCountChange?.(0);
-          if (applied) {
+          if (result === 'applied') {
             this.callbacks.onDataChanged?.();
           }
           this.callbacks.onStatusChange?.('idle');
-          return;
+          return 'synced';
         }
       }
 
+      const shouldRetryFailed = options.retryFailedNow || Date.now() >= this.nextAutoRetryAt;
+      if (shouldRetryFailed && (await countErroredSyncEvents()) > 0) {
+        await retryErroredSyncEvents();
+      }
+
       const didPushPendingEvents = await this.pushAllPendingEvents();
-      if (!didPushPendingEvents) {
-        this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
-        this.callbacks.onStatusChange?.('error');
-        return;
-      }
-
-      const erroredEvents = await countErroredSyncEvents();
+      const erroredEvents = didPushPendingEvents ? await countErroredSyncEvents() : 1;
       if (erroredEvents > 0) {
+        this.scheduleAutoRetry();
         this.callbacks.onPendingCountChange?.(await countPendingSyncEvents());
-        this.callbacks.onStatusChange?.('error');
-        return;
+        return await this.reportFailure();
       }
 
-      await this.pullRemoteSnapshot();
-      await setBoundSyncProfileId(this.remoteContext.profileId);
+      this.resetAutoRetry();
+      const pullResult = await this.pullRemoteSnapshot();
+      await setBoundSyncProfileId(context.profileId);
       await setLastSyncIssue(null);
       await recordSuccessfulSync();
       this.callbacks.onPendingCountChange?.(0);
       this.callbacks.onStatusChange?.('idle');
+      return pullResult === 'local_changes_pending' ? 'deferred' : 'synced';
     } catch (error) {
       if (error instanceof SyncIssueError) {
         await setLastSyncIssue(error.issueCode);
@@ -297,17 +343,33 @@ class SyncService {
         });
         this.callbacks.onPendingCountChange?.(0);
         this.callbacks.onStatusChange?.('error');
-        return;
+        return 'needs_review';
       }
 
       logError('sync_run_failed', error, {
-        profile_id: this.remoteContext.profileId,
+        profile_id: context.profileId,
       });
       this.callbacks.onPendingCountChange?.(0);
-      this.callbacks.onStatusChange?.('error');
-    } finally {
-      this.isRunning = false;
+      return await this.reportFailure();
     }
+  };
+
+  private reportFailure = async (): Promise<SyncRunResult> => {
+    const isOnline = await this.isOnline().catch(() => false);
+    this.callbacks.onStatusChange?.(isOnline ? 'error' : 'offline');
+    return isOnline ? 'error' : 'offline';
+  };
+
+  private scheduleAutoRetry = (): void => {
+    this.failedPushAttempts += 1;
+    this.nextAutoRetryAt =
+      Date.now() +
+      getAutoRetryDelayMs(this.failedPushAttempts, SYNC_INTERVAL_MS, MAX_AUTO_RETRY_DELAY_MS);
+  };
+
+  private resetAutoRetry = (): void => {
+    this.failedPushAttempts = 0;
+    this.nextAutoRetryAt = 0;
   };
 
   private handleAppStateChange = (nextState: AppStateStatus): void => {
@@ -318,22 +380,19 @@ class SyncService {
 
   private isOnline = async (): Promise<boolean> => {
     const networkState = await Network.getNetworkStateAsync();
-    return Boolean(networkState.isConnected && networkState.isInternetReachable);
+    // Unknown reachability (undefined/null) is treated as online; the request itself will tell.
+    return networkState.isConnected !== false && networkState.isInternetReachable !== false;
   };
 
   private ensureOnline = async (): Promise<void> => {
     if (!(await this.isOnline())) {
-      throw new Error('Zařízení je offline.');
+      throw new SyncActionError('offline', 'Device is offline.');
     }
   };
 
   private getInteractiveRemoteContext = (): RemoteContext => {
-    if (!hasSupabaseConfig || !supabaseClient) {
-      throw new Error('Supabase client missing');
-    }
-
-    if (!this.isAuthenticated || !this.remoteContext) {
-      throw new Error('Cloud sync is not ready.');
+    if (!hasSupabaseConfig || !supabaseClient || !this.isAuthenticated || !this.remoteContext) {
+      throw new SyncActionError('not_ready', 'Cloud sync is not ready.');
     }
 
     return this.remoteContext;
@@ -379,27 +438,20 @@ class SyncService {
   };
 
   private pullRemoteSnapshot = async (
-    options: { clearQueueBeforeApply?: boolean } = {}
-  ): Promise<boolean> => {
+    options: { discardUnsyncedEventsThrough?: number | null } = {}
+  ): Promise<ApplyRemoteSnapshotResult> => {
     if (!this.remoteContext) {
-      return false;
+      return 'empty';
     }
 
     const snapshot = await fetchRemoteSnapshot(this.remoteContext);
-    if (!remoteSnapshotHasData(snapshot)) {
-      return false;
-    }
-
-    const applied = await applyRemoteSnapshot(snapshot);
-    if (options.clearQueueBeforeApply) {
-      await clearUnsyncedSyncEvents();
-    }
-    await recordSuccessfulPull();
-    if (applied) {
+    const result = await applyRemoteSnapshot(snapshot, options);
+    if (result === 'applied') {
+      await recordSuccessfulPull();
       this.callbacks.onDataChanged?.();
     }
 
-    return applied;
+    return result;
   };
 
   private replaceCloudSnapshotWithLocal = async (context: RemoteContext): Promise<void> => {
@@ -419,8 +471,14 @@ class SyncService {
       await this.pushPayload('boards', board, { force: true });
     }
 
-    for (const settings of snapshot.settings) {
-      await this.pushPayload('profile_settings', settings, { force: true });
+    // A device can keep settings rows for earlier profiles. Upload only the active board's row
+    // so stale defaults (including the default PIN) never overwrite the cloud settings.
+    const activeProfileId = snapshot.boards.find((board) => board.is_active)?.profile_id;
+    const activeSettings =
+      snapshot.settings.find((settings) => settings.profile_id === activeProfileId) ??
+      snapshot.settings[0];
+    if (activeSettings) {
+      await this.pushPayload('profile_settings', activeSettings, { force: true });
     }
 
     for (const tile of snapshot.tiles) {
@@ -809,11 +867,15 @@ class SyncService {
       payload.image_local_uri.length > 0 &&
       !existingRemotePathMatchesContext
     ) {
-      nextPayload.image_remote_path = await uploadTileImageToSupabase(
+      const uploadedPath = await uploadTileImageToSupabase(
         this.remoteContext,
         String(payload.id),
         payload.image_local_uri
       );
+      nextPayload.image_remote_path = uploadedPath;
+      // Remember the upload so later pushes of this tile skip it and the next pull keeps the
+      // local file instead of downloading it again.
+      await recordUploadedTileImagePath(String(payload.id), payload.image_local_uri, uploadedPath);
     }
 
     return nextPayload;

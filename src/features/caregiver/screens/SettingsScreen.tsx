@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { authService } from '../../auth/authService';
 import { speechEngine } from '../../speech/speechEngine';
-import { syncService } from '../../sync/syncService';
+import { SyncActionError, syncService } from '../../sync/syncService';
 import { CategoryOrderControl } from '../components/CategoryOrderControl';
 import { DiagnosticsSettingsSection } from '../components/DiagnosticsSettingsSection';
 import { SettingChoiceStepper } from '../components/SettingChoiceStepper';
@@ -40,7 +40,7 @@ import {
   type WebPersistenceSmokeSummary,
 } from '../../../shared/storage/webPersistenceSmoke';
 import type { BoardLayoutMode, Category } from '../../../shared/types/domain';
-import type { SyncIssueCode } from '../../sync/types';
+import type { SyncIssueCode, SyncRunResult } from '../../sync/types';
 import { useAppStore } from '../../../store/useAppStore';
 
 type SettingsScreenProps = {
@@ -327,20 +327,58 @@ export const SettingsScreen = ({
     }
   };
 
-  const runSyncAction = async (action: () => Promise<void>, successMessage: string) => {
+  const getSyncActionErrorMessage = (error: unknown): string => {
+    if (!(error instanceof SyncActionError)) {
+      return settingsCopy.cloudSyncError;
+    }
+
+    switch (error.code) {
+      case 'offline':
+        return settingsCopy.syncOfflineMessage;
+      case 'cloud_empty':
+        return settingsCopy.syncCloudEmptyMessage;
+      case 'changed_during_action':
+        return settingsCopy.syncChangedDuringActionMessage;
+      case 'not_ready':
+        return settingsCopy.syncNotReadyMessage;
+    }
+  };
+
+  const getSyncRunMessage = (result: SyncRunResult): { ok: boolean; message: string } => {
+    switch (result) {
+      case 'synced':
+      case 'deferred':
+        return { ok: true, message: settingsCopy.syncChecked };
+      case 'offline':
+        return { ok: false, message: settingsCopy.syncOfflineMessage };
+      case 'needs_review':
+        return { ok: false, message: settingsCopy.syncNeedsChoiceMessage };
+      case 'disabled':
+        return { ok: false, message: settingsCopy.syncNotReadyMessage };
+      case 'busy':
+      case 'error':
+        return { ok: false, message: settingsCopy.cloudSyncError };
+    }
+  };
+
+  const runSyncAction = async (
+    action: () => Promise<SyncRunResult | void>,
+    successMessage: string
+  ) => {
     setIsSyncActionRunning(true);
     setMessage(null);
 
     try {
-      await action();
+      const result = await action();
       await refreshBoard();
       await refreshSettings();
       await Promise.all([refreshPhrases(), refreshPendingSyncEvents()]);
-      void appHaptics.success();
-      setMessage(successMessage);
+      const outcome = result ? getSyncRunMessage(result) : { ok: true, message: successMessage };
+      void (outcome.ok ? appHaptics.success() : appHaptics.error());
+      setMessage(outcome.message);
     } catch (error) {
       void appHaptics.error();
-      setMessage(getErrorMessage(error, settingsCopy.cloudSyncError));
+      setMessage(getSyncActionErrorMessage(error));
     } finally {
       setIsSyncActionRunning(false);
     }
@@ -380,6 +418,43 @@ export const SettingsScreen = ({
     await runSyncAction(
       () => syncService.replaceLocalStateWithCloud(),
       settingsCopy.syncUseCloudSuccess
+    );
+  };
+
+  const keepLocalStateForCloud = async () => {
+    await runSyncAction(
+      () => syncService.keepLocalStateForInitialBind(),
+      settingsCopy.syncKeepLocalSuccess
+    );
+  };
+
+  const confirmKeepLocalData = () => {
+    if (isWebPlatform && typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        `${settingsCopy.syncKeepLocalConfirmTitle}\n\n${settingsCopy.syncKeepLocalConfirmBody}`
+      );
+      if (confirmed) {
+        void keepLocalStateForCloud();
+      }
+      return;
+    }
+
+    Alert.alert(
+      settingsCopy.syncKeepLocalConfirmTitle,
+      settingsCopy.syncKeepLocalConfirmBody,
+      [
+        {
+          text: copy.common.cancel,
+          style: 'cancel',
+        },
+        {
+          text: settingsCopy.syncKeepLocalConfirmAction,
+          style: 'destructive',
+          onPress: () => {
+            void keepLocalStateForCloud();
+          },
+        },
+      ]
     );
   };
 
@@ -463,9 +538,8 @@ export const SettingsScreen = ({
   };
 
   const lastSuccessfulSyncLabel = formatTimestamp(lastSuccessfulSyncAt, locale);
-  const lastPullLabel = formatTimestamp(lastSyncPullAt, locale);
   const syncIssueDetail = formatSyncIssue(syncLastIssue, locale);
-  const hasInitialBindConflict = syncLastIssue === 'initial_bind_requires_review';
+  const needsSyncDataChoice = syncLastIssue !== null;
   const language = getSupportedLanguage(boardLocale);
   const languageLabel =
     locale === 'en-US' ? language.labelEn : language.label;
@@ -481,30 +555,30 @@ export const SettingsScreen = ({
       ? settingsCopy.syncStatus.signedOut
       : syncAnonymous
       ? settingsCopy.syncStatus.anonymous
+      : needsSyncDataChoice
+      ? settingsCopy.syncStatus.needsChoice
       : syncStatus === 'offline'
       ? settingsCopy.syncStatus.offline
       : syncStatus === 'syncing'
         ? settingsCopy.syncStatus.syncing
-        : syncStatus === 'error' || syncLastIssue
+        : syncStatus === 'error' || syncErrorEvents > 0
           ? settingsCopy.syncStatus.error
           : pendingSyncEvents > 0
             ? settingsCopy.syncStatus.pending
             : settingsCopy.syncStatus.running;
+  const showsSyncTrouble =
+    !needsSyncDataChoice && (syncStatus === 'error' || syncErrorEvents > 0);
   const syncStatusDetailParts = syncUnavailable
     ? [
         settingsCopy.syncDetail.missingConfig,
-        pendingSyncEvents > 0
-          ? settingsCopy.syncDetail.localChanges(pendingSyncEvents)
-          : settingsCopy.syncDetail.localChanges(0),
+        pendingSyncEvents > 0 ? settingsCopy.syncDetail.localChanges(pendingSyncEvents) : null,
         syncErrorEvents > 0 ? settingsCopy.syncDetail.previousErrors(syncErrorEvents) : null,
         settingsCopy.syncDetail.noAuthSync,
       ]
     : syncSignedOut
       ? [
           settingsCopy.syncDetail.localWithoutSignIn,
-          pendingSyncEvents > 0
-            ? settingsCopy.syncDetail.localChanges(pendingSyncEvents)
-            : settingsCopy.syncDetail.localChanges(0),
+          pendingSyncEvents > 0 ? settingsCopy.syncDetail.localChanges(pendingSyncEvents) : null,
           settingsCopy.syncDetail.signInForSync,
         ]
     : syncAnonymous
@@ -518,14 +592,10 @@ export const SettingsScreen = ({
           ? settingsCopy.syncDetail.account(remoteContext.caregiverEmail)
           : null,
         syncIssueDetail,
-        pendingSyncEvents > 0
-          ? settingsCopy.syncDetail.queue(pendingSyncEvents)
-          : settingsCopy.syncDetail.queue(0),
-        syncErrorEvents > 0
-          ? settingsCopy.syncDetail.errors(syncErrorEvents)
-          : settingsCopy.syncDetail.errors(0),
-        lastSuccessfulSyncLabel ? settingsCopy.syncDetail.lastDone(lastSuccessfulSyncLabel) : null,
-        lastPullLabel ? settingsCopy.syncDetail.lastPulled(lastPullLabel) : null,
+        syncErrorEvents > 0 ? settingsCopy.syncDetail.failedChanges(syncErrorEvents) : null,
+        pendingSyncEvents > 0 ? settingsCopy.syncDetail.pendingChanges(pendingSyncEvents) : null,
+        showsSyncTrouble ? settingsCopy.syncDetail.autoRetry : null,
+        lastSuccessfulSyncLabel ? settingsCopy.syncDetail.lastSynced(lastSuccessfulSyncLabel) : null,
       ];
   const syncStatusDetail = syncStatusDetailParts.filter(Boolean).join('\n');
 
@@ -553,18 +623,14 @@ export const SettingsScreen = ({
             {hasSupabaseConfig && authStatus === 'signed_in' && !authIsAnonymous ? (
               <>
                 <View style={styles.divider} />
-                {hasInitialBindConflict ? (
+                {needsSyncDataChoice ? (
                   <>
                     <SettingRowButton
                       title={settingsCopy.syncKeepLocalTitle}
                       detail={settingsCopy.syncKeepLocalDetail}
+                      tone="danger"
                       disabled={isSyncActionRunning}
-                      onPress={() => {
-                        void runSyncAction(
-                          () => syncService.keepLocalStateForInitialBind(),
-                          settingsCopy.syncKeepLocalSuccess
-                        );
-                      }}
+                      onPress={confirmKeepLocalData}
                     />
                     <View style={styles.divider} />
                     <SettingRowButton
@@ -576,32 +642,14 @@ export const SettingsScreen = ({
                     />
                   </>
                 ) : (
-                  <>
-                    <SettingRowButton
-                      title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
-                      detail={settingsCopy.syncNowDetail}
-                      disabled={isSyncActionRunning}
-                      onPress={() => {
-                        void runSyncAction(() => syncService.runOnce(), settingsCopy.syncChecked);
-                      }}
-                    />
-                    {syncErrorEvents > 0 ? (
-                      <>
-                        <View style={styles.divider} />
-                        <SettingRowButton
-                          title={settingsCopy.retryFailedTitle}
-                          detail={settingsCopy.retryFailedDetail}
-                          disabled={isSyncActionRunning}
-                          onPress={() => {
-                            void runSyncAction(
-                              () => syncService.retryFailed(),
-                              settingsCopy.retryQueued
-                            );
-                          }}
-                        />
-                      </>
-                    ) : null}
-                  </>
+                  <SettingRowButton
+                    title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
+                    detail={settingsCopy.syncNowDetail}
+                    disabled={isSyncActionRunning}
+                    onPress={() => {
+                      void runSyncAction(() => syncService.syncNow(), settingsCopy.syncChecked);
+                    }}
+                  />
                 )}
               </>
             ) : null}

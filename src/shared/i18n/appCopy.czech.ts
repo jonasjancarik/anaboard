@@ -1,5 +1,13 @@
 import type { LocaleCopy } from "./appCopy.types";
 
+const formatChangeCount = (count: number): string => {
+  if (count === 1) {
+    return "1 změna";
+  }
+
+  return count >= 2 && count <= 4 ? `${count} změny` : `${count} změn`;
+};
+
 export const CS_APP_COPY: LocaleCopy = {
     dateLocale: "cs-CZ",
     common: {
@@ -198,19 +206,27 @@ export const CS_APP_COPY: LocaleCopy = {
       boardResetConfirmTitle: "Obnovit výchozí dlaždice?",
       boardResetConfirmBody: "Vrátí původní pořadí a smaže vlastní nahrávky na tabuli.",
       resetConfirmAction: "Obnovit",
-      cloudSyncError: "Cloud sync selhal",
-      syncChecked: "Sync zkontrolován",
-      retryQueued: "Zkusím sync znovu",
-      syncKeepLocalTitle: "Ponechat data v telefonu",
-      syncKeepLocalDetail: "Nahraje místní změny do cloudu a sync spustí znovu.",
-      syncUseCloudTitle: "Načíst data z cloudu",
-      syncUseCloudDetail: "Nahradí místní data touto cloud tabulí.",
-      syncUseCloudConfirmTitle: "Načíst data z cloudu?",
+      cloudSyncError: "Synchronizace se nepovedla. Zkusím to znovu automaticky.",
+      syncChecked: "Synchronizace hotová",
+      syncOfflineMessage: "Telefon je offline. Změny zůstanou uložené a odešlou se po připojení.",
+      syncNeedsChoiceMessage: "Nejdřív vyber, která data se mají použít.",
+      syncCloudEmptyMessage: "V cloudu zatím nic není. Použij data z tohoto telefonu.",
+      syncChangedDuringActionMessage: "Během načítání se data v telefonu změnila. Zkus to znovu.",
+      syncNotReadyMessage: "Cloud teď není dostupný. Zkus se odhlásit a znovu přihlásit.",
+      syncKeepLocalTitle: "Použít data z tohoto telefonu",
+      syncKeepLocalDetail: "Data v cloudu nahradí tím, co je v tomto telefonu.",
+      syncKeepLocalConfirmTitle: "Použít data z tohoto telefonu?",
+      syncKeepLocalConfirmBody:
+        "Tabule v cloudu se nahradí tabulí z tohoto telefonu. Ostatní propojená zařízení ji pak načtou také.",
+      syncKeepLocalConfirmAction: "Použít tento telefon",
+      syncUseCloudTitle: "Použít data z cloudu",
+      syncUseCloudDetail: "Tabuli v tomto telefonu nahradí tabulí z cloudu.",
+      syncUseCloudConfirmTitle: "Použít data z cloudu?",
       syncUseCloudConfirmBody:
-        "Místní změny v tomto telefonu se zahodí a nahradí daty z cloudu.",
-      syncUseCloudConfirmAction: "Načíst cloud",
-      syncKeepLocalSuccess: "Místní data zůstávají, sync pokračuje",
-      syncUseCloudSuccess: "Cloud data načtena",
+        "Změny v tomto telefonu, které nejsou v cloudu, se zahodí.",
+      syncUseCloudConfirmAction: "Použít cloud",
+      syncKeepLocalSuccess: "Data z tohoto telefonu jsou teď v cloudu",
+      syncUseCloudSuccess: "Data z cloudu jsou načtená",
       pinDetailOff: "Použije se, až znovu zapneš ochranu nastavení.",
       pinDetailWeb: "V prohlížeči se používá vždy pro odemknutí úprav.",
       pinDetailBackup: "4 číslice pro vstup do nastavení.",
@@ -237,16 +253,17 @@ export const CS_APP_COPY: LocaleCopy = {
       syncIssueInitialBind:
         "V tomto telefonu i v cloudu jsou data. Vyber, která se mají použít.",
       syncIssueProfileSwitch:
-        "Tento telefon byl dřív připojený k jiné cloud tabuli. Automatický přenos jsem zablokoval.",
+        "Tento telefon byl dřív propojený s jiným profilem v cloudu. Vyber, která data se mají použít.",
       syncStatus: {
         unavailable: "Cloud sync není nastavený",
         signedOut: "Cloud sync je připravený",
         anonymous: "Zkušební režim bez účtu",
         offline: "Zařízení je offline",
         syncing: "Probíhá sync",
-        error: "Sync je pozastavený",
-        pending: "Čekají změny",
-        running: "Cloud sync běží",
+        error: "Synchronizace se teď nepovedla",
+        needsChoice: "Vyber, která data použít",
+        pending: "Změny čekají na odeslání",
+        running: "Vše je synchronizované",
       },
       syncDetail: {
         missingConfig: "V této verzi aplikace chybí Supabase konfigurace.",
@@ -260,10 +277,10 @@ export const CS_APP_COPY: LocaleCopy = {
           "AI můžeš vyzkoušet hned, ale cloud sync a trvalé propojení zařízení zatím neběží.",
         anonymousConvert: "Přihlas se, až budeš chtít trial převést na běžný účet.",
         account: (email) => `Účet: ${email}`,
-        queue: (count) => `Ve frontě: ${count}`,
-        errors: (count) => `Chyby: ${count}`,
-        lastDone: (value) => `Poslední hotovo: ${value}`,
-        lastPulled: (value) => `Naposledy staženo: ${value}`,
+        pendingChanges: (count) => `Čeká na odeslání: ${formatChangeCount(count)}`,
+        failedChanges: (count) => `Nepodařilo se odeslat: ${formatChangeCount(count)}`,
+        autoRetry: "Zkusím to znovu automaticky. Data v telefonu zůstávají uložená.",
+        lastSynced: (value) => `Naposledy synchronizováno: ${value}`,
       },
       signInTitle: "Přihlásit ke cloud syncu",
       registerTitle: "Zaregistrovat / přihlásit",
@@ -271,8 +288,6 @@ export const CS_APP_COPY: LocaleCopy = {
       syncNowTitle: "Synchronizovat teď",
       syncingNowTitle: "Synchronizuji…",
       syncNowDetail: "Odešle čekající změny a stáhne novější data z cloudu.",
-      retryFailedTitle: "Zkusit znovu chybné položky",
-      retryFailedDetail: "Vrátí chybné změny do fronty a hned je zkusí znovu.",
       speechRate: "Rychlost hlasu",
       speechPitch: "Tón hlasu",
       saveRateError: "Rychlost hlasu nešla uložit",

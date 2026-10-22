@@ -1,6 +1,6 @@
 # Cloud Sync
 
-Last updated: 2026-05-21
+Last updated: 2026-10-22
 
 Read when: changing sync queue processing, cloud restore, initial bind conflict handling, Supabase sync schema, or multi-device merge behavior.
 
@@ -18,6 +18,22 @@ The child board must remain usable offline. Local writes enqueue sync events and
 Normal sync drains all pending local events before applying a remote snapshot. This prevents a large queue from uploading only the first batch and then being overwritten by an authoritative cloud pull.
 
 If any event fails, successful events from that batch are marked synced, failed events are marked error, and the service stops before pulling remote data.
+
+Failed events are retried automatically. After each failed upload the next automatic retry waits longer (20 s, 40 s, 80 s, … up to 15 minutes). "Synchronizovat teď" retries them immediately. There is no separate "retry failed" button.
+
+## Pull Never Overwrites Queued Edits
+
+`applyRemoteSnapshot` refuses to apply while any local change is still queued (`pending` or `error`). This covers edits made while a pull was downloading. The check runs once before media downloads and again inside the write transaction. A skipped pull returns `local_changes_pending` and the next run uploads the edit first.
+
+Explicit restores ("Použít data z cloudu" and the automatic first bind of an untouched device) pass `discardUnsyncedEventsThrough`, which drops only the changes that existed when the restore started, inside the same transaction. Changes queued after that still block the restore.
+
+## Large Tables
+
+Supabase returns at most 1000 rows per request. Tiles, saved phrases and phrase events are read page by page (`fetchAllPages`), so a long phrase history is not cut to the newest 1000 rows on every pull.
+
+## Media
+
+Storage paths are stable per tile or clip (`family/profile/<id>.<ext>`), so a replaced picture or recording keeps its path. A pull reuses the cached local file only when the path matches and the row's `updated_at` is the same instant. Otherwise it downloads the file again. After a tile image upload, the remote path is written back to the local row so later pushes skip the upload.
 
 ## Conflict Policy
 
@@ -39,6 +55,12 @@ When a device with customized local data connects to a cloud profile that alread
 - Use cloud data: applies the cloud snapshot locally and clears the pre-existing unsynced queue after the cloud restore succeeds.
 
 Neither action should show success until its write path completes.
+
+The same two choices are offered when the device was previously linked to a different cloud profile (`profile_switch_requires_review`). Both choices ask for confirmation because both overwrite one side. "Keep this device" uploads only the settings row of the active board's profile, so leftover rows from an earlier profile (with the default PIN) never reach the cloud.
+
+## Settings Screen Feedback
+
+`syncService.syncNow()` waits for any background run, then returns a `SyncRunResult`. The settings screen shows success only for `synced`/`deferred`; offline, failure and "needs a choice" each get their own message. Explicit actions throw `SyncActionError` with a code that maps to localized copy instead of raw English errors.
 
 ## Known Limits
 

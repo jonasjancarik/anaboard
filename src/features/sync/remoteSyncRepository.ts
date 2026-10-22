@@ -1,6 +1,7 @@
 import { mediaAssetExists } from '../../shared/media/mediaStorage';
 import { supabaseClient } from '../../shared/services/supabaseClient';
 import { getDatabase } from '../../shared/storage/db';
+import type { MigrationDatabase } from '../../shared/storage/migrations';
 import type { EntityType } from '../../shared/types/domain';
 import {
   normalizeBoardLayoutMode,
@@ -13,6 +14,12 @@ import {
   downloadAudioClipFromSupabase,
   downloadTileImageFromSupabase,
 } from './supabaseMediaSync';
+import {
+  countUnsyncedEventsAfter,
+  discardUnsyncedEventsThrough,
+  fetchAllPages,
+  isSameSyncTimestamp,
+} from './syncRunPolicy';
 import type {
   RemoteAudioClipRow,
   RemoteBoardRow,
@@ -267,19 +274,18 @@ export const fetchRemoteSnapshot = async (
   const boards = normalizeRemoteBoards(await fetchRemoteBoards(context));
   const boardIds = boards.map((board) => board.id);
 
+  const client = supabaseClient;
   let tiles: RemoteTileRow[] = [];
   if (boardIds.length > 0) {
-    const tileResult = await supabaseClient
-      .from('tiles')
-      .select('id, board_id, position, label_cs, emoji, visual_type, image_remote_path, category, speech_mode, audio_clip_id, updated_at, revision')
-      .in('board_id', boardIds)
-      .order('position', { ascending: true });
-
-    if (tileResult.error) {
-      throw tileResult.error;
-    }
-
-    tiles = (tileResult.data ?? []) as RemoteTileRow[];
+    tiles = await fetchAllPages<RemoteTileRow>((from, to) =>
+      client
+        .from('tiles')
+        .select('id, board_id, position, label_cs, emoji, visual_type, image_remote_path, category, speech_mode, audio_clip_id, updated_at, revision')
+        .in('board_id', boardIds)
+        .order('position', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    );
   }
 
   let audioClips: RemoteAudioClipRow[] = [];
@@ -298,34 +304,34 @@ export const fetchRemoteSnapshot = async (
   }
 
   const settings = await fetchRemoteSettings(context.profileId);
-  const [savedPhrasesResult, phraseEventsResult] = await Promise.all([
-    supabaseClient
-      .from('saved_phrases')
-      .select('id, profile_id, phrase_key, label, spoken_text, tokens_json, created_at, updated_at, usage_count')
-      .eq('profile_id', context.profileId)
-      .order('updated_at', { ascending: false }),
-    supabaseClient
-      .from('phrase_events')
-      .select('id, profile_id, tile_sequence, spoken_text, mode, spoken_at')
-      .eq('profile_id', context.profileId)
-      .order('spoken_at', { ascending: false }),
+  const [savedPhrases, phraseEvents] = await Promise.all([
+    fetchAllPages<RemoteSavedPhraseRow>((from, to) =>
+      client
+        .from('saved_phrases')
+        .select('id, profile_id, phrase_key, label, spoken_text, tokens_json, created_at, updated_at, usage_count')
+        .eq('profile_id', context.profileId)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
+    fetchAllPages<RemotePhraseEventRow>((from, to) =>
+      client
+        .from('phrase_events')
+        .select('id, profile_id, tile_sequence, spoken_text, mode, spoken_at')
+        .eq('profile_id', context.profileId)
+        .order('spoken_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
   ]);
-
-  if (savedPhrasesResult.error) {
-    throw savedPhrasesResult.error;
-  }
-
-  if (phraseEventsResult.error) {
-    throw phraseEventsResult.error;
-  }
 
   return {
     boards,
     tiles,
     audioClips,
     settings,
-    savedPhrases: (savedPhrasesResult.data ?? []) as RemoteSavedPhraseRow[],
-    phraseEvents: (phraseEventsResult.data ?? []) as RemotePhraseEventRow[],
+    savedPhrases,
+    phraseEvents,
   };
 };
 
@@ -625,9 +631,12 @@ const resolveTileImageUris = async (
     }
 
     const localTile = localTiles.get(tile.id);
+    // Remote paths are stable per tile, so a replaced picture keeps its path. Only reuse the
+    // cached file when the tile row itself is unchanged.
     if (
       tile.image_remote_path &&
       localTile?.image_remote_path === tile.image_remote_path &&
+      isSameSyncTimestamp(localTile.updated_at, tile.updated_at) &&
       localTile.image_local_uri &&
       (await mediaAssetExists(localTile.image_local_uri))
     ) {
@@ -662,6 +671,7 @@ const resolveAudioClipUris = async (
     if (
       clip.remote_path &&
       localClip?.remote_path === clip.remote_path &&
+      isSameSyncTimestamp(localClip.updated_at, clip.updated_at) &&
       localClip.local_uri &&
       (await mediaAssetExists(localClip.local_uri))
     ) {
@@ -690,12 +700,33 @@ const buildDeleteSql = (tableName: string, columnName: string, ids: string[]): s
   return `DELETE FROM ${tableName} WHERE ${columnName} NOT IN (${placeholders})`;
 };
 
-export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boolean> => {
+export type ApplyRemoteSnapshotResult = 'applied' | 'empty' | 'local_changes_pending';
+
+/**
+ * Replaces local synced data with the cloud snapshot.
+ *
+ * Unsynced local changes always win over the snapshot: if any are queued, nothing is applied and
+ * the next sync run uploads them first. `discardUnsyncedEventsThrough` lets an explicit restore
+ * drop the changes that existed before it started; changes queued after that id still block it.
+ */
+export const applyRemoteSnapshot = async (
+  snapshot: RemoteSnapshot,
+  options: { discardUnsyncedEventsThrough?: number | null } = {}
+): Promise<ApplyRemoteSnapshotResult> => {
   if (!remoteSnapshotHasData(snapshot)) {
-    return false;
+    return 'empty';
   }
 
+  const discardThrough = options.discardUnsyncedEventsThrough ?? null;
+
   const db = await getDatabase();
+  const eventDb = db as unknown as MigrationDatabase;
+  const countNewerLocalChanges = () => countUnsyncedEventsAfter(eventDb, discardThrough);
+
+  // Cheap early exit before downloading media; re-checked inside the transaction below.
+  if ((await countNewerLocalChanges()) > 0) {
+    return 'local_changes_pending';
+  }
   const [localTiles, localAudioClips] = await Promise.all([
     getLocalTiles(),
     getLocalAudioClips(),
@@ -721,7 +752,18 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
     snapshot.phraseEvents[0]?.profile_id ??
     null;
 
+  let blockedByLocalChanges = false;
+
   await db.withTransactionAsync(async () => {
+    if ((await countNewerLocalChanges()) > 0) {
+      blockedByLocalChanges = true;
+      return;
+    }
+
+    if (discardThrough !== null) {
+      await discardUnsyncedEventsThrough(eventDb, discardThrough);
+    }
+
     if (snapshot.boards.length > 0) {
       await db.runAsync('UPDATE boards SET is_active = 0');
 
@@ -968,5 +1010,19 @@ export const applyRemoteSnapshot = async (snapshot: RemoteSnapshot): Promise<boo
     }
   });
 
-  return true;
+  return blockedByLocalChanges ? 'local_changes_pending' : 'applied';
+};
+
+export const recordUploadedTileImagePath = async (
+  tileId: string,
+  localUri: string,
+  remotePath: string
+): Promise<void> => {
+  const db = await getDatabase();
+  await db.runAsync(
+    'UPDATE tiles SET image_remote_path = ? WHERE id = ? AND image_local_uri = ?',
+    remotePath,
+    tileId,
+    localUri
+  );
 };

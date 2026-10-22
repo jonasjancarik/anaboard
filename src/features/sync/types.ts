@@ -98,3 +98,18 @@ export type RemoteSnapshot = {
   savedPhrases: RemoteSavedPhraseRow[];
   phraseEvents: RemotePhraseEventRow[];
 };
+
+export type SyncRunResult =
+  | 'synced'
+  | 'deferred'
+  | 'offline'
+  | 'error'
+  | 'needs_review'
+  | 'disabled'
+  | 'busy';
+
+export type SyncActionErrorCode =
+  | 'offline'
+  | 'not_ready'
+  | 'cloud_empty'
+  | 'changed_during_action';
