@@ -213,11 +213,50 @@ export const styles = StyleSheet.create({
   chipTextSelected: {
     color: APP_THEME.text,
   },
+  recordingSection: {
+    gap: 4,
+  },
   recordingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
     justifyContent: "space-between",
+  },
+  recordingInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  recordingStatus: {
+    color: APP_THEME.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  secondaryActionButton: {
+    borderColor: APP_THEME.borderStrong,
+    backgroundColor: APP_THEME.surfaceTint,
+  },
+  secondaryActionButtonText: {
+    color: APP_THEME.text,
+  },
+  quietLink: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    justifyContent: "center",
+    paddingVertical: 6,
+  },
+  quietLinkText: {
+    color: APP_THEME.textMuted,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  removeTileLink: {
+    alignSelf: "center",
+    paddingHorizontal: 12,
+  },
+  removeTileLinkText: {
+    color: APP_THEME.dangerBorder,
+    fontSize: 14,
+    fontWeight: "700",
   },
   error: {
     color: APP_THEME.dangerBorder,
@@ -265,27 +304,9 @@ export const styles = StyleSheet.create({
     borderColor: APP_THEME.dangerBorder,
     backgroundColor: APP_THEME.danger,
   },
-  deleteRecordingButton: {
-    borderColor: APP_THEME.dangerBorder,
-    backgroundColor: APP_THEME.surface,
-  },
   saveButton: {
     borderColor: APP_THEME.primaryBorder,
     backgroundColor: APP_THEME.primary,
-  },
-  tileActionsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  tileActionButton: {
-    flex: 1,
-  },
-  deleteTileButton: {
-    borderColor: APP_THEME.dangerBorder,
-    backgroundColor: APP_THEME.surface,
-  },
-  deleteTileButtonText: {
-    color: APP_THEME.dangerBorder,
   },
   emptyText: {
     color: APP_THEME.textMuted,

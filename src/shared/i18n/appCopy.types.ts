@@ -304,6 +304,16 @@ export type LocaleCopy = {
     aiImageApplyError: string;
     deleteTileTitle: string;
     deleteTileBody: string;
+    removeTile: string;
+    removeTileConfirm: string;
+    recordingHint: string;
+    recordingInProgress: string;
+    recordingSaved: (seconds: number) => string;
+    stopRecording: string;
+    recordAgain: string;
+    deleteRecording: string;
+    deleteRecordingTitle: string;
+    deleteRecordingBody: string;
     signInCta: string;
     unsavedTitle: string;
     unsavedBody: string;

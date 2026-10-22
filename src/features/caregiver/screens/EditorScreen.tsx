@@ -587,42 +587,54 @@ export const EditorScreen = ({ onBack, backHandlerRef }: EditorScreenProps) => {
     }
   };
 
+  // Alert.alert is a no-op on web, so destructive confirmations fall back to window.confirm.
+  const confirmDestructive = (params: {
+    title: string;
+    body: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  }) => {
+    if (isWebPlatform && typeof window !== "undefined") {
+      if (window.confirm(`${params.title}\n\n${params.body}`)) {
+        params.onConfirm();
+      }
+      return;
+    }
+
+    Alert.alert(params.title, params.body, [
+      { text: copy.common.cancel, style: "cancel" },
+      {
+        text: params.confirmLabel,
+        style: "destructive",
+        onPress: params.onConfirm,
+      },
+    ]);
+  };
+
   const handleDeleteTile = () => {
     if (!selectedTile) {
       return;
     }
 
-    Alert.alert(
-      copy.editor.deleteTileTitle,
-      copy.editor.deleteTileBody,
-      [
-        {
-          text: copy.common.cancel,
-          style: "cancel",
-        },
-        {
-          text: copy.common.delete,
-          style: "destructive",
-          onPress: () => {
-            void deleteSelectedTile();
-          },
-        },
-      ],
-    );
+    confirmDestructive({
+      title: copy.editor.deleteTileTitle,
+      body: copy.editor.deleteTileBody,
+      confirmLabel: copy.editor.removeTileConfirm,
+      onConfirm: () => {
+        void deleteSelectedTile();
+      },
+    });
   };
 
-  const handleRecordingAction = () => {
-    if (isRecording) {
-      void handleRecordToggle();
-      return;
-    }
-
-    if (selectedClip) {
-      void handleDeleteClip();
-      return;
-    }
-
-    void handleRecordToggle();
+  const handleDeleteRecording = () => {
+    confirmDestructive({
+      title: copy.editor.deleteRecordingTitle,
+      body: copy.editor.deleteRecordingBody,
+      confirmLabel: copy.common.delete,
+      onConfirm: () => {
+        void handleDeleteClip();
+      },
+    });
   };
 
   const showAuthCtaForTileError =
@@ -840,31 +852,60 @@ export const EditorScreen = ({ onBack, backHandlerRef }: EditorScreenProps) => {
 
                 <View style={styles.divider} />
 
-                <View style={styles.recordingRow}>
-                  <Text style={styles.inputLabel}>{copy.editor.recording}</Text>
-                  <Pressable
-                    style={[
-                      styles.actionButton,
-                      styles.inlineActionButton,
-                      isRecording
-                        ? styles.stopButton
-                        : selectedClip
-                          ? styles.deleteRecordingButton
-                          : styles.recordButton,
-                    ]}
-                    onPress={handleRecordingAction}
-                  >
-                    <Text
+                <View style={styles.recordingSection}>
+                  <View style={styles.recordingRow}>
+                    <View style={styles.recordingInfo}>
+                      <Text style={styles.inputLabel}>{copy.editor.recording}</Text>
+                      <Text style={styles.recordingStatus}>
+                        {isRecording
+                          ? copy.editor.recordingInProgress
+                          : selectedClip
+                            ? copy.editor.recordingSaved(
+                                Math.max(1, Math.round(selectedClip.durationMs / 1000)),
+                              )
+                            : copy.editor.recordingHint}
+                      </Text>
+                    </View>
+                    <Pressable
                       style={[
-                        styles.actionButtonText,
-                        selectedClip && !isRecording
-                          ? styles.deleteTileButtonText
-                          : null,
+                        styles.actionButton,
+                        styles.inlineActionButton,
+                        isRecording
+                          ? styles.stopButton
+                          : selectedClip
+                            ? styles.secondaryActionButton
+                            : styles.recordButton,
                       ]}
+                      onPress={() => {
+                        void handleRecordToggle();
+                      }}
                     >
-                      {isRecording ? copy.common.stop : selectedClip ? copy.common.delete : copy.editor.record}
-                    </Text>
-                  </Pressable>
+                      <Text
+                        style={[
+                          styles.actionButtonText,
+                          selectedClip && !isRecording
+                            ? styles.secondaryActionButtonText
+                            : null,
+                        ]}
+                      >
+                        {isRecording
+                          ? copy.editor.stopRecording
+                          : selectedClip
+                            ? copy.editor.recordAgain
+                            : copy.editor.record}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {selectedClip && !isRecording ? (
+                    <Pressable
+                      style={styles.quietLink}
+                      onPress={handleDeleteRecording}
+                    >
+                      <Text style={styles.quietLinkText}>
+                        {copy.editor.deleteRecording}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
                 {recordingError ? (
                   <Text style={styles.error}>{recordingError}</Text>
@@ -872,45 +913,22 @@ export const EditorScreen = ({ onBack, backHandlerRef }: EditorScreenProps) => {
 
                 <View style={styles.divider} />
 
-                <View style={styles.tileActionsRow}>
-                  <Pressable
-                    style={[
-                      styles.actionButton,
-                      styles.tileActionButton,
-                      styles.deleteTileButton,
-                      (tiles.length <= 1 || isSaving || isRecording) &&
-                        styles.actionButtonDisabled,
-                    ]}
-                    onPress={handleDeleteTile}
-                    disabled={tiles.length <= 1 || isSaving || isRecording}
-                  >
-                    <Text
-                      style={[
-                        styles.actionButtonText,
-                        styles.deleteTileButtonText,
-                      ]}
-                    >
-                      {copy.common.delete}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.actionButton,
-                      styles.tileActionButton,
-                      styles.saveButton,
-                      (isSaving || isRecording || visualSelectionIncomplete) &&
-                        styles.actionButtonDisabled,
-                    ]}
-                    onPress={() => {
-                      void saveTile();
-                    }}
-                    disabled={isSaving || isRecording || visualSelectionIncomplete}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {isSaving ? copy.common.saving : copy.common.save}
-                    </Text>
-                  </Pressable>
-                </View>
+                <Pressable
+                  style={[
+                    styles.actionButton,
+                    styles.saveButton,
+                    (isSaving || isRecording || visualSelectionIncomplete) &&
+                      styles.actionButtonDisabled,
+                  ]}
+                  onPress={() => {
+                    void saveTile();
+                  }}
+                  disabled={isSaving || isRecording || visualSelectionIncomplete}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {isSaving ? copy.common.saving : copy.common.save}
+                  </Text>
+                </Pressable>
 
                 {tileActionError ? (
                   <>
@@ -929,6 +947,22 @@ export const EditorScreen = ({ onBack, backHandlerRef }: EditorScreenProps) => {
                       </Pressable>
                     ) : null}
                   </>
+                ) : null}
+
+                {tiles.length > 1 ? (
+                  <Pressable
+                    style={[
+                      styles.quietLink,
+                      styles.removeTileLink,
+                      (isSaving || isRecording) && styles.actionButtonDisabled,
+                    ]}
+                    onPress={handleDeleteTile}
+                    disabled={isSaving || isRecording}
+                  >
+                    <Text style={styles.removeTileLinkText}>
+                      {copy.editor.removeTile}
+                    </Text>
+                  </Pressable>
                 ) : null}
               </>
             ) : (
