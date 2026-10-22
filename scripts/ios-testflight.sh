@@ -227,7 +227,10 @@ EOF
 
   rm -rf "${export_dir}"
 
-  xcodebuild \
+  # Xcode packages the .ipa with /usr/bin/rsync (openrsync), which starts the
+  # receiving rsync from PATH; Homebrew's rsync 3.x rejects its flags and the
+  # export fails with "Copy failed".
+  PATH="/usr/bin:${PATH}" xcodebuild \
     -exportArchive \
     -archivePath "${ARCHIVE_PATH}" \
     -exportOptionsPlist "${options_plist}" \
