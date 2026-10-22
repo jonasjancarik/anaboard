@@ -9,6 +9,7 @@ import {
   TILE_IMAGES_BUCKET,
 } from '../_shared/storage.ts';
 import { createAdminClient, requireUser } from '../_shared/supabase.ts';
+import { normalizeTileImage } from '../_shared/tileImageNormalize.ts';
 import {
   buildTileImagePrompt,
   describeTileMeaning,
@@ -106,6 +107,15 @@ Deno.serve(async (request: Request) => {
     }
 
     const image = await generateTransparentImage(buildTileImagePrompt(promptInput, meaning));
+    try {
+      // Match the size emoji render at, whatever margin the model chose.
+      image.bytes = normalizeTileImage(image.bytes).bytes;
+    } catch (normalizeError) {
+      console.warn(
+        'tile image normalization failed, keeping original',
+        normalizeError instanceof Error ? normalizeError.message : normalizeError
+      );
+    }
 
     const extension = getExtension(image.mimeType);
     const storagePath =

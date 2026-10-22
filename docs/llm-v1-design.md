@@ -350,6 +350,11 @@ Cleanup policy:
    depiction and drawing rules (people only for person words, a face for feelings,
    otherwise a single emoji-like object; nothing cropped; transparent background).
    OpenAI returns base64 image data.
+   The function then trims the transparent border and re-centres the drawing so its
+   longer side is 68% of the canvas (`normalizeTileImage` in
+   `supabase/functions/_shared/tileImageNormalize.ts`). Emoji render at about that share
+   of the tile's visual box, so AI pictures match their size whatever margin the model
+   chose. Images without transparency are left unchanged.
 5. Function uploads bytes to `tile-images/{familyId}/{profileId}/ai-drafts/{draftId}.png`.
 6. Function returns:
    - `draftId`

@@ -91,7 +91,7 @@ export const buildTileImagePrompt = (
     ...subject,
     input.category ? `Category: ${input.category}.` : null,
     'Style: a modern smartphone emoji. Chunky rounded shapes, bright friendly colors, smooth soft shading with a gentle highlight, no outlines or only very subtle ones, minimal detail, readable at 64 pixels.',
-    'Centered and large: the subject fills about 80% of the canvas, fully inside it with a small even margin on every side. Nothing cropped.',
+    'Centered and large, filling most of the canvas but fully inside it with a small even margin on every side. Nothing cropped.',
     'Transparent background. No text, letters or numbers. No watermark. No frame. No background scene.',
   ]
     .filter(Boolean)
