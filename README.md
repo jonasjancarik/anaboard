@@ -96,11 +96,17 @@ Optional release environment values, set the same way:
 
 These `EXPO_PUBLIC_*` values are embedded in the APK. Do not add server-only secrets such as Supabase service-role keys or OpenAI API keys to the app build.
 
-Google Play bundle:
+Google Play bundle (local, signed with the upload key):
 
 ```bash
-npx eas-cli@latest build -p android --profile production
+npm run android:aab
 ```
+
+- Output: `release-artifacts/anaboard-v<version>-<versionCode>.aab`, ready to upload in Play Console.
+- The upload key lives outside the repo in `~/.anaboard-release/` (`anaboard-upload.jks` plus `android-upload.properties` with the alias and passwords). Back up both, for example in a password manager. Override the location with `ANDROID_UPLOAD_PROPERTIES`.
+- Use Play App Signing: Google keeps the app signing key and this key only uploads. A lost upload key can be reset through Play Console support.
+- `versionCode` defaults to minutes since 2024-01-01 UTC, so every bundle is higher than the previous one. Override with `ANDROID_VERSION_CODE`.
+- The package is `cz.jonasjancarik.anaboard`. APKs released before v1.0.10 used `com.anonymous.anaboard`, so those installs do not upgrade in place; testers install the new app and restore their board through sync.
 
 Local APK on your machine:
 
@@ -148,7 +154,7 @@ Notes:
 - The marketing version comes from `expo.version` in `app.json`.
 - Builds default `SENTRY_DISABLE_AUTO_UPLOAD=true`, like the Android script.
 - `ITSAppUsesNonExemptEncryption` is `false` in `app.json`, so App Store Connect does not ask about export compliance for each build.
-- Android keeps the `com.anonymous.anaboard` package so existing APK installs keep updating.
+- iOS and Android share the `cz.jonasjancarik.anaboard` identifier.
 
 ## Environment
 

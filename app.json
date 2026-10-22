@@ -25,7 +25,7 @@
       }
     },
     "android": {
-      "package": "com.anonymous.anaboard",
+      "package": "cz.jonasjancarik.anaboard",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F6F1E8"

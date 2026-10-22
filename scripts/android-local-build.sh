@@ -10,6 +10,11 @@ Usage:
   scripts/android-local-build.sh doctor
   scripts/android-local-build.sh prebuild
   scripts/android-local-build.sh apk
+  scripts/android-local-build.sh aab
+
+aab builds a Google Play bundle signed with the upload key described in
+ANDROID_UPLOAD_PROPERTIES (default ~/.anaboard-release/android-upload.properties).
+ANDROID_VERSION_CODE overrides the default versionCode (minutes since 2024-01-01 UTC).
 EOF
 }
 
@@ -177,6 +182,71 @@ EOF
   printf '\nAPK path:\n%s\n' "${apk_path}"
 }
 
+load_upload_signing() {
+  local properties_file="${ANDROID_UPLOAD_PROPERTIES:-$HOME/.anaboard-release/android-upload.properties}"
+  local line=""
+
+  if [[ ! -f "${properties_file}" ]]; then
+    cat >&2 <<EOF
+Upload key properties not found: ${properties_file}
+
+Expected keys:
+  ANDROID_UPLOAD_STORE_FILE, ANDROID_UPLOAD_KEY_ALIAS,
+  ANDROID_UPLOAD_STORE_PASSWORD, ANDROID_UPLOAD_KEY_PASSWORD
+EOF
+    exit 1
+  fi
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ "${line}" =~ ^(ANDROID_UPLOAD_[A-Z_]+)=(.*)$ ]] || continue
+    export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+  done < "${properties_file}"
+
+  if [[ ! -f "${ANDROID_UPLOAD_STORE_FILE:-}" ]]; then
+    echo "Upload keystore not found: ${ANDROID_UPLOAD_STORE_FILE:-unset}" >&2
+    exit 1
+  fi
+}
+
+build_aab() {
+  setup_env
+  load_upload_signing
+  cd "${PROJECT_ROOT}"
+  local aab_path="${PROJECT_ROOT}/android/app/build/outputs/bundle/release/app-release.aab"
+  local version=""
+  local artifact_path=""
+
+  export ANDROID_VERSION_CODE="${ANDROID_VERSION_CODE:-$(( ($(date -u +%s) - 1704067200) / 60 ))}"
+  version="$(node -p "require('./app.json').expo.version")"
+
+  EXPO_NO_GIT_STATUS=1 npx expo prebuild --platform android --clean --no-install
+  rm -f "${aab_path}"
+
+  # Injected signing overrides the debug signingConfig from Expo's template, so the
+  # generated /android folder needs no edits. Passed as env to keep passwords out of argv.
+  (
+    cd android
+    ./gradlew --stop >/dev/null 2>&1 || true
+    env \
+      "ORG_GRADLE_PROJECT_android.injected.signing.store.file=${ANDROID_UPLOAD_STORE_FILE}" \
+      "ORG_GRADLE_PROJECT_android.injected.signing.store.password=${ANDROID_UPLOAD_STORE_PASSWORD}" \
+      "ORG_GRADLE_PROJECT_android.injected.signing.key.alias=${ANDROID_UPLOAD_KEY_ALIAS}" \
+      "ORG_GRADLE_PROJECT_android.injected.signing.key.password=${ANDROID_UPLOAD_KEY_PASSWORD}" \
+      ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m" bundleRelease
+  ) || [[ -f "${aab_path}" ]]
+
+  if [[ ! -f "${aab_path}" ]]; then
+    echo "Bundle was not produced: ${aab_path}" >&2
+    exit 1
+  fi
+
+  artifact_path="${PROJECT_ROOT}/release-artifacts/anaboard-v${version}-${ANDROID_VERSION_CODE}.aab"
+  mkdir -p "${PROJECT_ROOT}/release-artifacts"
+  cp "${aab_path}" "${artifact_path}"
+
+  printf '\nVersion: %s (%s)\nAAB path:\n%s\n' "${version}" "${ANDROID_VERSION_CODE}" "${artifact_path}"
+}
+
 main() {
   local command="${1:-}"
 
@@ -189,6 +259,9 @@ main() {
       ;;
     apk)
       build_apk
+      ;;
+    aab)
+      build_aab
       ;;
     *)
       print_usage >&2
