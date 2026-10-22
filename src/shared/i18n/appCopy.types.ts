@@ -272,6 +272,14 @@ export type LocaleCopy = {
     resetDefaultsDetail: string;
     signOut: string;
     signOutDetail: string;
+    deleteAccount: string;
+    deletingAccount: string;
+    deleteAccountDetail: string;
+    deleteAccountConfirmTitle: string;
+    deleteAccountConfirmBody: string;
+    deleteAccountConfirmAction: string;
+    deleteAccountSuccess: string;
+    deleteAccountError: string;
   };
   diagnostics: {
     sectionTitle: string;

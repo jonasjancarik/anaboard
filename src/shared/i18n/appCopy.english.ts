@@ -319,6 +319,15 @@ export const EN_APP_COPY: LocaleCopy = {
       resetDefaultsDetail: "Restores the original order and removes custom recordings.",
       signOut: "Sign out",
       signOutDetail: "Signs this device out of cloud sync.",
+      deleteAccount: "Delete account",
+      deletingAccount: "Deleting account…",
+      deleteAccountDetail: "Deletes the account and everything stored in the cloud.",
+      deleteAccountConfirmTitle: "Delete account permanently?",
+      deleteAccountConfirmBody:
+        "The account, board, photos, recordings and saved phrases will be deleted from the cloud and can't be restored. The board on this device stays until you delete the app.",
+      deleteAccountConfirmAction: "Delete account",
+      deleteAccountSuccess: "Account deleted",
+      deleteAccountError: "The account couldn't be deleted. Please try again.",
     },
     diagnostics: {
       sectionTitle: "Diagnostics",

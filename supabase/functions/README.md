@@ -1,6 +1,8 @@
 # Supabase Functions
 
-ÁňaBoard AI endpoints live here.
+ÁňaBoard AI endpoints and account deletion live here.
+
+`account-delete` removes the signed-in user from Supabase Auth. When they are the last caregiver of their family it also deletes the family (cascading to profiles, boards, tiles and audio clips), the profile-keyed rows (`profile_settings`, `phrase_events`, `saved_phrases`), the family's `audio-clips` and `tile-images` folders, the user's `trials/<user>` images and their `ai_image_generation_events`. If other caregivers remain, only this caregiver is removed and family ownership moves to the next one.
 
 ## Required secrets
 
@@ -55,6 +57,7 @@ supabase secrets set \
 supabase functions deploy ai-emoji-suggest
 supabase functions deploy ai-image-draft-generate
 supabase functions deploy ai-image-draft-promote
+supabase functions deploy account-delete
 ```
 
 Repo helper:

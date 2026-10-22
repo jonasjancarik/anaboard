@@ -267,6 +267,20 @@ export const authService = {
     }
   },
 
+  async deleteAccount(): Promise<void> {
+    const client = getClient();
+    const { error } = await client.functions.invoke('account-delete', { body: {} });
+
+    if (error) {
+      throw error;
+    }
+
+    // The server already removed the user, so only drop the local session.
+    await client.auth.signOut({ scope: 'local' });
+    await clearRemoteContext();
+    await setLastSyncIssue(null);
+  },
+
   async resolveBootstrapState(user: User): Promise<{ requiresBootstrap: boolean; context: RemoteContext | null }> {
     try {
       if (isAnonymousUser(user)) {

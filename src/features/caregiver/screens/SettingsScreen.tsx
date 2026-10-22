@@ -153,6 +153,7 @@ export const SettingsScreen = ({
   const [selectedVoiceValue, setSelectedVoiceValue] = useState(DEFAULT_VOICE_VALUE);
   const [message, setMessage] = useState<string | null>(null);
   const [isResettingBoard, setIsResettingBoard] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isSyncActionRunning, setIsSyncActionRunning] = useState(false);
   const [webPersistenceSummary, setWebPersistenceSummary] =
     useState<WebPersistenceSmokeSummary | null>(null);
@@ -309,6 +310,52 @@ export const SettingsScreen = ({
       void appHaptics.error();
       setMessage(getErrorMessage(error, settingsCopy.signOutError));
     }
+  };
+
+  const deleteAccount = async () => {
+    setIsDeletingAccount(true);
+    setMessage(null);
+
+    try {
+      await authService.deleteAccount();
+      void appHaptics.success();
+      setMessage(settingsCopy.deleteAccountSuccess);
+    } catch {
+      void appHaptics.error();
+      setMessage(settingsCopy.deleteAccountError);
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
+  const confirmAccountDelete = () => {
+    if (isWebPlatform && typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        `${settingsCopy.deleteAccountConfirmTitle}\n\n${settingsCopy.deleteAccountConfirmBody}`
+      );
+      if (confirmed) {
+        void deleteAccount();
+      }
+      return;
+    }
+
+    Alert.alert(
+      settingsCopy.deleteAccountConfirmTitle,
+      settingsCopy.deleteAccountConfirmBody,
+      [
+        {
+          text: copy.common.cancel,
+          style: 'cancel',
+        },
+        {
+          text: settingsCopy.deleteAccountConfirmAction,
+          style: 'destructive',
+          onPress: () => {
+            void deleteAccount();
+          },
+        },
+      ]
+    );
   };
 
   const performBoardReset = async () => {
@@ -987,14 +1034,24 @@ export const SettingsScreen = ({
         {authStatus === 'signed_in' && !authIsAnonymous ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>{settingsCopy.sections.account}</Text>
-            <SettingRowButton
-              title={settingsCopy.signOut}
-              detail={settingsCopy.signOutDetail}
-              tone="danger"
-              onPress={() => {
-                void signOut();
-              }}
-            />
+            <View style={styles.cardStack}>
+              <SettingRowButton
+                title={settingsCopy.signOut}
+                detail={settingsCopy.signOutDetail}
+                tone="danger"
+                disabled={isDeletingAccount}
+                onPress={() => {
+                  void signOut();
+                }}
+              />
+              <SettingRowButton
+                title={isDeletingAccount ? settingsCopy.deletingAccount : settingsCopy.deleteAccount}
+                detail={settingsCopy.deleteAccountDetail}
+                tone="danger"
+                disabled={isDeletingAccount}
+                onPress={confirmAccountDelete}
+              />
+            </View>
           </View>
         ) : null}
       </ScrollView>

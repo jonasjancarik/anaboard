@@ -327,6 +327,15 @@ export const CS_APP_COPY: LocaleCopy = {
       resetDefaultsDetail: "Vrátí původní pořadí a smaže vlastní nahrávky.",
       signOut: "Odhlásit",
       signOutDetail: "Odhlásí tento telefon od cloud syncu.",
+      deleteAccount: "Smazat účet",
+      deletingAccount: "Mažu účet…",
+      deleteAccountDetail: "Smaže účet i všechno, co je uložené v cloudu.",
+      deleteAccountConfirmTitle: "Smazat účet natrvalo?",
+      deleteAccountConfirmBody:
+        "Z cloudu se smaže účet, tabule, fotky, nahrávky i uložené fráze a nepůjde je obnovit. Tabule v tomto telefonu zůstane, dokud aplikaci nesmažeš.",
+      deleteAccountConfirmAction: "Smazat účet",
+      deleteAccountSuccess: "Účet je smazaný",
+      deleteAccountError: "Účet se nepodařilo smazat. Zkus to znovu.",
     },
     diagnostics: {
       sectionTitle: "Diagnostika",

@@ -8,6 +8,7 @@ FUNCTIONS=(
   "ai-emoji-suggest"
   "ai-image-draft-generate"
   "ai-image-draft-promote"
+  "account-delete"
 )
 
 print_usage() {

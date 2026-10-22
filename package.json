@@ -23,7 +23,7 @@
     "board-ordering:test": "node --experimental-strip-types scripts/test-board-ordering.mjs",
     "defaults:test": "node --experimental-strip-types scripts/test-default-tiles.mjs",
     "sync:test": "node --experimental-strip-types scripts/test-sync-conflict-policy.mjs",
-    "functions:check": "deno check --no-lock --config supabase/functions/deno.json supabase/functions/ai-emoji-suggest/index.ts supabase/functions/ai-image-draft-generate/index.ts supabase/functions/ai-image-draft-promote/index.ts",
+    "functions:check": "deno check --no-lock --config supabase/functions/deno.json supabase/functions/ai-emoji-suggest/index.ts supabase/functions/ai-image-draft-generate/index.ts supabase/functions/ai-image-draft-promote/index.ts supabase/functions/account-delete/index.ts",
     "functions:env": "bash ./scripts/supabase-functions.sh check-env",
     "functions:serve": "bash ./scripts/supabase-functions.sh serve",
     "functions:secrets": "bash ./scripts/supabase-functions.sh set-secrets",
