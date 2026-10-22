@@ -802,7 +802,7 @@ export const SettingsScreen = ({
                 <Text style={styles.statusDetail}>{voiceAvailabilityDetail}</Text>
               </View>
             )}
-            {!isWebPlatform ? (
+            {Platform.OS === 'ios' ? (
               <>
                 <View style={styles.divider} />
                 <View style={styles.statusBlock}>
