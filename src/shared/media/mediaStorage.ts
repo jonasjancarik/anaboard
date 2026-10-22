@@ -221,7 +221,17 @@ export const persistManagedMediaFromRemoteUrl = async (
   const fallbackExtension = kind === 'audio' ? 'm4a' : 'jpg';
   const targetUri = `${directoryUri}${assetId}-${Date.now()}.${extension ?? fallbackExtension}`;
 
-  await FileSystem.downloadAsync(sourceUrl, targetUri);
+  // Foreground session: iOS background downloads fail with NSURLErrorDomain -1
+  // ("unknown error") in some environments, and these files are small anyway.
+  const result = await FileSystem.downloadAsync(sourceUrl, targetUri, {
+    sessionType: FileSystem.FileSystemSessionType.FOREGROUND,
+  });
+
+  // downloadAsync resolves on HTTP errors too and saves the error body as the file.
+  if (result.status < 200 || result.status >= 300) {
+    await FileSystem.deleteAsync(targetUri, { idempotent: true });
+    throw new Error(`Media download failed with HTTP ${result.status}`);
+  }
 
   return targetUri;
 };
