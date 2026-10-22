@@ -43,13 +43,18 @@
       "@sentry/react-native",
       "expo-sqlite",
       "expo-asset",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Umožni ÁňaBoard nahrát vlastní hlas pro dlaždici."
+        }
+      ],
       [
         "expo-image-picker",
         {
           "photosPermission": "Umožni ÁňaBoard vybrat fotku pro dlaždici.",
           "cameraPermission": "Umožni ÁňaBoard vyfotit obrázek pro dlaždici.",
-          "microphonePermission": false
+          "microphonePermission": "Umožni ÁňaBoard nahrát vlastní hlas pro dlaždici."
         }
       ]
     ]

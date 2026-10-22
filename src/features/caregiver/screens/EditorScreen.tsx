@@ -27,7 +27,10 @@ import type {
   TileVisualType,
 } from "../../../shared/types/domain";
 import { useAppStore } from "../../../store/useAppStore";
-import { recordingService } from "../../speech/recordingService";
+import {
+  RecordingPermissionError,
+  recordingService,
+} from "../../speech/recordingService";
 import type { TileUpdateInput } from "../../../shared/storage/repositories/tileRepository";
 import { logError, logEvent } from "../../../shared/telemetry/logger";
 
@@ -448,7 +451,11 @@ export const EditorScreen = ({ onBack, backHandlerRef }: EditorScreenProps) => {
       } catch (error) {
         void appHaptics.error();
         setRecordingError(
-          error instanceof Error ? error.message : copy.editor.recordingError,
+          error instanceof RecordingPermissionError
+            ? copy.editor.microphonePermission
+            : error instanceof Error
+              ? error.message
+              : copy.editor.recordingError,
         );
       }
       return;

@@ -11,13 +11,20 @@ export type RecordingResult = {
   durationMs: number;
 };
 
+export class RecordingPermissionError extends Error {
+  constructor() {
+    super('Microphone permission denied');
+    this.name = 'RecordingPermissionError';
+  }
+}
+
 class RecordingService {
   private recording: AudioRecorder | null = null;
 
   public start = async (): Promise<void> => {
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
-      throw new Error('Permission denied');
+      throw new RecordingPermissionError();
     }
 
     await setAudioModeAsync({
