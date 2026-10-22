@@ -15,8 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.anaboard",
+      "bundleIdentifier": "cz.jonasjancarik.anaboard",
+      "appleTeamId": "2B4C6M3Y44",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "Umožni ÁňaBoard používat Face ID pro odemknutí režimu pečovatele.",
         "NSPhotoLibraryUsageDescription": "Umožni ÁňaBoard vybrat fotku pro dlaždici.",
         "NSCameraUsageDescription": "Umožni ÁňaBoard vyfotit obrázek pro dlaždici."
@@ -40,6 +42,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withPodsDeploymentTarget",
       "@sentry/react-native",
       "expo-sqlite",
       "expo-asset",

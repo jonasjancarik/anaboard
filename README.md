@@ -125,6 +125,31 @@ Notes:
 - Local APK builds default `SENTRY_DISABLE_AUTO_UPLOAD=true`; CI can upload source maps separately when configured.
 - The local release APK is debug-signed by Expo's generated template, good for device testing, not for Play Store upload.
 
+## iOS builds (TestFlight)
+
+Local path: the build is archived and signed on your Mac, then uploaded straight to App Store Connect.
+
+```bash
+npm run ios:doctor
+npm run ios:testflight
+```
+
+One-time setup:
+
+- App Store Connect -> Users and Access -> Integrations -> App Store Connect API -> create a Team key with the Admin role (needed so Xcode can create the distribution certificate and profiles)
+- save the downloaded file as `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`
+- add `ASC_KEY_ID` and `ASC_ISSUER_ID` to `.env.local`
+- App Store Connect -> Apps -> New App: platform iOS, bundle ID `cz.jonasjancarik.anaboard`; the bundle ID appears in the list after the first `npm run ios:archive`
+
+Notes:
+
+- `npm run ios:archive` regenerates `/ios` from `app.json` (`expo prebuild --clean`) and builds a signed archive in `release-artifacts/ios/`.
+- `npm run ios:testflight` archives and uploads. Override the build number with `IOS_BUILD_NUMBER`; by default it is a timestamp such as `261022.2305`, so every upload is newer than the last one.
+- The marketing version comes from `expo.version` in `app.json`.
+- Builds default `SENTRY_DISABLE_AUTO_UPLOAD=true`, like the Android script.
+- `ITSAppUsesNonExemptEncryption` is `false` in `app.json`, so App Store Connect does not ask about export compliance for each build.
+- Android keeps the `com.anonymous.anaboard` package so existing APK installs keep updating.
+
 ## Environment
 
 Copy `.env.example` to `.env.local` and set values when enabling cloud sync.
