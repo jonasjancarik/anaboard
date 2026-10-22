@@ -49,6 +49,15 @@ const sanitizeEmojiSuggestions = (suggestions: EmojiSuggestion[]): EmojiSuggesti
     }));
 };
 
+// Thrown when the AI function fails without a server-provided reason (network, relay, crash).
+// Callers show their own localized message instead of the raw transport error.
+export class AiUnavailableError extends Error {
+  constructor(functionName: string, cause?: string) {
+    super(cause || `Volání AI funkce ${functionName} selhalo.`);
+    this.name = 'AiUnavailableError';
+  }
+}
+
 const invokeFunction = async <TResponse>(
   functionName: string,
   body: unknown
@@ -100,7 +109,11 @@ const invokeFunction = async <TResponse>(
       }
     }
 
-    throw new Error(detailedMessage || error.message || `Volání AI funkce ${functionName} selhalo.`);
+    if (detailedMessage) {
+      throw new Error(detailedMessage);
+    }
+
+    throw new AiUnavailableError(functionName, error.message);
   }
 
   return data as TResponse;

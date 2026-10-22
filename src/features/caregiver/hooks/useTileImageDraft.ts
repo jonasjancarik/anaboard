@@ -24,6 +24,8 @@ type UseTileImageDraftParams = {
   onError: (message: string | null) => void;
 };
 
+const MAX_GENERATED_DRAFTS = 3;
+
 export type GeneratedTileImageDraft = {
   draftId: string;
   storagePath: string;
@@ -49,8 +51,15 @@ export const useTileImageDraft = ({
   const [imageRemotePath, setImageRemotePath] = useState<string | null>(
     initialImageRemotePath ?? null
   );
-  const [generatedDraft, setGeneratedDraft] =
-    useState<GeneratedTileImageDraft | null>(null);
+  const [generatedDrafts, setGeneratedDrafts] = useState<
+    GeneratedTileImageDraft[]
+  >([]);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const selectedDraft =
+    visualType === "image"
+      ? (generatedDrafts.find((draft) => draft.draftId === selectedDraftId) ??
+        null)
+      : null;
 
   const discardDraftImage = async (uri?: string | null) => {
     if (!uri || !draftImageUrisRef.current.has(uri)) {
@@ -72,7 +81,8 @@ export const useTileImageDraft = ({
     setVisualType(initialVisualType);
     setImageLocalUri(initialImageLocalUri ?? null);
     setImageRemotePath(initialImageRemotePath ?? null);
-    setGeneratedDraft(null);
+    setGeneratedDrafts([]);
+    setSelectedDraftId(null);
   }, [tileId]);
 
   useEffect(() => {
@@ -100,6 +110,7 @@ export const useTileImageDraft = ({
       draftImageUrisRef.current.add(persistedUri);
       setImageLocalUri(persistedUri);
       setImageRemotePath(null);
+      setSelectedDraftId(null);
       setVisualType("image");
       onError(null);
     } catch (error) {
@@ -154,19 +165,34 @@ export const useTileImageDraft = ({
     await discardDraftImage(imageLocalUri);
     setImageLocalUri(null);
     setImageRemotePath(null);
-    setGeneratedDraft(null);
+    setSelectedDraftId(null);
     setVisualType("emoji");
   };
 
-  const setGeneratedDraftPreview = (draft: GeneratedTileImageDraft) => {
+  const chooseEmojiVisual = () => {
+    setSelectedDraftId(null);
+    setVisualType("emoji");
+  };
+
+  // Newest first; the new draft becomes the chosen tile image until Save.
+  const addGeneratedDraft = (draft: GeneratedTileImageDraft) => {
     if (draft.localUri) {
       draftImageUrisRef.current.add(draft.localUri);
     }
-    setGeneratedDraft(draft);
+
+    const nextDrafts = [draft, ...generatedDrafts];
+    const evicted = nextDrafts.slice(MAX_GENERATED_DRAFTS);
+    evicted.forEach((item) => {
+      void discardDraftImage(item.localUri);
+    });
+    setGeneratedDrafts(nextDrafts.slice(0, MAX_GENERATED_DRAFTS));
+    setSelectedDraftId(draft.draftId);
+    setVisualType("image");
   };
 
-  const clearGeneratedDraft = () => {
-    setGeneratedDraft(null);
+  const selectGeneratedDraft = (draftId: string) => {
+    setSelectedDraftId(draftId);
+    setVisualType("image");
   };
 
   const applyGeneratedDraft = async (params: {
@@ -174,10 +200,16 @@ export const useTileImageDraft = ({
     remotePath: string;
   }) => {
     await discardDraftImage(imageLocalUri);
+    await Promise.all(
+      generatedDrafts
+        .filter((draft) => draft.localUri && draft.localUri !== params.localUri)
+        .map((draft) => discardDraftImage(draft.localUri)),
+    );
     draftImageUrisRef.current.add(params.localUri);
     setImageLocalUri(params.localUri);
     setImageRemotePath(params.remotePath);
-    setGeneratedDraft(null);
+    setGeneratedDrafts([]);
+    setSelectedDraftId(null);
     setVisualType("image");
   };
 
@@ -190,25 +222,28 @@ export const useTileImageDraft = ({
 
     if (persistCurrentImage && nextPersistedImageLocalUri) {
       draftImageUrisRef.current.delete(nextPersistedImageLocalUri);
-      setGeneratedDraft(null);
       return;
     }
 
     await discardDraftImage(nextPersistedImageLocalUri);
-    setGeneratedDraft(null);
   };
 
   return {
     visualType,
-    setVisualType,
     imageLocalUri,
     imageRemotePath,
-    previewImageLocalUri: imageLocalUri,
-    previewImageRemotePath: imageRemotePath,
-    generatedDraft,
-    hasPreviewImage: Boolean(imageLocalUri || imageRemotePath),
-    setGeneratedDraftPreview,
-    clearGeneratedDraft,
+    previewImageLocalUri: selectedDraft
+      ? (selectedDraft.localUri ?? null)
+      : imageLocalUri,
+    previewImageRemotePath: selectedDraft
+      ? selectedDraft.previewUrl
+      : imageRemotePath,
+    generatedDrafts,
+    selectedDraft,
+    hasPreviewImage: Boolean(selectedDraft || imageLocalUri || imageRemotePath),
+    chooseEmojiVisual,
+    addGeneratedDraft,
+    selectGeneratedDraft,
     applyGeneratedDraft,
     pickImageFromLibrary,
     takePhoto,

@@ -199,9 +199,9 @@ Why:
 
 UI:
 
-- in tile editor, label field section
-- button: `Navrhnout emoji`
-- show 3-5 chips
+- in the tile picture sheet (`Obrázek dlaždice`, opened from the tile preview)
+- requested automatically when the sheet opens and the tile has text (cheap)
+- show 3-5 chips next to the current emoji
 - tap chip -> preview emoji
 - still requires save
 
@@ -211,15 +211,15 @@ Use only when caregiver explicitly requests it.
 
 UI:
 
-- in tile visual options
-- action: `Vygenerovat obrázek`
-- show preview card/sheet
-- actions:
-  - `Použít`
-  - `Zkusit znovu`
-  - `Zrušit`
+- in the tile picture sheet, section `Obrázek od AI`
+- action: `✨ Nakreslit „<text>“`, then `✨ Zkusit jiný obrázek`
+- never generated just by opening the sheet
+- placeholder with spinner while generating
+- last 3 drafts stay as choices; the newest is selected, tap to pick another
+- anonymous users see how many trial pictures remain
 
-No auto-save on generation.
+No auto-save on generation. A selected draft is only a preview until the
+caregiver presses `Uložit`; leaving the editor with unsaved changes asks first.
 
 ## Proposed function endpoints
 
@@ -339,7 +339,7 @@ Cleanup policy:
 
 ### Generate draft
 
-1. Caregiver taps `Vygenerovat obrázek`.
+1. Caregiver taps `Nakreslit „<text>“`.
 2. App calls `ai-image-draft-generate`.
 3. Function calls OpenAI.
 4. OpenAI returns base64 image data.
@@ -352,8 +352,8 @@ Cleanup policy:
 
 ### Accept draft
 
-1. Caregiver taps `Použít`.
-2. App calls `ai-image-draft-promote`.
+1. Caregiver selects a draft (or keeps the newest one) and presses `Uložit`.
+2. App calls `ai-image-draft-promote` as part of saving the tile.
 3. Function copies/moves draft object to final tile path.
 4. Function returns final `storagePath` and signed URL.
 5. App persists the signed URL locally into managed media.
@@ -361,7 +361,6 @@ Cleanup policy:
    - `visualType: "image"`
    - `imageRemotePath: final storage path`
    - `imageLocalUri: persisted local copy`
-7. Caregiver presses normal `Uložit`.
 
 ### Why local persistence on accept
 

@@ -305,18 +305,13 @@ export type LocaleCopy = {
     deleteTileTitle: string;
     deleteTileBody: string;
     signInCta: string;
+    unsavedTitle: string;
+    unsavedBody: string;
+    unsavedDiscard: string;
+    unsavedKeepEditing: string;
   };
   tileAppearance: {
     labelPlaceholder: string;
-  };
-  imageDraft: {
-    title: string;
-    generating: string;
-    draftReady: string;
-    applying: string;
-    apply: string;
-    retry: string;
-    discard: string;
   };
   emojiSuggestion: {
     title: string;
@@ -327,33 +322,26 @@ export type LocaleCopy = {
     noneFound: string;
     failed: string;
   };
-  tileVisualOptions: {
-    keyboardEmoji: string;
+  tileIconSheet: {
+    title: string;
+    saveHint: string;
+    emojiSection: string;
+    moreEmoji: string;
+    typeOwn: string;
+    photoSection: string;
     photoLibrary: string;
     camera: string;
-    generatingImage: string;
-    suggestIcon: string;
-    title: string;
-    subtitle: string;
-    removePhoto: string;
+    aiSection: string;
+    aiGenerate: (label: string) => string;
+    aiGenerateAnother: string;
+    aiGenerating: string;
+    aiNeedsLabel: string;
+    aiRemaining: (count: number) => string;
+    removeImage: string;
   };
   emojiKeyboard: {
     title: string;
     subtitle: string;
-  };
-  smartIcon: {
-    title: string;
-    subtitle: (label: string) => string;
-    currentPreview: string;
-    emojiSuggestions: string;
-    searching: string;
-    noEmoji: string;
-    imageSuggestion: string;
-    generating: string;
-    useImage: string;
-    retryImage: string;
-    noImage: string;
-    suggestImage: string;
   };
   categoryOrder: {
     title: string;

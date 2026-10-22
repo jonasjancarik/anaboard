@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MutableRefObject } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import EmojiPicker, { cs, type EmojiType } from "rn-emoji-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmojiKeyboardModal } from "../components/EmojiKeyboardModal";
-import { SmartIconSuggestionsModal } from "../components/SmartIconSuggestionsModal";
 import { TileAppearanceSection } from "../components/TileAppearanceSection";
-import { TileVisualOptionsModal } from "../components/TileVisualOptionsModal";
+import { TileIconSheet } from "../components/TileIconSheet";
 import { useEmojiSuggestions } from "../hooks/useEmojiSuggestions";
+import { AiUnavailableError } from "../../ai/aiClient";
 import { imageDraftService } from "../../ai/imageDraftService";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { useTileImageDraft } from "../hooks/useTileImageDraft";
@@ -18,6 +18,7 @@ import {
   CATEGORY_COLORS,
 } from "../../../shared/constants/defaults";
 import { appHaptics } from "../../../shared/feedback/haptics";
+import { isWebPlatform } from "../../../shared/platform/runtime";
 import { getAppCopy } from "../../../shared/i18n/appCopy";
 import { normalizeSupportedLocale } from "../../../shared/i18n/profileLanguage";
 import type {
@@ -32,6 +33,7 @@ import { logError, logEvent } from "../../../shared/telemetry/logger";
 
 type EditorScreenProps = {
   onBack: () => void;
+  backHandlerRef?: MutableRefObject<(() => void) | null>;
 };
 
 const categories: Category[] = [
@@ -46,7 +48,7 @@ const speechModes: SpeechMode[] = [
   "recording_only",
 ];
 
-export const EditorScreen = ({ onBack }: EditorScreenProps) => {
+export const EditorScreen = ({ onBack, backHandlerRef }: EditorScreenProps) => {
   const authStatus = useAppStore((state) => state.authStatus);
   const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const remoteContext = useAppStore((state) => state.remoteContext);
@@ -72,13 +74,12 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [isEmojiKeyboardModalOpen, setIsEmojiKeyboardModalOpen] =
     useState(false);
-  const [isVisualMenuOpen, setIsVisualMenuOpen] = useState(false);
-  const [isSmartSuggestionsOpen, setIsSmartSuggestionsOpen] = useState(false);
+  const [isIconSheetOpen, setIsIconSheetOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTestingSpeech, setIsTestingSpeech] = useState(false);
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
-  const [isApplyingAiImage, setIsApplyingAiImage] = useState(false);
+  const [aiTrialRemaining, setAiTrialRemaining] = useState<number | null>(null);
   const [hasExplicitCategoryChoice, setHasExplicitCategoryChoice] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [tileActionError, setTileActionError] = useState<string | null>(null);
@@ -108,15 +109,16 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const {
     visualType,
-    setVisualType,
     imageLocalUri,
     imageRemotePath,
     previewImageLocalUri,
     previewImageRemotePath,
-    generatedDraft,
+    generatedDrafts,
+    selectedDraft,
     hasPreviewImage,
-    setGeneratedDraftPreview,
-    clearGeneratedDraft,
+    chooseEmojiVisual,
+    addGeneratedDraft,
+    selectGeneratedDraft,
     applyGeneratedDraft,
     pickImageFromLibrary,
     takePhoto,
@@ -142,10 +144,8 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
     setSpeechMode(selectedTile.speechMode);
     setIsEmojiPickerOpen(false);
     setIsEmojiKeyboardModalOpen(false);
-    setIsVisualMenuOpen(false);
-    setIsSmartSuggestionsOpen(false);
+    setIsIconSheetOpen(false);
     setIsGeneratingAiImage(false);
-    setIsApplyingAiImage(false);
     setHasExplicitCategoryChoice(false);
     setRecordingError(null);
     setTileActionError(null);
@@ -222,16 +222,56 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   const saveTile = async () => {
     if (!selectedTile) {
-      return;
+      return false;
     }
 
     setIsSaving(true);
     setTileActionError(null);
 
     try {
-      const payload = buildTileUpdatePayload();
+      let payloadOverrides:
+        | {
+            visualType: TileVisualType;
+            imageLocalUri: string | null;
+            imageRemotePath: string | null;
+          }
+        | undefined;
+
+      // A chosen AI picture is only a draft until Save; promote it now.
+      if (selectedDraft && previewVisualType === "image") {
+        let promoted;
+        try {
+          promoted = await imageDraftService.promoteDraft({
+            profileId: remoteContext?.profileId,
+            tileId: selectedTile.id,
+            draftId: selectedDraft.draftId,
+            draftStoragePath: selectedDraft.storagePath,
+            localUri: selectedDraft.localUri,
+          });
+        } catch (error) {
+          throw new Error(
+            error instanceof Error &&
+              error.message &&
+              !(error instanceof AiUnavailableError)
+              ? error.message
+              : copy.editor.aiImageApplyError,
+          );
+        }
+
+        await applyGeneratedDraft({
+          localUri: promoted.localUri,
+          remotePath: promoted.storagePath,
+        });
+        payloadOverrides = {
+          visualType: "image",
+          imageLocalUri: promoted.localUri,
+          imageRemotePath: promoted.storagePath,
+        };
+      }
+
+      const payload = buildTileUpdatePayload(payloadOverrides);
       if (!payload) {
-        return;
+        return false;
       }
 
       await updateTileDraft(selectedTile.id, payload);
@@ -240,30 +280,94 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         payload.imageLocalUri,
       );
       void appHaptics.success();
+      return true;
     } catch (error) {
       void appHaptics.error();
       setTileActionError(
         error instanceof Error ? error.message : copy.editor.saveTileError,
       );
+      return false;
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleEditVisual = () => {
-    setIsVisualMenuOpen(true);
+  const isDirty = Boolean(
+    selectedTile &&
+      (effectiveLabel !== selectedTile.labelCs ||
+        previewEmoji !== selectedTile.emoji ||
+        category !== selectedTile.category ||
+        speechMode !== selectedTile.speechMode ||
+        previewVisualType !== selectedTile.visualType ||
+        (previewVisualType === "image" &&
+          (selectedDraft !== null ||
+            (imageLocalUri ?? null) !== (selectedTile.imageLocalUri ?? null) ||
+            (imageRemotePath ?? null) !==
+              (selectedTile.imageRemotePath ?? null)))),
+  );
+
+  const requestLeave = () => {
+    if (!isDirty || isSaving) {
+      onBack();
+      return;
+    }
+
+    if (isWebPlatform && typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        `${copy.editor.unsavedTitle}\n\n${copy.editor.unsavedBody}\n\n${copy.editor.unsavedDiscard}?`,
+      );
+      if (confirmed) {
+        onBack();
+      }
+      return;
+    }
+
+    Alert.alert(copy.editor.unsavedTitle, copy.editor.unsavedBody, [
+      { text: copy.editor.unsavedKeepEditing, style: "cancel" },
+      {
+        text: copy.editor.unsavedDiscard,
+        style: "destructive",
+        onPress: onBack,
+      },
+      {
+        text: copy.common.save,
+        onPress: () => {
+          void saveTile().then((saved) => {
+            if (saved) {
+              onBack();
+            }
+          });
+        },
+      },
+    ]);
   };
 
-  const openSmartSuggestions = () => {
-    setIsVisualMenuOpen(false);
+  if (backHandlerRef) {
+    backHandlerRef.current = requestLeave;
+  }
+
+  useEffect(() => {
+    if (!backHandlerRef) {
+      return;
+    }
+
+    return () => {
+      backHandlerRef.current = null;
+    };
+  }, [backHandlerRef]);
+
+  const handleEditVisual = () => {
     setIsEmojiPickerOpen(false);
     setIsEmojiKeyboardModalOpen(false);
-    setIsSmartSuggestionsOpen(true);
+    setIsIconSheetOpen(true);
 
-    if (effectiveLabel.trim()) {
-      if (!isEmojiSuggestionsLoading && emojiSuggestions.length === 0) {
-        void requestEmojiSuggestions();
-      }
+    if (
+      aiEmojiSuggestionsEnabled &&
+      effectiveLabel.trim() &&
+      !isEmojiSuggestionsLoading &&
+      emojiSuggestions.length === 0
+    ) {
+      void requestEmojiSuggestions();
     }
   };
 
@@ -300,12 +404,15 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         trial_remaining:
           typeof draft.trialRemaining === "number" ? draft.trialRemaining : null,
       });
-      setGeneratedDraftPreview({
+      addGeneratedDraft({
         draftId: draft.draftId,
         storagePath: draft.storagePath,
         previewUrl: draft.signedUrl,
         localUri: draft.localUri,
       });
+      if (typeof draft.trialRemaining === "number") {
+        setAiTrialRemaining(draft.trialRemaining);
+      }
       void appHaptics.success();
     } catch (error) {
       logError("ai_image_generate_error", error, {
@@ -317,49 +424,12 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
       });
       void appHaptics.error();
       setTileActionError(
-        error instanceof Error ? error.message : copy.editor.aiImageGenerateError,
+        error instanceof Error && !(error instanceof AiUnavailableError)
+          ? error.message
+          : copy.editor.aiImageGenerateError,
       );
     } finally {
       setIsGeneratingAiImage(false);
-    }
-  };
-
-  const handleApplyAiImage = async () => {
-    if (!selectedTile || !generatedDraft) {
-      return;
-    }
-
-    setIsApplyingAiImage(true);
-    setTileActionError(null);
-
-    try {
-      const promoted = await imageDraftService.promoteDraft({
-        profileId: remoteContext?.profileId,
-        tileId: selectedTile.id,
-        draftId: generatedDraft.draftId,
-        draftStoragePath: generatedDraft.storagePath,
-        localUri: generatedDraft.localUri,
-      });
-
-      await applyGeneratedDraft({
-        localUri: promoted.localUri,
-        remotePath: promoted.storagePath,
-      });
-      await updateTileDraft(selectedTile.id, {
-        visualType: "image",
-        imageLocalUri: promoted.localUri,
-        imageRemotePath: promoted.storagePath,
-      });
-      await commitDraft(true, promoted.localUri);
-      setIsSmartSuggestionsOpen(false);
-      void appHaptics.success();
-    } catch (error) {
-      void appHaptics.error();
-      setTileActionError(
-        error instanceof Error ? error.message : copy.editor.aiImageApplyError,
-      );
-    } finally {
-      setIsApplyingAiImage(false);
     }
   };
 
@@ -561,7 +631,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <ScreenHeader title={copy.editor.title} onBack={onBack} backLabel={copy.common.back} />
+      <ScreenHeader title={copy.editor.title} onBack={requestLeave} backLabel={copy.common.back} />
 
       <EmojiPicker
         open={isEmojiPickerOpen}
@@ -570,7 +640,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         }}
         onEmojiSelected={(selected: EmojiType) => {
           setEmoji(selected.emoji);
-          setVisualType("emoji");
+          chooseEmojiVisual();
           setTileActionError(null);
           setIsEmojiPickerOpen(false);
         }}
@@ -585,7 +655,7 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         locale={locale}
         onChange={(nextEmoji) => {
           setEmoji(nextEmoji);
-          setVisualType("emoji");
+          chooseEmojiVisual();
           setTileActionError(null);
         }}
         onClose={() => {
@@ -593,87 +663,66 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
         }}
       />
 
-      <TileVisualOptionsModal
-        visible={isVisualMenuOpen}
-        locale={locale}
-        hasPreviewImage={hasPreviewImage}
-        showSuggestionsAction={
-          aiEmojiSuggestionsEnabled || aiGeneratedTileImagesEnabled
-        }
-        canSuggest={Boolean(effectiveLabel.trim())}
-        isGeneratingImage={isGeneratingAiImage}
-        onClose={() => {
-          setIsVisualMenuOpen(false);
-        }}
-        onSelectEmoji={() => {
-          setIsVisualMenuOpen(false);
-          setIsEmojiKeyboardModalOpen(false);
-          setIsEmojiPickerOpen(true);
-          setTileActionError(null);
-        }}
-        onSelectEmojiKeyboard={() => {
-          setIsVisualMenuOpen(false);
-          setIsEmojiPickerOpen(false);
-          setIsEmojiKeyboardModalOpen(true);
-          setTileActionError(null);
-        }}
-        onSelectPhotoLibrary={() => {
-          setIsVisualMenuOpen(false);
-          setIsEmojiPickerOpen(false);
-          setIsEmojiKeyboardModalOpen(false);
-          void pickImageFromLibrary();
-        }}
-        onSelectCamera={() => {
-          setIsVisualMenuOpen(false);
-          setIsEmojiPickerOpen(false);
-          setIsEmojiKeyboardModalOpen(false);
-          void takePhoto();
-        }}
-        onOpenSuggestions={() => {
-          openSmartSuggestions();
-        }}
-        onRemoveImage={() => {
-          setIsVisualMenuOpen(false);
-          clearGeneratedDraft();
-          void removeImage();
-        }}
-      />
-
-      <SmartIconSuggestionsModal
-        visible={isSmartSuggestionsOpen}
+      <TileIconSheet
+        visible={isIconSheetOpen}
         locale={locale}
         label={effectiveLabel}
         previewEmoji={previewEmoji}
         previewVisualType={previewVisualType}
         previewImageLocalUri={previewImageLocalUri}
         previewImageRemotePath={previewImageRemotePath}
-        generatedImageLocalUri={generatedDraft?.localUri}
-        generatedImageRemotePath={generatedDraft?.previewUrl}
+        previewBackgroundColor={previewColors.background}
+        hasImage={hasPreviewImage && previewVisualType === "image"}
+        showEmojiSuggestions={aiEmojiSuggestionsEnabled}
         emojiSuggestions={emojiSuggestions}
         isEmojiLoading={isEmojiSuggestionsLoading}
         emojiError={emojiSuggestionError}
-        showEmojiSection={aiEmojiSuggestionsEnabled}
-        showImageSection={aiGeneratedTileImagesEnabled}
-        isImageLoading={isGeneratingAiImage}
-        isImageApplying={isApplyingAiImage}
-        hasGeneratedImage={Boolean(generatedDraft)}
+        showAiImages={aiGeneratedTileImagesEnabled}
+        generatedDrafts={generatedDrafts}
+        selectedDraftId={selectedDraft?.draftId ?? null}
+        isGeneratingImage={isGeneratingAiImage}
+        trialRemaining={authIsAnonymous ? aiTrialRemaining : null}
         error={tileActionError}
         showAuthCta={showAuthCtaForTileError}
         onClose={() => {
-          setIsSmartSuggestionsOpen(false);
+          setIsIconSheetOpen(false);
         }}
-        onSelectEmoji={(suggestedEmoji) => {
-          setEmoji(suggestedEmoji);
-          setVisualType("emoji");
+        onSelectEmoji={(value) => {
+          void appHaptics.selection();
+          setEmoji(value);
+          chooseEmojiVisual();
           setTileActionError(null);
         }}
-        onUseGeneratedImage={() => {
-          void handleApplyAiImage();
+        onOpenEmojiPicker={() => {
+          setIsIconSheetOpen(false);
+          setTileActionError(null);
+          setIsEmojiPickerOpen(true);
         }}
-        onRegenerateImage={() => {
+        onOpenEmojiKeyboard={() => {
+          setIsIconSheetOpen(false);
+          setTileActionError(null);
+          setIsEmojiKeyboardModalOpen(true);
+        }}
+        onPickPhoto={() => {
+          setIsIconSheetOpen(false);
+          void pickImageFromLibrary();
+        }}
+        onTakePhoto={() => {
+          setIsIconSheetOpen(false);
+          void takePhoto();
+        }}
+        onGenerateImage={() => {
           void handleGenerateAiImage();
         }}
+        onSelectDraft={(draftId) => {
+          void appHaptics.selection();
+          selectGeneratedDraft(draftId);
+        }}
+        onRemoveImage={() => {
+          void removeImage();
+        }}
         onAuth={() => {
+          setIsIconSheetOpen(false);
           setAuthReturnScreen("editor");
           navigate("auth");
         }}
@@ -852,7 +901,9 @@ export const EditorScreen = ({ onBack }: EditorScreenProps) => {
                       (isSaving || isRecording || visualSelectionIncomplete) &&
                         styles.actionButtonDisabled,
                     ]}
-                    onPress={saveTile}
+                    onPress={() => {
+                      void saveTile();
+                    }}
                     disabled={isSaving || isRecording || visualSelectionIncomplete}
                   >
                     <Text style={styles.actionButtonText}>

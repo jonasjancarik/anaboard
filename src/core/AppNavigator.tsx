@@ -1,5 +1,5 @@
 import { Alert, BackHandler, StyleSheet, View } from 'react-native';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { BoardScreen } from '../features/board/screens/BoardScreen';
 import { AuthScreen } from '../features/auth/screens/AuthScreen';
@@ -31,10 +31,17 @@ export const AppNavigator = () => {
   const clearPendingCaregiverAction = useAppStore((state) => state.clearPendingCaregiverAction);
   const usesAppPin = isWebPlatform || Boolean(settings?.backupPinEnabled);
   const copy = getAppCopy(board?.locale);
+  // The editor installs its own back handler so it can ask about unsaved changes.
+  const editorBackHandlerRef = useRef<(() => void) | null>(null);
 
   const goBack = useCallback((): boolean => {
     if (currentScreen === 'pinSettings' || currentScreen === 'tileArchive') {
       navigate('settings');
+      return true;
+    }
+
+    if (currentScreen === 'editor' && editorBackHandlerRef.current) {
+      editorBackHandlerRef.current();
       return true;
     }
 
@@ -134,7 +141,12 @@ export const AppNavigator = () => {
     return <BootstrapScreen />;
   }
 
-  const editorScreen = <EditorScreen onBack={() => navigate('board')} />;
+  const editorScreen = (
+    <EditorScreen
+      onBack={() => navigate('board')}
+      backHandlerRef={editorBackHandlerRef}
+    />
+  );
 
   if (currentScreen === 'auth') {
     const authScreen = (

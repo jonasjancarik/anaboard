@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { aiClient } from "../../ai/aiClient";
+import { AiUnavailableError, aiClient } from "../../ai/aiClient";
 import { logError, logEvent } from "../../../shared/telemetry/logger";
 import type { EmojiSuggestion } from "../../../shared/ai/contracts";
 import { getAppCopy } from "../../../shared/i18n/appCopy";
@@ -132,7 +132,8 @@ export const useEmojiSuggestions = ({
         label_length: normalizedLabel.length,
       });
       setError(
-        requestError instanceof Error
+        requestError instanceof Error &&
+          !(requestError instanceof AiUnavailableError)
           ? requestError.message
           : copy.failed
       );

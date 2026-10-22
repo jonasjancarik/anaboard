@@ -344,25 +344,20 @@ export const CS_APP_COPY: LocaleCopy = {
       deleteRecordingError: "Nahrávku nešlo smazat",
       saveTileError: "Dlaždici nešlo uložit",
       deleteTileError: "Dlaždici nešlo smazat",
-      imageRequired: "Nejdřív přidej fotku z foťáku nebo knihovny.",
+      imageRequired: "Nejdřív vyber obrázek dlaždice.",
       labelRequired: "Nejdřív napiš text dlaždice.",
-      aiImageGenerateError: "AI obrázek nešel vytvořit",
-      aiImageApplyError: "AI obrázek nešel použít",
+      aiImageGenerateError: "Obrázek teď nešel nakreslit. Zkontroluj připojení a zkus to znovu.",
+      aiImageApplyError: "Obrázek od AI nešel uložit. Zkus to znovu.",
       deleteTileTitle: "Smazat vybranou dlaždici?",
       deleteTileBody: "Dlaždice zmizí z tabule a zůstane dostupná v archivu.",
       signInCta: "Přihlásit / založit účet",
+      unsavedTitle: "Neuložené změny",
+      unsavedBody: "Úpravy této dlaždice ještě nejsou uložené.",
+      unsavedDiscard: "Zahodit změny",
+      unsavedKeepEditing: "Pokračovat v úpravách",
     },
     tileAppearance: {
       labelPlaceholder: "Text",
-    },
-    imageDraft: {
-      title: "AI obrázek",
-      generating: "Vytvářím náhled obrázku...",
-      draftReady: "AI náhled ještě není uložený do dlaždice.",
-      applying: "Používám...",
-      apply: "Použít",
-      retry: "Zkusit znovu",
-      discard: "Zahodit",
     },
     emojiSuggestion: {
       title: "Emoji návrh",
@@ -371,35 +366,39 @@ export const CS_APP_COPY: LocaleCopy = {
       labelRequired: "Nejdřív napiš text dlaždice.",
       timeout: "AI návrh se zatím nevrátil ani po minutě.",
       noneFound: "Teď jsem nenašel dobrý emoji návrh.",
-      failed: "Emoji návrh teď nevyšel.",
+      failed: "Návrhy emoji teď nejsou dostupné. Zkus to později.",
     },
-    tileVisualOptions: {
-      keyboardEmoji: "Emoji/text z klávesnice",
-      photoLibrary: "Fotka z knihovny",
+    tileIconSheet: {
+      title: "Obrázek dlaždice",
+      saveHint: "Vyber emoji, fotku nebo obrázek. Do dlaždice se uloží tlačítkem Uložit.",
+      emojiSection: "Emoji",
+      moreEmoji: "Vybrat jiné emoji",
+      typeOwn: "Napsat vlastní",
+      photoSection: "Fotka",
+      photoLibrary: "Z galerie",
       camera: "Vyfotit",
-      generatingImage: "Vytvářím obrázek...",
-      suggestIcon: "Navrhnout ikonu",
-      title: "Ikona dlaždice",
-      subtitle: "Vyber, jak chceš dlaždici upravit.",
-      removePhoto: "Odebrat fotku",
+      aiSection: "Obrázek od AI",
+      aiGenerate: (label) => (label ? `✨ Nakreslit „${label}“` : "✨ Nakreslit obrázek"),
+      aiGenerateAnother: "✨ Zkusit jiný obrázek",
+      aiGenerating: "Kreslím obrázek, obvykle to trvá do půl minuty.",
+      aiNeedsLabel: "Nejdřív napiš text dlaždice. Podle něj obrázek nakreslím.",
+      aiRemaining: (count) => {
+        if (count <= 0) {
+          return "Obrázky na vyzkoušení došly. Pro další se přihlas.";
+        }
+        if (count === 1) {
+          return "Bez účtu můžeš vytvořit ještě 1 obrázek.";
+        }
+        if (count <= 4) {
+          return `Bez účtu můžeš vytvořit ještě ${count} obrázky.`;
+        }
+        return `Bez účtu můžeš vytvořit ještě ${count} obrázků.`;
+      },
+      removeImage: "Odebrat obrázek",
     },
     emojiKeyboard: {
-      title: "Emoji/text z klávesnice",
+      title: "Vlastní emoji nebo text",
       subtitle: "Vlož emoji nebo krátký text přímo z normální klávesnice telefonu.",
-    },
-    smartIcon: {
-      title: "Návrh ikony",
-      subtitle: (label) => `Vyber emoji nebo obrázek pro dlaždici ${label ? `„${label}“` : ""}.`,
-      currentPreview: "Aktuální návrh",
-      emojiSuggestions: "Emoji návrhy",
-      searching: "Hledám…",
-      noEmoji: "Zatím bez emoji návrhu.",
-      imageSuggestion: "Obrázkový návrh",
-      generating: "Vytvářím…",
-      useImage: "Použít obrázek",
-      retryImage: "Zkusit nový obrázek",
-      noImage: "Zatím bez obrázkového návrhu.",
-      suggestImage: "Navrhnout obrázek",
     },
     categoryOrder: {
       title: "Pořadí kategorií",
