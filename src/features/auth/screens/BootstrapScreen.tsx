@@ -256,6 +256,9 @@ const styles = StyleSheet.create({
     backgroundColor: APP_THEME.background,
   },
   content: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,

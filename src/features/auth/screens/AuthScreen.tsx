@@ -190,6 +190,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SCREEN_CONTENT_PADDING,
   },
   form: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
     paddingTop: 56,
     paddingHorizontal: 24,
   },

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { authService } from '../../auth/authService';
@@ -86,6 +86,11 @@ const formatSyncIssue = (issueCode: SyncIssueCode | null, locale: SupportedLocal
   return null;
 };
 
+const CENTERED_LAYOUT_MIN_WIDTH = 600;
+const CENTERED_LAYOUT_MAX_WIDTH = 680;
+const WIDE_LAYOUT_MIN_WIDTH = 900;
+const WIDE_LAYOUT_MAX_WIDTH = 1120;
+
 export const SettingsScreen = ({
   onBack,
   onOpenArchive,
@@ -93,6 +98,14 @@ export const SettingsScreen = ({
   onOpenAuth,
 }: SettingsScreenProps) => {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  // Phones keep the full-width list; tablets get a centered column, wide screens two columns.
+  const isWideLayout = windowWidth >= WIDE_LAYOUT_MIN_WIDTH;
+  const pageMaxWidth = isWideLayout
+    ? WIDE_LAYOUT_MAX_WIDTH
+    : windowWidth >= CENTERED_LAYOUT_MIN_WIDTH
+      ? CENTERED_LAYOUT_MAX_WIDTH
+      : null;
   const settings = useAppStore((state) => state.settings);
   const board = useAppStore((state) => state.board);
   const tiles = useAppStore((state) => state.tiles);
@@ -651,437 +664,445 @@ export const SettingsScreen = ({
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ScreenHeader title={settingsCopy.title} onBack={onBack} backLabel={copy.common.back} />
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{settingsCopy.sections.cloud}</Text>
-          <View style={styles.cardStack}>
-            <View style={styles.statusBlock}>
-              <Text style={styles.statusTitle}>{syncStatusTitle}</Text>
-              <Text style={styles.statusDetail}>{syncStatusDetail}</Text>
-            </View>
-            {syncSignedOut || syncAnonymous ? (
-              <>
-                <View style={styles.divider} />
-                <SettingRowButton
-                  title={syncAnonymous ? settingsCopy.registerTitle : settingsCopy.signInTitle}
-                  detail={settingsCopy.signInDetail}
-                  onPress={onOpenAuth}
-                />
-              </>
-            ) : null}
-            {hasSupabaseConfig && authStatus === 'signed_in' && !authIsAnonymous ? (
-              <>
-                <View style={styles.divider} />
-                {needsSyncDataChoice ? (
-                  <>
-                    <SettingRowButton
-                      title={settingsCopy.syncKeepLocalTitle}
-                      detail={settingsCopy.syncKeepLocalDetail}
-                      tone="danger"
-                      disabled={isSyncActionRunning}
-                      onPress={confirmKeepLocalData}
-                    />
-                    <View style={styles.divider} />
-                    <SettingRowButton
-                      title={settingsCopy.syncUseCloudTitle}
-                      detail={settingsCopy.syncUseCloudDetail}
-                      tone="danger"
-                      disabled={isSyncActionRunning}
-                      onPress={confirmUseCloudData}
-                    />
-                  </>
-                ) : (
-                  <SettingRowButton
-                    title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
-                    detail={settingsCopy.syncNowDetail}
-                    disabled={isSyncActionRunning}
-                    onPress={() => {
-                      void runSyncAction(() => syncService.syncNow(), settingsCopy.syncChecked);
+        <View style={[styles.page, pageMaxWidth ? { maxWidth: pageMaxWidth } : null]}>
+          <ScreenHeader title={settingsCopy.title} onBack={onBack} backLabel={copy.common.back} />
+          <View style={isWideLayout ? styles.columnsWide : styles.columns}>
+            <View style={isWideLayout ? styles.columnWide : styles.columns}>
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>{settingsCopy.sections.cloud}</Text>
+                <View style={styles.cardStack}>
+                  <View style={styles.statusBlock}>
+                    <Text style={styles.statusTitle}>{syncStatusTitle}</Text>
+                    <Text style={styles.statusDetail}>{syncStatusDetail}</Text>
+                  </View>
+                  {syncSignedOut || syncAnonymous ? (
+                    <>
+                      <View style={styles.divider} />
+                      <SettingRowButton
+                        title={syncAnonymous ? settingsCopy.registerTitle : settingsCopy.signInTitle}
+                        detail={settingsCopy.signInDetail}
+                        onPress={onOpenAuth}
+                      />
+                    </>
+                  ) : null}
+                  {hasSupabaseConfig && authStatus === 'signed_in' && !authIsAnonymous ? (
+                    <>
+                      <View style={styles.divider} />
+                      {needsSyncDataChoice ? (
+                        <>
+                          <SettingRowButton
+                            title={settingsCopy.syncKeepLocalTitle}
+                            detail={settingsCopy.syncKeepLocalDetail}
+                            tone="danger"
+                            disabled={isSyncActionRunning}
+                            onPress={confirmKeepLocalData}
+                          />
+                          <View style={styles.divider} />
+                          <SettingRowButton
+                            title={settingsCopy.syncUseCloudTitle}
+                            detail={settingsCopy.syncUseCloudDetail}
+                            tone="danger"
+                            disabled={isSyncActionRunning}
+                            onPress={confirmUseCloudData}
+                          />
+                        </>
+                      ) : (
+                        <SettingRowButton
+                          title={isSyncActionRunning ? settingsCopy.syncingNowTitle : settingsCopy.syncNowTitle}
+                          detail={settingsCopy.syncNowDetail}
+                          disabled={isSyncActionRunning}
+                          onPress={() => {
+                            void runSyncAction(() => syncService.syncNow(), settingsCopy.syncChecked);
+                          }}
+                        />
+                      )}
+                    </>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>{settingsCopy.sections.language}</Text>
+                <View style={styles.cardStack}>
+                  <View style={styles.statusBlock}>
+                    <Text style={styles.statusTitle}>
+                      {copy.languageOptions.boardLanguage}: {languageLabel}
+                    </Text>
+                    <Text style={styles.statusDetail}>{languageDetail}</Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <SettingChoiceStepper
+                    title={copy.languageOptions.boardLanguage}
+                    value={boardLocale}
+                    options={languageOptions}
+                    previousLabel={choicePreviousLabel}
+                    nextLabel={choiceNextLabel}
+                    onChange={(nextValue) => {
+                      const nextLocale = normalizeSupportedLocale(nextValue);
+                      void updateLanguagePreference(boardLocale, nextLocale);
                     }}
                   />
-                )}
-              </>
-            ) : null}
-          </View>
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{settingsCopy.sections.language}</Text>
-          <View style={styles.cardStack}>
-            <View style={styles.statusBlock}>
-              <Text style={styles.statusTitle}>
-                {copy.languageOptions.boardLanguage}: {languageLabel}
-              </Text>
-              <Text style={styles.statusDetail}>{languageDetail}</Text>
-            </View>
-            <View style={styles.divider} />
-            <SettingChoiceStepper
-              title={copy.languageOptions.boardLanguage}
-              value={boardLocale}
-              options={languageOptions}
-              previousLabel={choicePreviousLabel}
-              nextLabel={choiceNextLabel}
-              onChange={(nextValue) => {
-                const nextLocale = normalizeSupportedLocale(nextValue);
-                void updateLanguagePreference(boardLocale, nextLocale);
-              }}
-            />
-            {isGenderedLocale(language.locale) ? (
-              <>
-                <View style={styles.divider} />
-                <SettingChoiceStepper
-                  title={copy.languageOptions.userGender}
-                  value={childGender}
-                  options={childGenderOptions}
-                  previousLabel={choicePreviousLabel}
-                  nextLabel={choiceNextLabel}
-                  onChange={(nextValue) => {
-                    const nextGender = normalizeChildGender(nextValue);
-                    void updateSetting(
-                      childGender,
-                      nextGender,
-                      setChildGender,
-                      { childGender: nextGender },
-                      copy.languageOptions.saveGenderError
-                    );
-                  }}
-                />
-              </>
-            ) : null}
-          </View>
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{settingsCopy.sections.voice}</Text>
-          <View style={styles.cardStack}>
-            <SettingStepper
-              title={settingsCopy.speechRate}
-              value={ttsRate}
-              options={rateOptions}
-              decreaseLabel={stepperDecreaseLabel}
-              increaseLabel={stepperIncreaseLabel}
-              onChange={(nextValue) => {
-                void updateSetting(
-                  ttsRate,
-                  nextValue,
-                  setTtsRate,
-                  { ttsRate: nextValue },
-                  settingsCopy.saveRateError,
-                  () => previewVoice(nextValue, ttsPitch)
-                );
-              }}
-            />
-            <View style={styles.divider} />
-            <SettingStepper
-              title={settingsCopy.speechPitch}
-              value={ttsPitch}
-              options={pitchOptions}
-              decreaseLabel={stepperDecreaseLabel}
-              increaseLabel={stepperIncreaseLabel}
-              onChange={(nextValue) => {
-                void updateSetting(
-                  ttsPitch,
-                  nextValue,
-                  setTtsPitch,
-                  { ttsPitch: nextValue },
-                  settingsCopy.savePitchError,
-                  () => previewVoice(ttsRate, nextValue)
-                );
-              }}
-            />
-            <View style={styles.divider} />
-            {shouldShowVoicePicker ? (
-              <SettingChoiceStepper
-                title={voiceRowTitle}
-                value={selectedVoiceValue}
-                options={voiceOptions}
-                disabled={isVoiceOptionsLoading}
-                previousLabel={choicePreviousLabel}
-                nextLabel={choiceNextLabel}
-                onChange={handleVoiceChange}
-              />
-            ) : (
-              <View style={styles.statusBlock}>
-                <Text style={styles.statusTitle}>{voiceAvailabilityTitle}</Text>
-                <Text style={styles.statusDetail}>{voiceAvailabilityDetail}</Text>
+                  {isGenderedLocale(language.locale) ? (
+                    <>
+                      <View style={styles.divider} />
+                      <SettingChoiceStepper
+                        title={copy.languageOptions.userGender}
+                        value={childGender}
+                        options={childGenderOptions}
+                        previousLabel={choicePreviousLabel}
+                        nextLabel={choiceNextLabel}
+                        onChange={(nextValue) => {
+                          const nextGender = normalizeChildGender(nextValue);
+                          void updateSetting(
+                            childGender,
+                            nextGender,
+                            setChildGender,
+                            { childGender: nextGender },
+                            copy.languageOptions.saveGenderError
+                          );
+                        }}
+                      />
+                    </>
+                  ) : null}
+                </View>
               </View>
-            )}
-            {Platform.OS === 'ios' ? (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.statusBlock}>
-                  <Text style={styles.statusTitle}>{settingsCopy.iosSilentTitle}</Text>
-                  <Text style={styles.statusDetail}>
-                    {settingsCopy.iosSilentDetail}
-                  </Text>
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>{settingsCopy.sections.voice}</Text>
+                <View style={styles.cardStack}>
+                  <SettingStepper
+                    title={settingsCopy.speechRate}
+                    value={ttsRate}
+                    options={rateOptions}
+                    decreaseLabel={stepperDecreaseLabel}
+                    increaseLabel={stepperIncreaseLabel}
+                    onChange={(nextValue) => {
+                      void updateSetting(
+                        ttsRate,
+                        nextValue,
+                        setTtsRate,
+                        { ttsRate: nextValue },
+                        settingsCopy.saveRateError,
+                        () => previewVoice(nextValue, ttsPitch)
+                      );
+                    }}
+                  />
+                  <View style={styles.divider} />
+                  <SettingStepper
+                    title={settingsCopy.speechPitch}
+                    value={ttsPitch}
+                    options={pitchOptions}
+                    decreaseLabel={stepperDecreaseLabel}
+                    increaseLabel={stepperIncreaseLabel}
+                    onChange={(nextValue) => {
+                      void updateSetting(
+                        ttsPitch,
+                        nextValue,
+                        setTtsPitch,
+                        { ttsPitch: nextValue },
+                        settingsCopy.savePitchError,
+                        () => previewVoice(ttsRate, nextValue)
+                      );
+                    }}
+                  />
+                  <View style={styles.divider} />
+                  {shouldShowVoicePicker ? (
+                    <SettingChoiceStepper
+                      title={voiceRowTitle}
+                      value={selectedVoiceValue}
+                      options={voiceOptions}
+                      disabled={isVoiceOptionsLoading}
+                      previousLabel={choicePreviousLabel}
+                      nextLabel={choiceNextLabel}
+                      onChange={handleVoiceChange}
+                    />
+                  ) : (
+                    <View style={styles.statusBlock}>
+                      <Text style={styles.statusTitle}>{voiceAvailabilityTitle}</Text>
+                      <Text style={styles.statusDetail}>{voiceAvailabilityDetail}</Text>
+                    </View>
+                  )}
+                  {Platform.OS === 'ios' ? (
+                    <>
+                      <View style={styles.divider} />
+                      <View style={styles.statusBlock}>
+                        <Text style={styles.statusTitle}>{settingsCopy.iosSilentTitle}</Text>
+                        <Text style={styles.statusDetail}>
+                          {settingsCopy.iosSilentDetail}
+                        </Text>
+                      </View>
+                    </>
+                  ) : null}
                 </View>
-              </>
-            ) : null}
-          </View>
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{settingsCopy.sections.appearanceSecurity}</Text>
-          <View style={styles.cardStack}>
-            <SettingToggleRow
-              title={settingsCopy.highContrast}
-              value={highContrast}
-              onValueChange={(nextValue) => {
-                void updateSetting(
-                  highContrast,
-                  nextValue,
-                  setHighContrast,
-                  { highContrast: nextValue },
-                  settingsCopy.saveContrastError
-                );
-              }}
-            />
-            <View style={styles.divider} />
-            <SettingToggleRow
-              title={settingsCopy.showLabels}
-              value={showLabels}
-              onValueChange={(nextValue) => {
-                void updateSetting(
-                  showLabels,
-                  nextValue,
-                  setShowLabels,
-                  { showLabels: nextValue },
-                  settingsCopy.saveLabelsError
-                );
-              }}
-            />
-            {board ? (
-              <>
-                <View style={styles.divider} />
-                <TileSizeControl
-                  copy={settingsCopy}
-                  columns={board.columns}
-                  rows={board.rows}
-                  tiles={tiles}
-                  layoutMode={boardLayoutMode}
-                  categoryOrder={categoryOrder}
-                  categoriesStartNewPage={categoriesStartNewPage}
-                  locale={locale}
-                  previousLabel={choicePreviousLabel}
-                  nextLabel={choiceNextLabel}
-                  onChange={async (columns, rows) => {
-                    setMessage(null);
-                    try {
-                      await setBoardGridSize(columns, rows);
-                    } catch (error) {
-                      void appHaptics.error();
-                      setMessage(getErrorMessage(error, settingsCopy.saveTileSizeError));
+              </View>
+            </View>
+            <View style={isWideLayout ? styles.columnWide : styles.columns}>
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>{settingsCopy.sections.appearanceSecurity}</Text>
+                <View style={styles.cardStack}>
+                  <SettingToggleRow
+                    title={settingsCopy.highContrast}
+                    value={highContrast}
+                    onValueChange={(nextValue) => {
+                      void updateSetting(
+                        highContrast,
+                        nextValue,
+                        setHighContrast,
+                        { highContrast: nextValue },
+                        settingsCopy.saveContrastError
+                      );
+                    }}
+                  />
+                  <View style={styles.divider} />
+                  <SettingToggleRow
+                    title={settingsCopy.showLabels}
+                    value={showLabels}
+                    onValueChange={(nextValue) => {
+                      void updateSetting(
+                        showLabels,
+                        nextValue,
+                        setShowLabels,
+                        { showLabels: nextValue },
+                        settingsCopy.saveLabelsError
+                      );
+                    }}
+                  />
+                  {board ? (
+                    <>
+                      <View style={styles.divider} />
+                      <TileSizeControl
+                        copy={settingsCopy}
+                        columns={board.columns}
+                        rows={board.rows}
+                        tiles={tiles}
+                        layoutMode={boardLayoutMode}
+                        categoryOrder={categoryOrder}
+                        categoriesStartNewPage={categoriesStartNewPage}
+                        locale={locale}
+                        previousLabel={choicePreviousLabel}
+                        nextLabel={choiceNextLabel}
+                        onChange={async (columns, rows) => {
+                          setMessage(null);
+                          try {
+                            await setBoardGridSize(columns, rows);
+                          } catch (error) {
+                            void appHaptics.error();
+                            setMessage(getErrorMessage(error, settingsCopy.saveTileSizeError));
+                          }
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  <View style={styles.divider} />
+                  <SettingChoiceStepper
+                    title={settingsCopy.boardOrdering}
+                    value={boardLayoutMode}
+                    options={boardLayoutOptions}
+                    previousLabel={choicePreviousLabel}
+                    nextLabel={choiceNextLabel}
+                    onChange={(nextValue) => {
+                      const nextMode = nextValue as BoardLayoutMode;
+                      void updateSetting(
+                        boardLayoutMode,
+                        nextMode,
+                        setBoardLayoutMode,
+                        { boardLayoutMode: nextMode },
+                        settingsCopy.saveOrderingError,
+                        () => setBoardPageIndex(0)
+                      );
+                    }}
+                  />
+                  {boardLayoutMode === 'category' ? (
+                    <>
+                      <View style={styles.divider} />
+                      <SettingToggleRow
+                        title={settingsCopy.categoriesNewPage}
+                        detail={settingsCopy.categoriesNewPageDetail}
+                        value={categoriesStartNewPage}
+                        onValueChange={(nextValue) => {
+                          void updateSetting(
+                            categoriesStartNewPage,
+                            nextValue,
+                            setCategoriesStartNewPage,
+                            { categoriesStartNewPage: nextValue },
+                            settingsCopy.saveCategoryPagesError,
+                            () => setBoardPageIndex(0)
+                          );
+                        }}
+                      />
+                      <View style={styles.divider} />
+                      <CategoryOrderControl
+                        value={categoryOrder}
+                        locale={locale}
+                        onChange={(nextOrder) => {
+                          void updateSetting(
+                            categoryOrder,
+                            nextOrder,
+                            setCategoryOrder,
+                            { categoryOrder: nextOrder },
+                            settingsCopy.saveCategoryOrderError,
+                            () => setBoardPageIndex(0)
+                          );
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  <View style={styles.divider} />
+                  <SettingToggleRow
+                    title={settingsCopy.quickPhrases}
+                    detail={settingsCopy.quickPhrasesDetail}
+                    value={phraseBarEnabled}
+                    onValueChange={(nextValue) => {
+                      void updateSetting(
+                        phraseBarEnabled,
+                        nextValue,
+                        setPhraseBarEnabled,
+                        { phraseBarEnabled: nextValue },
+                        settingsCopy.saveQuickPhrasesError
+                      );
+                    }}
+                  />
+                  {phraseBarEnabled ? (
+                    <>
+                      <View style={styles.divider} />
+                      <SettingChoiceStepper
+                        title={settingsCopy.suggestionCount}
+                        value={suggestionCount}
+                        options={settingsCopy.suggestionCountOptions}
+                        previousLabel={choicePreviousLabel}
+                        nextLabel={choiceNextLabel}
+                        onChange={(nextValue) => {
+                          void updateSetting(
+                            suggestionCount,
+                            nextValue,
+                            setSuggestionCount,
+                            { suggestionCount: Number(nextValue) },
+                            settingsCopy.saveSuggestionCountError
+                          );
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  <View style={styles.divider} />
+                  <SettingToggleRow
+                    title={settingsCopy.protectSettings}
+                    detail={
+                      isWebPlatform
+                        ? settingsCopy.protectSettingsWebDetail
+                        : settingsCopy.protectSettingsNativeDetail
                     }
-                  }}
-                />
-              </>
-            ) : null}
-            <View style={styles.divider} />
-            <SettingChoiceStepper
-              title={settingsCopy.boardOrdering}
-              value={boardLayoutMode}
-              options={boardLayoutOptions}
-              previousLabel={choicePreviousLabel}
-              nextLabel={choiceNextLabel}
-              onChange={(nextValue) => {
-                const nextMode = nextValue as BoardLayoutMode;
-                void updateSetting(
-                  boardLayoutMode,
-                  nextMode,
-                  setBoardLayoutMode,
-                  { boardLayoutMode: nextMode },
-                  settingsCopy.saveOrderingError,
-                  () => setBoardPageIndex(0)
-                );
-              }}
-            />
-            {boardLayoutMode === 'category' ? (
-              <>
-                <View style={styles.divider} />
-                <SettingToggleRow
-                  title={settingsCopy.categoriesNewPage}
-                  detail={settingsCopy.categoriesNewPageDetail}
-                  value={categoriesStartNewPage}
-                  onValueChange={(nextValue) => {
-                    void updateSetting(
-                      categoriesStartNewPage,
-                      nextValue,
-                      setCategoriesStartNewPage,
-                      { categoriesStartNewPage: nextValue },
-                      settingsCopy.saveCategoryPagesError,
-                      () => setBoardPageIndex(0)
-                    );
-                  }}
-                />
-                <View style={styles.divider} />
-                <CategoryOrderControl
-                  value={categoryOrder}
-                  locale={locale}
-                  onChange={(nextOrder) => {
-                    void updateSetting(
-                      categoryOrder,
-                      nextOrder,
-                      setCategoryOrder,
-                      { categoryOrder: nextOrder },
-                      settingsCopy.saveCategoryOrderError,
-                      () => setBoardPageIndex(0)
-                    );
-                  }}
-                />
-              </>
-            ) : null}
-            <View style={styles.divider} />
-            <SettingToggleRow
-              title={settingsCopy.quickPhrases}
-              detail={settingsCopy.quickPhrasesDetail}
-              value={phraseBarEnabled}
-              onValueChange={(nextValue) => {
-                void updateSetting(
-                  phraseBarEnabled,
-                  nextValue,
-                  setPhraseBarEnabled,
-                  { phraseBarEnabled: nextValue },
-                  settingsCopy.saveQuickPhrasesError
-                );
-              }}
-            />
-            {phraseBarEnabled ? (
-              <>
-                <View style={styles.divider} />
-                <SettingChoiceStepper
-                  title={settingsCopy.suggestionCount}
-                  value={suggestionCount}
-                  options={settingsCopy.suggestionCountOptions}
-                  previousLabel={choicePreviousLabel}
-                  nextLabel={choiceNextLabel}
-                  onChange={(nextValue) => {
-                    void updateSetting(
-                      suggestionCount,
-                      nextValue,
-                      setSuggestionCount,
-                      { suggestionCount: Number(nextValue) },
-                      settingsCopy.saveSuggestionCountError
-                    );
-                  }}
-                />
-              </>
-            ) : null}
-            <View style={styles.divider} />
-            <SettingToggleRow
-              title={settingsCopy.protectSettings}
-              detail={
-                isWebPlatform
-                  ? settingsCopy.protectSettingsWebDetail
-                  : settingsCopy.protectSettingsNativeDetail
-              }
-              value={lockEnabled}
-              onValueChange={(nextValue) => {
-                void updateSetting(
-                  lockEnabled,
-                  nextValue,
-                  setLockEnabled,
-                  { lockEnabled: nextValue },
-                  settingsCopy.saveProtectionError
-                );
-              }}
-            />
-            <View style={styles.divider} />
-            <SettingRowButton
-              title={
-                isWebPlatform
-                  ? settingsCopy.appPin
-                  : backupPinEnabled
-                    ? settingsCopy.changeAppPin
-                    : settingsCopy.setAppPin
-              }
-              detail={pinDetail}
-              onPress={onOpenPinSettings}
-            />
-            {!isWebPlatform ? (
-              <>
-                <View style={styles.divider} />
-                <SettingToggleRow
-                  title={settingsCopy.appPinToggle}
-                  detail={settingsCopy.appPinToggleDetail}
-                  value={backupPinEnabled}
-                  onValueChange={(nextValue) => {
-                    void updateSetting(
-                      backupPinEnabled,
-                      nextValue,
-                      setBackupPinEnabled,
-                      { backupPinEnabled: nextValue },
-                      settingsCopy.savePinChoiceError
-                    );
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.statusBlock}>
-                  <Text style={styles.statusTitle}>{settingsCopy.webStorage}</Text>
-                  <Text style={styles.statusDetail}>{webStorageDetail}</Text>
+                    value={lockEnabled}
+                    onValueChange={(nextValue) => {
+                      void updateSetting(
+                        lockEnabled,
+                        nextValue,
+                        setLockEnabled,
+                        { lockEnabled: nextValue },
+                        settingsCopy.saveProtectionError
+                      );
+                    }}
+                  />
+                  <View style={styles.divider} />
+                  <SettingRowButton
+                    title={
+                      isWebPlatform
+                        ? settingsCopy.appPin
+                        : backupPinEnabled
+                          ? settingsCopy.changeAppPin
+                          : settingsCopy.setAppPin
+                    }
+                    detail={pinDetail}
+                    onPress={onOpenPinSettings}
+                  />
+                  {!isWebPlatform ? (
+                    <>
+                      <View style={styles.divider} />
+                      <SettingToggleRow
+                        title={settingsCopy.appPinToggle}
+                        detail={settingsCopy.appPinToggleDetail}
+                        value={backupPinEnabled}
+                        onValueChange={(nextValue) => {
+                          void updateSetting(
+                            backupPinEnabled,
+                            nextValue,
+                            setBackupPinEnabled,
+                            { backupPinEnabled: nextValue },
+                            settingsCopy.savePinChoiceError
+                          );
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.divider} />
+                      <View style={styles.statusBlock}>
+                        <Text style={styles.statusTitle}>{settingsCopy.webStorage}</Text>
+                        <Text style={styles.statusDetail}>{webStorageDetail}</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
-              </>
-            )}
-          </View>
-        </View>
-        <DiagnosticsSettingsSection
-          locale={locale}
-          diagnosticsInput={{
-            authStatus,
-            authIsAnonymous,
-            syncStatus,
-            pendingSyncEvents,
-            syncErrorEvents,
-            lastSuccessfulSyncAt,
-            lastSyncPullAt,
-            syncLastIssue,
-            board,
-            tiles,
-            clipsById,
-            settings,
-            webPersistenceSummary,
-          }}
-          onMessage={setMessage}
-        />
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{settingsCopy.sections.boardManagement}</Text>
-          <View style={styles.cardStack}>
-            <SettingRowButton
-              title={settingsCopy.archive}
-              detail={settingsCopy.archiveDetail}
-              onPress={onOpenArchive}
-            />
-            <SettingRowButton
-              title={isResettingBoard ? settingsCopy.resettingDefaults : settingsCopy.resetDefaults}
-              detail={settingsCopy.resetDefaultsDetail}
-              tone="danger"
-              disabled={isResettingBoard}
-              onPress={confirmBoardReset}
-            />
-          </View>
-        </View>
-        {authStatus === 'signed_in' && !authIsAnonymous ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>{settingsCopy.sections.account}</Text>
-            <View style={styles.cardStack}>
-              <SettingRowButton
-                title={settingsCopy.signOut}
-                detail={settingsCopy.signOutDetail}
-                tone="danger"
-                disabled={isDeletingAccount}
-                onPress={() => {
-                  void signOut();
+              </View>
+              <DiagnosticsSettingsSection
+                locale={locale}
+                diagnosticsInput={{
+                  authStatus,
+                  authIsAnonymous,
+                  syncStatus,
+                  pendingSyncEvents,
+                  syncErrorEvents,
+                  lastSuccessfulSyncAt,
+                  lastSyncPullAt,
+                  syncLastIssue,
+                  board,
+                  tiles,
+                  clipsById,
+                  settings,
+                  webPersistenceSummary,
                 }}
+                onMessage={setMessage}
               />
-              <SettingRowButton
-                title={isDeletingAccount ? settingsCopy.deletingAccount : settingsCopy.deleteAccount}
-                detail={settingsCopy.deleteAccountDetail}
-                tone="danger"
-                disabled={isDeletingAccount}
-                onPress={confirmAccountDelete}
-              />
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>{settingsCopy.sections.boardManagement}</Text>
+                <View style={styles.cardStack}>
+                  <SettingRowButton
+                    title={settingsCopy.archive}
+                    detail={settingsCopy.archiveDetail}
+                    onPress={onOpenArchive}
+                  />
+                  <SettingRowButton
+                    title={isResettingBoard ? settingsCopy.resettingDefaults : settingsCopy.resetDefaults}
+                    detail={settingsCopy.resetDefaultsDetail}
+                    tone="danger"
+                    disabled={isResettingBoard}
+                    onPress={confirmBoardReset}
+                  />
+                </View>
+              </View>
+              {authStatus === 'signed_in' && !authIsAnonymous ? (
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>{settingsCopy.sections.account}</Text>
+                  <View style={styles.cardStack}>
+                    <SettingRowButton
+                      title={settingsCopy.signOut}
+                      detail={settingsCopy.signOutDetail}
+                      tone="danger"
+                      disabled={isDeletingAccount}
+                      onPress={() => {
+                        void signOut();
+                      }}
+                    />
+                    <SettingRowButton
+                      title={isDeletingAccount ? settingsCopy.deletingAccount : settingsCopy.deleteAccount}
+                      detail={settingsCopy.deleteAccountDetail}
+                      tone="danger"
+                      disabled={isDeletingAccount}
+                      onPress={confirmAccountDelete}
+                    />
+                  </View>
+                </View>
+              ) : null}
             </View>
           </View>
-        ) : null}
+        </View>
       </ScrollView>
       {message ? (
         <View
@@ -1110,8 +1131,25 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SCREEN_CONTENT_PADDING,
-    gap: 10,
     paddingBottom: 28,
+  },
+  page: {
+    width: '100%',
+    alignSelf: 'center',
+    gap: 10,
+  },
+  columns: {
+    gap: 10,
+  },
+  columnsWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  columnWide: {
+    flex: 1,
+    minWidth: 0,
+    gap: 10,
   },
   card: {
     backgroundColor: APP_THEME.surface,
