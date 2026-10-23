@@ -94,13 +94,20 @@ export const CS_APP_COPY: LocaleCopy = {
     },
     auth: {
       emailRequired: "Zadej e-mail",
-      linkSent: "Odkaz jsme poslali do e-mailu. Otevři ho na tomto zařízení.",
-      sendFailed: "Odeslání odkazu selhalo",
+      linkSent:
+        "E-mail je na cestě. Opiš kód z e-mailu sem, nebo v e-mailu klepni na odkaz na tomto zařízení.",
+      sendFailed: "E-mail se nepodařilo odeslat. Zkus to znovu.",
       anonymousSubtitle:
-        "Zadej e-mail. Pošleme jednorázový odkaz a po návratu se vrátíš k rozpracované dlaždici.",
-      signedOutSubtitle: "Zadej e-mail. Pošleme jednorázový odkaz pro přihlášení.",
+        "Zadej svůj e-mail. Pošleme ti kód pro přihlášení a tabule se pak bude zálohovat do cloudu.",
+      signedOutSubtitle: "Zadej svůj e-mail. Pošleme ti kód pro přihlášení.",
       sending: "Posílám...",
-      sendLink: "Poslat odkaz do e-mailu",
+      sendLink: "Poslat kód do e-mailu",
+      tooManyEmails: "Teď jsme poslali moc e-mailů. Zkus to prosím za pár minut.",
+      codeLabel: "Kód z e-mailu",
+      verifyCode: "Přihlásit se",
+      verifying: "Ověřuji...",
+      codeInvalid: "Kód nesedí nebo už vypršel. Zkontroluj ho, nebo si nech poslat nový.",
+      sendAgain: "Poslat nový kód",
     },
     bootstrap: {
       title: "První nastavení",

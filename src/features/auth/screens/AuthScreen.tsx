@@ -23,6 +23,11 @@ type AuthScreenProps = {
   onBack: () => void;
 };
 
+const getErrorStatus = (error: unknown): number | null => {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' ? status : null;
+};
+
 export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const authIsAnonymous = useAppStore((state) => state.authIsAnonymous);
   const board = useAppStore((state) => state.board);
@@ -31,6 +36,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const submit = async () => {
     const originalEmail = getOriginalEmailAddress(email);
@@ -48,12 +56,32 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         ? window.location.origin
         : Linking.createURL('auth');
       await authService.sendMagicLink(originalEmail, emailRedirectTo);
+      setCodeSentTo(originalEmail);
+      setCode('');
       setMessage(copy.auth.linkSent);
     } catch (submitError) {
-      const nextError = submitError instanceof Error ? submitError.message : copy.auth.sendFailed;
-      setError(nextError);
+      setError(getErrorStatus(submitError) === 429 ? copy.auth.tooManyEmails : copy.auth.sendFailed);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    const trimmedCode = code.replace(/\s+/g, '');
+    if (!codeSentTo || trimmedCode.length === 0) {
+      return;
+    }
+
+    setIsVerifying(true);
+    setError(null);
+
+    try {
+      await authService.verifyEmailCode(codeSentTo, trimmedCode);
+      onBack();
+    } catch (verifyError) {
+      setError(getErrorStatus(verifyError) === 429 ? copy.auth.tooManyEmails : copy.auth.codeInvalid);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -78,6 +106,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
 
           <TextInput
             style={styles.input}
+            editable={!codeSentTo}
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
@@ -90,14 +119,58 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
             placeholderTextColor="#7C8DA7"
           />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
           {message ? <Text style={styles.message}>{message}</Text> : null}
 
-          <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
-            <Text style={styles.submitText}>
-              {isSubmitting ? copy.auth.sending : copy.auth.sendLink}
-            </Text>
-          </Pressable>
+          {codeSentTo ? (
+            <>
+              <Text style={styles.codeLabel}>{copy.auth.codeLabel}</Text>
+              <TextInput
+                style={[styles.input, styles.codeInput]}
+                autoFocus
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                keyboardType="number-pad"
+                maxLength={10}
+                value={code}
+                onChangeText={setCode}
+                onSubmitEditing={verifyCode}
+                placeholder="123456"
+                placeholderTextColor="#7C8DA7"
+              />
+            </>
+          ) : null}
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          {codeSentTo ? (
+            <>
+              <Pressable
+                style={styles.submitButton}
+                onPress={verifyCode}
+                disabled={isVerifying || code.trim().length === 0}
+              >
+                <Text style={styles.submitText}>
+                  {isVerifying ? copy.auth.verifying : copy.auth.verifyCode}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => {
+                  setCodeSentTo(null);
+                  setMessage(null);
+                  setError(null);
+                }}
+              >
+                <Text style={styles.secondaryText}>{copy.auth.sendAgain}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Pressable style={styles.submitButton} onPress={submit} disabled={isSubmitting}>
+              <Text style={styles.submitText}>
+                {isSubmitting ? copy.auth.sending : copy.auth.sendLink}
+              </Text>
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -141,6 +214,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 10,
   },
+  codeLabel: {
+    marginTop: 20,
+    color: APP_THEME.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  codeInput: {
+    fontSize: 24,
+    letterSpacing: 6,
+    textAlign: 'center',
+  },
   error: {
     marginTop: 10,
     color: APP_THEME.dangerBorder,
@@ -165,5 +249,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+  },
+  secondaryButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  secondaryText: {
+    color: APP_THEME.primaryBorder,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

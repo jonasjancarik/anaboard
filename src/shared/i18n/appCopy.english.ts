@@ -86,13 +86,20 @@ export const EN_APP_COPY: LocaleCopy = {
     },
     auth: {
       emailRequired: "Enter an email",
-      linkSent: "We sent a link to your email. Open it on this device.",
-      sendFailed: "Sending the link failed",
+      linkSent:
+        "Email sent. Type the code from the email here, or tap the link in the email on this device.",
+      sendFailed: "The email could not be sent. Please try again.",
       anonymousSubtitle:
-        "Enter an email. We will send a one-time link, then return you to the tile you were editing.",
-      signedOutSubtitle: "Enter an email. We will send a one-time sign-in link.",
+        "Enter your email. We will send you a sign-in code, and the board will then be backed up to the cloud.",
+      signedOutSubtitle: "Enter your email. We will send you a sign-in code.",
       sending: "Sending...",
-      sendLink: "Send email link",
+      sendLink: "Email me a code",
+      tooManyEmails: "Too many emails were sent just now. Please try again in a few minutes.",
+      codeLabel: "Code from the email",
+      verifyCode: "Sign in",
+      verifying: "Checking...",
+      codeInvalid: "The code is wrong or has expired. Check it, or ask for a new one.",
+      sendAgain: "Send a new code",
     },
     bootstrap: {
       title: "First setup",

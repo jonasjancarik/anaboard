@@ -201,6 +201,25 @@ export const authService = {
     }
   },
 
+  async verifyEmailCode(email: string, code: string): Promise<void> {
+    const client = getClient();
+    const sanitizedEmail = getOriginalEmailAddress(email);
+
+    if (!sanitizedEmail) {
+      throw new Error('E-mail chybí');
+    }
+
+    const { error } = await client.auth.verifyOtp({
+      email: sanitizedEmail,
+      token: code,
+      type: 'email',
+    });
+
+    if (error) {
+      throw error;
+    }
+  },
+
   async signInAnonymously(): Promise<Session | null> {
     const client = getClient();
     const { data, error } = await client.auth.signInAnonymously();

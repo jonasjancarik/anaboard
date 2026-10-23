@@ -85,6 +85,12 @@ export type LocaleCopy = {
     signedOutSubtitle: string;
     sending: string;
     sendLink: string;
+    tooManyEmails: string;
+    codeLabel: string;
+    verifyCode: string;
+    verifying: string;
+    codeInvalid: string;
+    sendAgain: string;
   };
   bootstrap: {
     title: string;

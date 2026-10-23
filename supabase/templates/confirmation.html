@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="cs">
+  <body style="margin:0;padding:24px;background:#F6F1E8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1F2A3D;">
+    <div style="max-width:480px;margin:0 auto;background:#FFFDF8;border-radius:20px;padding:28px;">
+      <p style="margin:0 0 4px;font-size:15px;color:#5B6B84;">ÁňaBoard</p>
+      <h1 style="margin:0 0 16px;font-size:24px;">Vítej v ÁňaBoard</h1>
+      <p style="margin:0 0 20px;font-size:16px;line-height:1.5;">Potvrď prosím svůj e-mail. Pak se tabule začne zálohovat do cloudu a půjde používat i na dalších zařízeních.</p>
+      <p style="margin:0 0 8px;font-size:15px;color:#5B6B84;">Kód pro přihlášení:</p>
+      <p style="margin:0 0 24px;font-size:34px;font-weight:800;letter-spacing:6px;">{{ .Token }}</p>
+      <p style="margin:0 0 12px;font-size:16px;line-height:1.5;">Nebo na zařízení, kde máš aplikaci, klepni na tlačítko:</p>
+      <p style="margin:0 0 24px;">
+        <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#5F7FA8;color:#FFFFFF;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:14px;">Přihlásit se v aplikaci</a>
+      </p>
+      <p style="margin:0;font-size:14px;line-height:1.5;color:#5B6B84;">Kód i tlačítko platí jen chvíli a fungují jednou. Pokud jsi o přihlášení nežádal(a), tento e-mail klidně smaž.</p>
+    </div>
+  </body>
+</html>
