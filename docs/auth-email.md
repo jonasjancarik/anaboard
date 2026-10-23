@@ -22,7 +22,9 @@ Supabase's built-in mailer allows only a few emails per hour for the whole proje
 
 The sending subdomain `anaboard.jonasjancarik.cz` is onboarded under Email Service; Cloudflare manages its SPF, DKIM, DMARC and bounce records. The account quota is 1000 emails per day. Supabase's own Auth rate limit for emails (Authentication → Rate Limits) still applies on top.
 
-These settings live in the Supabase dashboard (Authentication → Emails → SMTP Settings), not in this repo.
+These settings live in the Supabase dashboard (Authentication → Emails → SMTP Settings), not in this repo. Related dashboard values: email OTP length 6 (Authentication → Sign In / Providers → Email), email rate limit 100 per hour (Authentication → Rate Limits).
+
+Gmail addresses are matched in canonical form (no dots, no `+alias`) by `caregivers_email_canonical_key`, so `name+test@gmail.com` counts as the same caregiver as `name@gmail.com`. Use a different mailbox for test accounts.
 
 ## Templates
 
