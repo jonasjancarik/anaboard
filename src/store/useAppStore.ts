@@ -4,6 +4,7 @@ import {
   ensureDefaultBoard,
   getActiveBoardSnapshot,
   resetActiveBoardToDefaults,
+  updateActiveBoardGridSize,
 } from '../shared/storage/repositories/boardRepository';
 import {
   deleteAudioClipForTile,
@@ -160,6 +161,7 @@ type AppStore = {
   moveTile: (tileId: string, nextPosition: number) => Promise<void>;
   deleteTile: (tileId: string) => Promise<void>;
   resetBoardToDefaults: () => Promise<void>;
+  setBoardGridSize: (columns: number, rows: number) => Promise<void>;
   applyOnboardingPreferences: (input: {
     locale: string;
     childGender: ChildGender;
@@ -470,6 +472,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await resetActiveBoardToDefaults();
     await get().refreshBoard();
     set({ sentence: [], editorTargetTileId: null, boardPageIndex: 0 });
+    await get().refreshPendingSyncEvents();
+  },
+
+  setBoardGridSize: async (columns, rows) => {
+    await updateActiveBoardGridSize(columns, rows);
+    await get().refreshBoard();
+    set({ boardPageIndex: 0 });
     await get().refreshPendingSyncEvents();
   },
 

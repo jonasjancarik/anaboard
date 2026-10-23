@@ -111,6 +111,9 @@ export const EN_APP_COPY: LocaleCopy = {
       submit: "Create profile",
       saving: "Saving...",
       failed: "The profile could not be created. Check your connection and try again.",
+      tileSizeLabel: "Tile size",
+      tileSizeHelper:
+        "Bigger tiles are easier to tap, but fewer fit on a page. You can change this any time in settings.",
       emailAlreadyUsed:
         "This email already belongs to another ÁňaBoard account. Gmail ignores dots and anything after “+”. Sign out and sign in with your original email, or use a different one.",
       signOut: "Sign out and use a different email",
@@ -300,6 +303,14 @@ export const EN_APP_COPY: LocaleCopy = {
       highContrast: "Stronger contrast",
       showLabels: "Show names on tiles",
       boardOrdering: "Tile ordering",
+      tileSize: "Tile size",
+      tileSizeLabels: { standard: "Standard", large: "Larger", largest: "Largest" },
+      tileSizeCustom: "Custom",
+      tileSizeDetail: (columns, rows) => `${columns} × ${rows}, ${columns * rows} tiles per page`,
+      tileSizePreviewTitle: "This is how the first page will look",
+      tileSizeNote: (pageCount) =>
+        `Tiles keep the same order; only the page breaks move. Pages in total: ${pageCount}.`,
+      saveTileSizeError: "Tile size could not be saved",
       saveContrastError: "Contrast could not be saved",
       saveLabelsError: "Label display could not be saved",
       saveOrderingError: "Tile ordering could not be saved",

@@ -358,9 +358,10 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
     (logicalPageWidth - pageGridWidth) / 2
   );
   const verticalGridOffset = Math.max(0, (effectivePageHeight - pageGridHeight) / 2);
+  // Pictures grow with bigger tiles; on a 4×4 phone board the caps stay at 60 / 70 as before.
   const tileVisualSize = showLabels
-    ? Math.max(42, Math.min(tileSize - 26, 60))
-    : Math.max(48, Math.min(tileSize - 18, 70));
+    ? Math.max(42, Math.min(tileSize - 26, Math.max(60, Math.floor(tileSize * 0.6))))
+    : Math.max(48, Math.min(tileSize - 18, Math.max(70, Math.floor(tileSize * 0.7))));
   const tokenVisualSize = showLabels ? 24 : 26;
 
   useEffect(() => {
@@ -1530,7 +1531,7 @@ export const BoardScreen = ({ onOpenCaregiver, onOpenSettings }: BoardScreenProp
   const getTileLabelStyle = useCallback(
     (label: string) => {
       const normalizedLength = label.trim().length;
-      const baseFontSize = Math.max(12, Math.min(18, Math.floor(tileSize * 0.17)));
+      const baseFontSize = Math.max(12, Math.min(20, Math.floor(tileSize * 0.17)));
 
       if (normalizedLength >= 9) {
         return {

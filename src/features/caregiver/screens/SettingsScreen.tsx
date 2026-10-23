@@ -11,6 +11,7 @@ import { SettingChoiceStepper } from '../components/SettingChoiceStepper';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SettingRowButton } from '../components/SettingRowButton';
 import { SettingStepper, type SettingStepperOption } from '../components/SettingStepper';
+import { TileSizeControl } from '../components/TileSizeControl';
 import { SettingToggleRow } from '../components/SettingToggleRow';
 import { DEFAULT_VOICE_VALUE, useSpeechVoiceOptions } from '../hooks/useSpeechVoiceOptions';
 import {
@@ -102,6 +103,7 @@ export const SettingsScreen = ({
   const updateSettings = useAppStore((state) => state.updateSettings);
   const applyLanguagePreferences = useAppStore((state) => state.applyLanguagePreferences);
   const resetBoardToDefaults = useAppStore((state) => state.resetBoardToDefaults);
+  const setBoardGridSize = useAppStore((state) => state.setBoardGridSize);
   const refreshBoard = useAppStore((state) => state.refreshBoard);
   const refreshSettings = useAppStore((state) => state.refreshSettings);
   const refreshPhrases = useAppStore((state) => state.refreshPhrases);
@@ -845,6 +847,32 @@ export const SettingsScreen = ({
                 );
               }}
             />
+            {board ? (
+              <>
+                <View style={styles.divider} />
+                <TileSizeControl
+                  copy={settingsCopy}
+                  columns={board.columns}
+                  rows={board.rows}
+                  tiles={tiles}
+                  layoutMode={boardLayoutMode}
+                  categoryOrder={categoryOrder}
+                  categoriesStartNewPage={categoriesStartNewPage}
+                  locale={locale}
+                  previousLabel={choicePreviousLabel}
+                  nextLabel={choiceNextLabel}
+                  onChange={async (columns, rows) => {
+                    setMessage(null);
+                    try {
+                      await setBoardGridSize(columns, rows);
+                    } catch (error) {
+                      void appHaptics.error();
+                      setMessage(getErrorMessage(error, settingsCopy.saveTileSizeError));
+                    }
+                  }}
+                />
+              </>
+            ) : null}
             <View style={styles.divider} />
             <SettingChoiceStepper
               title={settingsCopy.boardOrdering}

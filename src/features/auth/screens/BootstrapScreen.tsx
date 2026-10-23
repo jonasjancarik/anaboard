@@ -3,6 +3,12 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { authService, EmailAlreadyUsedError } from '../authService';
+import {
+  BOARD_GRID_SIZES,
+  DEFAULT_BOARD_GRID_SIZE,
+  findBoardGridSize,
+  type BoardGridSize,
+} from '../../../shared/constants/boardGrid';
 import { APP_THEME } from '../../../shared/constants/theme';
 import {
   DEFAULT_CHILD_GENDER,
@@ -24,6 +30,8 @@ export const BootstrapScreen = () => {
   const setRemoteContext = useAppStore((state) => state.setRemoteContext);
   const setRequiresBootstrap = useAppStore((state) => state.setRequiresBootstrap);
   const applyOnboardingPreferences = useAppStore((state) => state.applyOnboardingPreferences);
+  const setBoardGridSize = useAppStore((state) => state.setBoardGridSize);
+  const board = useAppStore((state) => state.board);
 
   const initialCopy = getAppCopy(DEFAULT_PROFILE_LOCALE);
   const [familyName, setFamilyName] = useState(initialCopy.bootstrap.defaultFamilyName);
@@ -32,6 +40,9 @@ export const BootstrapScreen = () => {
     useState<SupportedLocale>(DEFAULT_PROFILE_LOCALE);
   const [childGender, setChildGender] =
     useState<ChildGender>(DEFAULT_CHILD_GENDER);
+  const [gridSize, setGridSize] = useState<BoardGridSize>(
+    () => (board ? findBoardGridSize(board.columns, board.rows) : null) ?? DEFAULT_BOARD_GRID_SIZE
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -71,6 +82,7 @@ export const BootstrapScreen = () => {
         locale: selectedLocale,
         childGender: effectiveChildGender,
       });
+      await setBoardGridSize(gridSize.columns, gridSize.rows);
       setRemoteContext(context);
       setRequiresBootstrap(false);
     } catch (submitError) {
@@ -183,6 +195,37 @@ export const BootstrapScreen = () => {
             </View>
           </View>
         ) : null}
+
+        <View style={styles.optionSection}>
+          <Text style={styles.label}>{copy.bootstrap.tileSizeLabel}</Text>
+          <Text style={styles.helperText}>{copy.bootstrap.tileSizeHelper}</Text>
+          <View style={styles.optionGroup}>
+            {BOARD_GRID_SIZES.map((size) => {
+              const selected = size.id === gridSize.id;
+              return (
+                <Pressable
+                  key={size.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  disabled={isBusy}
+                  onPress={() => setGridSize(size)}
+                  style={({ pressed }) => [
+                    styles.optionButton,
+                    selected && styles.optionButtonSelected,
+                    pressed && !isBusy && styles.optionButtonPressed,
+                  ]}
+                >
+                  <Text style={[styles.optionTitle, selected && styles.optionTitleSelected]}>
+                    {copy.settings.tileSizeLabels[size.id]}
+                  </Text>
+                  <Text style={styles.optionDetail}>
+                    {copy.settings.tileSizeDetail(size.columns, size.rows)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 

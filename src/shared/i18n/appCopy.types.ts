@@ -103,6 +103,8 @@ export type LocaleCopy = {
     saving: string;
     failed: string;
     emailAlreadyUsed: string;
+    tileSizeLabel: string;
+    tileSizeHelper: string;
     signOut: string;
     signingOut: string;
   };
@@ -251,6 +253,13 @@ export type LocaleCopy = {
     highContrast: string;
     showLabels: string;
     boardOrdering: string;
+    tileSize: string;
+    tileSizeLabels: Record<'standard' | 'large' | 'largest', string>;
+    tileSizeCustom: string;
+    tileSizeDetail: (columns: number, rows: number) => string;
+    tileSizePreviewTitle: string;
+    tileSizeNote: (pageCount: number) => string;
+    saveTileSizeError: string;
     saveContrastError: string;
     saveLabelsError: string;
     saveOrderingError: string;

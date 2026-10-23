@@ -119,6 +119,9 @@ export const CS_APP_COPY: LocaleCopy = {
       submit: "Vytvořit profil",
       saving: "Ukládám...",
       failed: "Profil se nepodařilo vytvořit. Zkontroluj připojení a zkus to znovu.",
+      tileSizeLabel: "Velikost dlaždic",
+      tileSizeHelper:
+        "Větší dlaždice se snáz trefují, ale na stránku se jich vejde méně. Jde to kdykoli změnit v nastavení.",
       emailAlreadyUsed:
         "Tento e-mail už patří k jinému účtu ÁňaBoard. U Gmailu se nerozlišují tečky ani část za „+“. Odhlas se a přihlas se původním e-mailem, nebo použij jiný.",
       signOut: "Odhlásit se a použít jiný e-mail",
@@ -308,6 +311,14 @@ export const CS_APP_COPY: LocaleCopy = {
       highContrast: "Silnější kontrast",
       showLabels: "Zobrazit názvy na dlaždicích",
       boardOrdering: "Řazení dlaždic",
+      tileSize: "Velikost dlaždic",
+      tileSizeLabels: { standard: "Běžné", large: "Větší", largest: "Největší" },
+      tileSizeCustom: "Vlastní",
+      tileSizeDetail: (columns, rows) => `${columns} × ${rows}, ${columns * rows} dlaždic na stránku`,
+      tileSizePreviewTitle: "Takhle bude vypadat první stránka",
+      tileSizeNote: (pageCount) =>
+        `Dlaždice zůstanou ve stejném pořadí, jen se jinak rozdělí na stránky. Stránek celkem: ${pageCount}.`,
+      saveTileSizeError: "Velikost dlaždic nešla uložit",
       saveContrastError: "Kontrast nešel uložit",
       saveLabelsError: "Zobrazení názvů nešlo uložit",
       saveOrderingError: "Řazení dlaždic nešlo uložit",

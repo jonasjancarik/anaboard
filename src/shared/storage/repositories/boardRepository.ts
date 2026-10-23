@@ -369,6 +369,51 @@ export const getActiveBoardSnapshot = async (): Promise<BoardSnapshot | null> =>
   };
 };
 
+/** Changes how many tiles fit on a page. Tile positions stay, so only page breaks move. */
+export const updateActiveBoardGridSize = async (columns: number, rows: number): Promise<void> => {
+  const db = await getDatabase();
+  const board = await db.getFirstAsync<BoardRow>(
+    `
+      SELECT id, profile_id, name, locale, columns_count, rows_count, is_active, updated_at, revision
+      FROM boards
+      WHERE is_active = 1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `
+  );
+
+  if (!board || (board.columns_count === columns && board.rows_count === rows)) {
+    return;
+  }
+
+  const timestamp = nowIso();
+  const revision = board.revision + 1;
+  await db.runAsync(
+    `
+      UPDATE boards
+      SET columns_count = ?, rows_count = ?, updated_at = ?, revision = ?, dirty = 1
+      WHERE id = ?
+    `,
+    columns,
+    rows,
+    timestamp,
+    revision,
+    board.id
+  );
+
+  await enqueueSyncEvent('boards', board.id, 'upsert', {
+    id: board.id,
+    profile_id: board.profile_id,
+    name: board.name,
+    locale: board.locale,
+    columns_count: columns,
+    rows_count: rows,
+    is_active: board.is_active === 1,
+    updated_at: timestamp,
+    revision,
+  });
+};
+
 export const resetActiveBoardToDefaults = async (): Promise<void> => {
   const snapshot = await getActiveBoardSnapshot();
   if (!snapshot) {
