@@ -39,6 +39,16 @@ const isAnonymousUser = (user: User): boolean => {
   return user.app_metadata?.provider === 'anonymous';
 };
 
+// Postgres unique violation; caregivers are unique per canonical email (Gmail ignores dots and +alias).
+const UNIQUE_VIOLATION = '23505';
+
+export class EmailAlreadyUsedError extends Error {
+  public constructor() {
+    super('This email already belongs to another caregiver.');
+    this.name = 'EmailAlreadyUsedError';
+  }
+}
+
 const getClient = () => {
   if (!hasSupabaseConfig || !supabaseClient) {
     throw new Error('Supabase config missing');
@@ -369,6 +379,11 @@ export const authService = {
         .single<CaregiverRow>();
 
       if (caregiverInsertError || !caregiverInsert) {
+        // Remove the family created a moment ago so a failed attempt leaves nothing behind.
+        await client.from('families').delete().eq('id', family.id);
+        if (caregiverInsertError?.code === UNIQUE_VIOLATION) {
+          throw new EmailAlreadyUsedError();
+        }
         throw caregiverInsertError ?? new Error('Failed to create caregiver');
       }
 

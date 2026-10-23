@@ -110,7 +110,11 @@ export const EN_APP_COPY: LocaleCopy = {
       defaultChildName: "Child",
       submit: "Create profile",
       saving: "Saving...",
-      failed: "Bootstrap failed",
+      failed: "The profile could not be created. Check your connection and try again.",
+      emailAlreadyUsed:
+        "This email already belongs to another ÁňaBoard account. Gmail ignores dots and anything after “+”. Sign out and sign in with your original email, or use a different one.",
+      signOut: "Sign out and use a different email",
+      signingOut: "Signing out...",
     },
     caregiverGate: {
       title: "Caregiver mode",

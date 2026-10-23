@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { authService } from '../authService';
+import { authService, EmailAlreadyUsedError } from '../authService';
 import { APP_THEME } from '../../../shared/constants/theme';
 import {
   DEFAULT_CHILD_GENDER,
@@ -33,6 +34,8 @@ export const BootstrapScreen = () => {
     useState<ChildGender>(DEFAULT_CHILD_GENDER);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const isBusy = isSaving || isSigningOut;
 
   const selectedLanguage = getSupportedLanguage(selectedLocale);
   const copy = getAppCopy(selectedLocale);
@@ -71,15 +74,31 @@ export const BootstrapScreen = () => {
       setRemoteContext(context);
       setRequiresBootstrap(false);
     } catch (submitError) {
-      const nextError = submitError instanceof Error ? submitError.message : copy.bootstrap.failed;
-      setError(nextError);
+      setError(
+        submitError instanceof EmailAlreadyUsedError
+          ? copy.bootstrap.emailAlreadyUsed
+          : copy.bootstrap.failed
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
+  const signOut = async () => {
+    setIsSigningOut(true);
+    setError(null);
+
+    try {
+      // The auth listener in AppRoot leaves this screen once the session is gone.
+      await authService.signOut();
+    } catch {
+      setError(copy.bootstrap.failed);
+      setIsSigningOut(false);
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
@@ -104,12 +123,12 @@ export const BootstrapScreen = () => {
                   key={language.locale}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  disabled={isSaving}
+                  disabled={isBusy}
                   onPress={() => selectLocale(language.locale)}
                   style={({ pressed }) => [
                     styles.optionButton,
                     selected && styles.optionButtonSelected,
-                    pressed && !isSaving && styles.optionButtonPressed,
+                    pressed && !isBusy && styles.optionButtonPressed,
                   ]}
                 >
                   <Text
@@ -141,12 +160,12 @@ export const BootstrapScreen = () => {
                     key={option.value}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
-                    disabled={isSaving}
+                    disabled={isBusy}
                     onPress={() => setChildGender(option.value)}
                     style={({ pressed }) => [
                       styles.optionButton,
                       selected && styles.optionButtonSelected,
-                      pressed && !isSaving && styles.optionButtonPressed,
+                      pressed && !isBusy && styles.optionButtonPressed,
                     ]}
                   >
                     <Text
@@ -167,13 +186,24 @@ export const BootstrapScreen = () => {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable style={styles.submitButton} onPress={submit} disabled={isSaving}>
+        <Pressable style={styles.submitButton} onPress={submit} disabled={isBusy}>
           <Text style={styles.submitText}>
             {isSaving ? copy.bootstrap.saving : copy.bootstrap.submit}
           </Text>
         </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          style={styles.secondaryButton}
+          onPress={signOut}
+          disabled={isBusy}
+        >
+          <Text style={styles.secondaryText}>
+            {isSigningOut ? copy.bootstrap.signingOut : copy.bootstrap.signOut}
+          </Text>
+        </Pressable>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -274,5 +304,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+  },
+  secondaryButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  secondaryText: {
+    color: APP_THEME.primaryBorder,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

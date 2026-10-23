@@ -118,7 +118,11 @@ export const CS_APP_COPY: LocaleCopy = {
       defaultChildName: "Dítě",
       submit: "Vytvořit profil",
       saving: "Ukládám...",
-      failed: "Bootstrap selhal",
+      failed: "Profil se nepodařilo vytvořit. Zkontroluj připojení a zkus to znovu.",
+      emailAlreadyUsed:
+        "Tento e-mail už patří k jinému účtu ÁňaBoard. U Gmailu se nerozlišují tečky ani část za „+“. Odhlas se a přihlas se původním e-mailem, nebo použij jiný.",
+      signOut: "Odhlásit se a použít jiný e-mail",
+      signingOut: "Odhlašuji...",
     },
     caregiverGate: {
       title: "Režim pečovatele",

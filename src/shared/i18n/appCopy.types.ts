@@ -102,6 +102,9 @@ export type LocaleCopy = {
     submit: string;
     saving: string;
     failed: string;
+    emailAlreadyUsed: string;
+    signOut: string;
+    signingOut: string;
   };
   caregiverGate: {
     title: string;
