@@ -1,6 +1,6 @@
 # Cloud Sync
 
-Last updated: 2026-10-22
+Last updated: 2026-10-23
 
 Read when: changing sync queue processing, background pull skipping, cloud restore, initial bind conflict handling, Supabase sync schema, or multi-device merge behavior.
 
@@ -39,6 +39,14 @@ The first background pull after the app starts always applies, so cached picture
 Any upload means apply, because the conflict policy can skip an upload and leave a newer cloud row that still has to reach the device. The fingerprint is cleared before "Použít data z cloudu" and "Použít data z tohoto telefonu", and whenever the bound profile changes, so those paths always apply. The pure rules live in `syncRunPolicy.ts` (`buildSnapshotFingerprintSource`, `canSkipRemoteApply`).
 
 Uploaded (`synced`) queue rows are pruned after 7 days, at most once an hour after a successful run. Only `pending` and `error` rows matter for sync, diagnostics and migrations.
+
+## Unique Ids For The Seeded Board
+
+Every install seeds its first board as `default-board` with tiles `tile-1`, `tile-2`, …, but cloud primary keys are shared by all families. Row level security refuses an upsert onto another family's row, so without a rename every family except the first would fail to upload its board and tiles on every retry, and the queue would stay stuck.
+
+Before uploading (normal runs and "Keep this device"), `ensureUniqueSeedIds` checks whether the cloud row `default-board` is visible with the current profile id. If it is, this profile owns the ids and nothing changes. Otherwise `rekeySeedBoard` (`seedIdRekey.ts`) renames the board and every `tile-<number>` tile in one transaction, including audio clips, tile history, archive, saved phrase keys/tokens and phrase event sequences. Queued changes for the old ids are dropped (the cloud never accepted them), uploads are queued for the renamed rows, and errored changes are retried right away.
+
+An untouched device that restores from the cloud keeps the seed ids until it uploads, so the initial bind guard still recognizes it as untouched.
 
 ## Large Tables
 

@@ -19,6 +19,9 @@ import {
 } from '../../shared/storage/repositories/syncRepository';
 import type { EntityType, SyncEvent, SyncStatus } from '../../shared/types/domain';
 import { normalizeChildGender } from '../../shared/i18n/profileLanguage';
+import { DEFAULT_BOARD_ID } from '../../shared/constants/defaults';
+import { createId } from '../../shared/utils/id';
+import { nowIso } from '../../shared/utils/time';
 import {
   applyRemoteSnapshot,
   fetchRemoteSnapshot,
@@ -43,6 +46,7 @@ import {
   uploadTileImageToSupabase,
 } from './supabaseMediaSync';
 import { canSafelyDiscardLocalStateForInitialBind, SyncIssueError } from './initialBindGuard';
+import { hasLocalSeedBoard, rekeySeedBoard } from './seedIdRekey';
 import { shouldApplyLocalChange } from './syncConflictPolicy';
 import {
   buildSnapshotFingerprintSource,
@@ -197,6 +201,7 @@ class SyncService {
         await this.ensureOnline();
         this.callbacks.onStatusChange?.('syncing');
         await setLastAppliedSnapshotFingerprint(null);
+        await this.ensureUniqueSeedIds(context);
         await this.replaceCloudSnapshotWithLocal(context);
         await setBoundSyncProfileId(context.profileId);
         await setLastSyncIssue(null);
@@ -334,7 +339,10 @@ class SyncService {
         }
       }
 
-      const shouldRetryFailed = options.retryFailedNow || Date.now() >= this.nextAutoRetryAt;
+      // Changes that failed because of the shared seed ids can upload right after the rename.
+      const didRekeySeedIds = await this.ensureUniqueSeedIds(context);
+      const shouldRetryFailed =
+        options.retryFailedNow || didRekeySeedIds || Date.now() >= this.nextAutoRetryAt;
       if (shouldRetryFailed && (await countErroredSyncEvents()) > 0) {
         await retryErroredSyncEvents();
       }
@@ -419,6 +427,46 @@ class SyncService {
     }
 
     return this.remoteContext;
+  };
+
+  /**
+   * Gives the seeded first board and its tiles unique ids unless this cloud profile already holds
+   * them. Returns true when local ids changed.
+   */
+  private ensureUniqueSeedIds = async (context: RemoteContext): Promise<boolean> => {
+    if (!supabaseClient) {
+      return false;
+    }
+
+    const db = (await getDatabase()) as unknown as MigrationDatabase;
+    if (!(await hasLocalSeedBoard(db, DEFAULT_BOARD_ID))) {
+      return false;
+    }
+
+    // Row level security hides another family's board, so a visible row with this profile id is ours.
+    const { data, error } = await supabaseClient
+      .from('boards')
+      .select('profile_id')
+      .eq('id', DEFAULT_BOARD_ID)
+      .maybeSingle<{ profile_id: string }>();
+    if (error) {
+      throw error;
+    }
+    if (data?.profile_id === context.profileId) {
+      return false;
+    }
+
+    const didRekey = await rekeySeedBoard(db, {
+      seedBoardId: DEFAULT_BOARD_ID,
+      createId,
+      now: nowIso(),
+    });
+    if (didRekey) {
+      logEvent('sync_seed_ids_rekeyed', { profile_id: context.profileId });
+      this.callbacks.onDataChanged?.();
+    }
+
+    return didRekey;
   };
 
   /** Uploads every queued change. Returns how many were uploaded, or null when one failed. */
